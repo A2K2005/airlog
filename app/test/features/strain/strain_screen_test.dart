@@ -28,7 +28,9 @@ void main() {
     expect(find.text('Strain'), findsWidgets);
     expect(find.byType(ArcStateTile), findsOneWidget);
     expect(find.byType(ZoneBarTile), findsOneWidget);
-    expect(find.text('TARGET'), findsOneWidget);
+    // PR #1 dropped the duplicate strain ring and TARGET block: one primary
+    // score tile, then the target basis.
+    expect(find.text('Target basis'), findsOneWidget);
     expect(find.text('Heart rate by zone'), findsOneWidget);
     expect(find.textContaining('Finished'), findsOneWidget);
     await t.scrollUntilVisible(
@@ -151,7 +153,8 @@ void main() {
     await scrollThrough(t);
   });
 
-  for (final b in const [Brightness.dark]) { // dark only
+  for (final b in const [Brightness.dark]) {
+    // dark only
     testWidgets('golden · ${b.name}', (t) async {
       final repo = ScreensBRepo.demo();
       await pumpB(
