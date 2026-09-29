@@ -237,9 +237,19 @@ void main() {
         for (var i = 0; i <= 600; i++)
           HrSample(t0.add(Duration(seconds: i)), 160),
       ];
+      // PR #1: zones need a declared max-HR anchor (birth year or
+      // override); without one the session is unavailable, not zero effort.
+      final none = Engine.liveWorkoutStrain(
+        samples,
+        restingHr: 60,
+        now: t0.add(const Duration(minutes: 20)),
+      );
+      expect(none.method, StrainMethod.none);
+      expect(none.zoneMinutes.every((m) => m == 0), isTrue);
       final w = Engine.liveWorkoutStrain(
         samples,
         restingHr: 60,
+        maxHr: 187,
         now: t0.add(const Duration(minutes: 20)),
       );
       final minutes = w.zoneMinutes.fold(0.0, (a, b) => a + b);
