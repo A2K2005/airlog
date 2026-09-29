@@ -77,7 +77,8 @@ class _CoachSetupScreenState extends ConsumerState<CoachSetupScreen> {
       context,
       ok
           ? 'Back to on-device. Your key was deleted.'
-          : 'Could not turn it off. Try again.',
+          : 'Withdrawal could not finish. Check the engine and stored keys, '
+                'then try again.',
     );
   }
 
@@ -151,10 +152,10 @@ class _CoachSetupScreenState extends ConsumerState<CoachSetupScreen> {
       ],
       if (!s.cloud) ...[
         const SizedBox(height: S.x2),
-        if (cloudInUse)
+        if (cloudInUse || s.keys.values.any((present) => present))
           AppButton(
             key: const ValueKey('use-on-device'),
-            label: 'Switch to on-device',
+            label: cloudInUse ? 'Switch to on-device' : 'Remove stored keys',
             icon: Icons.phone_android_rounded,
             expand: true,
             onTap: s.busy ? null : () => _withdraw(s),
@@ -357,7 +358,7 @@ class _CoachSetupScreenState extends ConsumerState<CoachSetupScreen> {
           ),
         ],
       ],
-      if (cloudInUse && s.cloud) ...[
+      if ((cloudInUse || s.hasKey) && s.cloud) ...[
         section(CoachSettingsCopy.withdrawTitle),
         AppCard(
           child: Column(
@@ -372,7 +373,9 @@ class _CoachSetupScreenState extends ConsumerState<CoachSetupScreen> {
                 alignment: Alignment.centerLeft,
                 child: AppButton(
                   key: const ValueKey('withdraw'),
-                  label: 'Turn off ${CoachCopy.providerName(s.saved.provider)}',
+                  label: cloudInUse
+                      ? 'Turn off ${CoachCopy.providerName(s.saved.provider)}'
+                      : 'Remove stored keys',
                   icon: Icons.power_settings_new_rounded,
                   kind: AppButtonKind.quiet,
                   accent: C.recRed,

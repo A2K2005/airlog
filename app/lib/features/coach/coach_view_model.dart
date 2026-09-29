@@ -350,6 +350,10 @@ class CoachChatViewModel extends AsyncNotifier<CoachChatState> {
       await _repo.addMemory(
         text,
         category: s.categoryOf(messageId, index, text),
+        expiresOn: s.messages
+            .where((m) => m.id == messageId)
+            .firstOrNull
+            ?.proposedExpiry(index),
       );
     } catch (_) {
       return false;

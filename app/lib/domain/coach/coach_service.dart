@@ -34,6 +34,7 @@
 // own date and context in the system prompt.
 
 import 'dart:async';
+import 'dart:convert';
 
 import '../day_key.dart';
 import '../repositories.dart';
@@ -42,12 +43,14 @@ import 'coach_contracts.dart';
 import 'format.dart';
 import 'policy.dart';
 import 'prompts.dart';
+import 'personal_context.dart';
 import 'safety.dart';
 import 'tools.dart';
 import 'verifier.dart';
 
 /// Version of the cloud disclosure the user must have accepted.
 const int kCoachConsentVersion = 1;
+const int kCoachPayloadVersion = 3;
 
 class CoachServiceImpl implements CoachService {
   CoachServiceImpl({
@@ -99,7 +102,13 @@ class CoachServiceImpl implements CoachService {
     }
 
     // 1. Input router: fixed response, no model, no network.
-    final flag = SafetyCheck.check(q);
+    var flag = SafetyCheck.check(q);
+    if (flag == null) {
+      final birthYear = (await health.profile()).birthYear;
+      if (birthYear != null && clock().year - birthYear < 18) {
+        flag = const SafetyVerdict(RedFlag.minor, SafetyCheck.minorMessage);
+      }
+    }
     if (flag != null) {
       final conv = await _conversation(conversationId, q);
       await _storeUser(conv, q);
@@ -128,9 +137,11 @@ class CoachServiceImpl implements CoachService {
     final chain = await coach.modelChain();
 
     final useData = settings.mode == CoachMode.useMyData;
+    final memoryScope = await _memoryScope();
+    final dataMode = health.mode;
     final conv = await _conversation(conversationId, q);
-    final history = useData
-        ? await _history(conv, cloud: cloud)
+    final history = useData && !MemoryContext.isCorrection(q)
+        ? await _history(conv, cloud: cloud, memoryScope: memoryScope)
         : const <LlmItem>[];
     await _storeUser(conv, q);
 
@@ -154,14 +165,6 @@ class CoachServiceImpl implements CoachService {
     final now = clock();
     final memoryOn = useData && await coach.memoryEnabled();
     final latest = useData ? await health.latestDate() : null;
-    final memories = memoryOn
-        ? [
-            for (final m in await coach.memories())
-              if (m.expiresOn == null ||
-                  m.expiresOn!.compareTo(DayKey.of(now)) >= 0)
-                m.text,
-          ]
-        : const <String>[];
 
     // 4. The question, on each engine in turn (model fallback, PRODUCT_PLAN
     //    §7). Every attempt restarts the WHOLE question: a fresh tool loop,
@@ -170,11 +173,15 @@ class CoachServiceImpl implements CoachService {
     //    A model-specific failure (ModelUnavailable) moves to the next model
     //    of the same provider; anything else, or the last model failing,
     //    answers on this phone with no network. Never another provider.
+    //    Context parity: every attempt, the on-device one included, gets the
+    //    same scoped history, card seed, personal context, memory tools,
+    //    system prompt and length, behind the same source firewall.
     final tally = _Tally();
     Future<_Answer> attempt(LlmClient client, {required bool network}) =>
         _attempt(
           client: client,
           network: network,
+          cloud: cloud,
           settings: settings,
           q: q,
           now: now,
@@ -182,8 +189,9 @@ class CoachServiceImpl implements CoachService {
           context: context,
           useData: useData,
           memoryOn: memoryOn,
-          memories: memories,
           latest: latest,
+          memoryScope: memoryScope,
+          dataMode: dataMode,
           tally: tally,
         );
 
@@ -211,8 +219,12 @@ class CoachServiceImpl implements CoachService {
         break;
       }
     }
+    // Settings, key, consent, data mode, memory or the chat changed while
+    // answering (the generation fences): the question is stale, so nothing
+    // more runs, not even on this phone.
+    final stale = failure?.kind == CoachErrorKind.notConfigured;
     var onDevice = false;
-    if (answer == null && cloud) {
+    if (answer == null && cloud && !stale) {
       try {
         answer = await attempt(coach.onDeviceClient(), network: false);
         onDevice = true;
@@ -255,6 +267,9 @@ class CoachServiceImpl implements CoachService {
             approxChars: tally.bytes > 0 ? tally.bytes : tally.chars,
             bytes: tally.bytes,
             requests: tally.requests,
+            privacyVersion: kCoachPayloadVersion,
+            memoryContext: memoryScope,
+            mode: settings.mode,
           )
         : null;
 
@@ -273,22 +288,44 @@ class CoachServiceImpl implements CoachService {
         sent: sent,
         proposedMemories: [for (final p in proposals) p.text],
         proposedCategories: [for (final p in proposals) p.category.name],
+        proposedExpiries: [for (final p in proposals) p.expiresOn],
         error: error,
         answeredBy: answeredBy,
         fallbackFrom: fellBack ? chosen : null,
         fallbackReason: fellBack ? failure?.kind.name : null,
+        // An on-device fallback that sent nothing has no SentPayload to
+        // scope its replay by; it records the scope it was built under.
+        replayScope: fellBack && sent == null
+            ? replayScopeOf(settings, memoryScope)
+            : null,
       ),
     );
   }
 
+  /// The privacy scope a cloud answer is built under (PR #1 history
+  /// isolation): provider, mode, payload version and the memory scope.
+  static String replayScopeOf(CoachSettings s, String memoryScope) =>
+      jsonEncode([
+        s.provider.name,
+        s.mode.name,
+        kCoachPayloadVersion,
+        memoryScope,
+      ]);
+
   /// One run of the question on [client]: the card seed, the tool loop
   /// (≤ [maxToolRounds] rounds), the verifier and output policy, one repair
-  /// round, then the facts table. [network]: a cloud request (the budget is
-  /// re-checked before each one, and what is sent is tallied); false for the
-  /// on-device engine. Throws the client's CoachException.
+  /// round, then the facts table. [network]: a cloud request (consent and
+  /// the budget are re-checked before each one, and what is sent is
+  /// tallied); false for the on-device engine. [cloud]: the question is a
+  /// cloud one. It sets the source firewall, the card seed, the personal
+  /// context and the system prompt, identically for every attempt, so an
+  /// on-device fallback sees exactly what the chosen model saw (and its
+  /// answer is safe to replay to that provider as history). Throws the
+  /// client's CoachException.
   Future<_Answer> _attempt({
     required LlmClient client,
     required bool network,
+    required bool cloud,
     required CoachSettings settings,
     required String q,
     required DateTime now,
@@ -296,8 +333,9 @@ class CoachServiceImpl implements CoachService {
     required AskContext? context,
     required bool useData,
     required bool memoryOn,
-    required List<String> memories,
     required String? latest,
+    required String memoryScope,
+    required DataMode dataMode,
     required _Tally tally,
   }) async {
     final seeded = useData && _hasSeed(context);
@@ -307,19 +345,23 @@ class CoachServiceImpl implements CoachService {
       latestDate: latest,
       mode: settings.mode,
       length: settings.length,
-      provider: network ? settings.provider : CoachProvider.offline,
+      provider: settings.provider,
       context: useData ? context : null,
     );
     final toolbox = CoachToolbox(
       health: health,
       coach: coach,
       now: now,
-      cloud: network,
+      cloud: cloud,
       mode: settings.mode,
       memoryEnabled: memoryOn,
       seed: seeded ? context : null,
       question: q,
     );
+    // Only memory actually retrieved on this attempt can ground an answer.
+    // Stale facts remain labelled context but cannot validate current
+    // claims.
+    final memories = toolbox.groundedMemories;
 
     final calls = <ToolCall>[];
     final results = <ToolResult>[];
@@ -331,24 +373,51 @@ class CoachServiceImpl implements CoachService {
     var rounds = 0;
     String? model;
 
-    // The card's own facts, as data in the question's message (first refs
-    // r1…, Google Health API withholding applied). They are evidence
-    // (results) but not a call: nothing asked for them.
+    // On-device gets the card facts. Cloud gets a withholding notice and
+    // must read current facts through the guarded data tools instead.
     final seed = seeded
         ? await toolbox.run(const [
             ToolCall(id: 'seed_card', name: CoachTools.insightCard, input: {}),
           ])
         : const <ToolResult>[];
     results.addAll(seed);
+    // Read bounded, question-relevant evidence before the model answers.
+    // No extra model request; the same consent/source firewall applies.
+    final contextCalls = cloud && useData
+        ? PersonalContext.plan(q, DayKey.of(now), memory: memoryOn)
+        : const <ToolCall>[];
+    final personal = await toolbox.run(contextCalls);
+    calls.addAll(contextCalls);
+    results.addAll(personal);
     // Built once and never rebuilt: every request of this attempt replays
     // the same question message, so the history stays append-only.
-    final transcript = <LlmItem>[...history, LlmUser(q, data: seed)];
-    for (final r in seed) {
+    final transcript = <LlmItem>[
+      ...history,
+      LlmUser(q, data: [...seed, ...personal]),
+    ];
+    for (final r in [...seed, ...personal]) {
       chars += _jsonChars(r.content);
     }
 
     Future<LlmTurn> request() async {
+      // The question's settings, consent, data mode and memory scope must
+      // still hold before every request of every attempt.
+      final current = await coach.settings();
+      if (!current.enabled ||
+          current.provider != settings.provider ||
+          current.mode != settings.mode ||
+          current.consentAt != settings.consentAt ||
+          current.consentVersion != settings.consentVersion ||
+          health.mode != dataMode ||
+          await _memoryScope() != memoryScope) {
+        throw const CoachException(
+          CoachErrorKind.notConfigured,
+          'Coach settings or data mode changed. No further requests were '
+          'sent. Start a new question with your current settings.',
+        );
+      }
       if (network) {
+        _requireConsent(current);
         await _checkBudget();
         tally.attempts++;
       }
@@ -382,6 +451,12 @@ class CoachServiceImpl implements CoachService {
         tally.lastModel = t.model ?? client.model;
       }
       model = t.model ?? client.model;
+      if (health.mode != dataMode) {
+        throw const CoachException(
+          CoachErrorKind.notConfigured,
+          'Data mode changed while answering. Start a new question.',
+        );
+      }
       return t;
     }
 
@@ -515,11 +590,13 @@ class CoachServiceImpl implements CoachService {
             safety: m.safety,
             proposedMemories: m.proposedMemories,
             proposedCategories: m.proposedCategories,
+            proposedExpiries: m.proposedExpiries,
             error: m.error,
             sampleData: true,
             answeredBy: m.answeredBy,
             fallbackFrom: m.fallbackFrom,
             fallbackReason: m.fallbackReason,
+            replayScope: m.replayScope,
           )
         : m;
     await coach.appendMessage(out);
@@ -530,11 +607,11 @@ class CoachServiceImpl implements CoachService {
   static String budgetText(CoachUsage u) {
     final byRequests = u.requests >= u.requestLimit;
     final what = byRequests
-        ? '${u.requestLimit} questions'
+        ? '${u.requestLimit} model requests'
         : '${CoachFormat.grouped(u.tokenLimit)} tokens';
     return 'You\'ve reached today\'s limit for ${u.provider.label} '
-        '($what), so nothing was sent. It resets at midnight. You can raise '
-        'the limit or switch to the on-device coach in Settings → Coach.';
+        '($what). No further requests will be sent. It resets at midnight. '
+        'You can switch to the on-device coach in Settings → Coach.';
   }
 
   Future<void> _checkBudget() async {
@@ -599,10 +676,11 @@ class CoachServiceImpl implements CoachService {
       'Your AI provider account is out of credit or quota.',
     CoachErrorKind.dailyLimit =>
       e.message ??
-          "You've reached today's limit, so nothing was sent. It resets at "
+          "You've reached today's limit. No further requests were sent. It resets at "
               'midnight.',
     CoachErrorKind.network =>
-      'Couldn\'t reach the AI provider. Check your connection and try again.',
+      'No answer arrived from the AI provider. A request may already have '
+          'reached it. Check your connection and try again.',
     CoachErrorKind.server =>
       'The AI provider had a problem. Try again shortly.',
     CoachErrorKind.refused => refusalText,
@@ -627,13 +705,32 @@ class CoachServiceImpl implements CoachService {
     ),
   );
 
+  /// The saved memories this question may use (ids, versions, expiry,
+  /// review state), or 'off'. A change mid-question stops it; an answer
+  /// built under another scope is not replayed to a cloud provider.
+  Future<String> _memoryScope() async {
+    if (!await coach.memoryEnabled()) return 'off';
+    final today = DayKey.of(clock());
+    final facts = [
+      for (final m in await coach.memories())
+        if (m.expiresOn == null || m.expiresOn!.compareTo(today) >= 0)
+          '${m.id}|${m.updatedAt?.toIso8601String()}|${m.expiresOn}|${MemoryContext.needsReview(m, today)}',
+    ];
+    facts.sort();
+    return jsonEncode(facts);
+  }
+
   /// Earlier Q/A of [conv] as plain text (answers without errors; fixed
-  /// safety copy is not replayed). For a cloud provider only answers that
-  /// were themselves produced for a cloud provider (sent != null) are
-  /// replayed: an on-device answer was built without the Google Health API
-  /// filter and must never leave the phone as history.
-  Future<List<LlmItem>> _history(String conv, {required bool cloud}) async {
+  /// safety copy is not replayed; sample-data answers only in demo mode).
+  /// For a cloud provider only answers built under the current privacy
+  /// scope are replayed ([_replayable]).
+  Future<List<LlmItem>> _history(
+    String conv, {
+    required bool cloud,
+    required String memoryScope,
+  }) async {
     final msgs = await coach.messages(conv);
+    final settings = await coach.settings();
     final pairs = <(String, String)>[];
     for (var i = 0; i + 1 < msgs.length; i++) {
       final u = msgs[i], a = msgs[i + 1];
@@ -641,9 +738,8 @@ class CoachServiceImpl implements CoachService {
           a.role == ChatRole.assistant &&
           a.error == null &&
           !a.safety &&
-          // A cloud chat replays what the cloud saw, plus answers written on
-          // this phone as its fallback (they are part of the conversation).
-          (!cloud || a.sent != null || a.fellBack)) {
+          a.sampleData == (health.mode == DataMode.demo) &&
+          (!cloud || _replayable(a, settings, memoryScope))) {
         pairs.add((u.text, CoachPrompts.stripCitations(a.text)));
         i++;
       }
@@ -657,6 +753,24 @@ class CoachServiceImpl implements CoachService {
         LlmAssistant(LlmTurn(text: a)),
       ],
     ];
+  }
+
+  /// History isolation for a cloud chat: the same provider, mode, payload
+  /// version and memory scope as now. That includes answers a backup model
+  /// or this phone wrote as the chosen model's fallback: they ran behind the
+  /// same source firewall with the same context, and are part of the chat.
+  /// An on-device fallback that sent nothing carries its scope in
+  /// [ChatMessage.replayScope]; an answer of the on-device coach itself
+  /// (never a fallback) is never replayed.
+  static bool _replayable(ChatMessage a, CoachSettings s, String memoryScope) {
+    final sent = a.sent;
+    if (sent != null) {
+      return sent.provider == s.provider &&
+          sent.mode == s.mode &&
+          sent.privacyVersion == kCoachPayloadVersion &&
+          sent.memoryContext == memoryScope;
+    }
+    return a.fellBack && a.replayScope == replayScopeOf(s, memoryScope);
   }
 
   static int _chars(LlmItem i) => switch (i) {

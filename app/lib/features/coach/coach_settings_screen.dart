@@ -23,7 +23,7 @@ String usageLine(CoachUsage u) {
       ? '$n'
       : '${(n / 1000).toStringAsFixed(n < 10000 ? 1 : 0).replaceFirst(RegExp(r'\.0$'), '')}k';
   final tokens = u.inputTokens + u.outputTokens;
-  return '${u.requests} of ${u.requestLimit} questions · '
+  return '${u.requests} of ${u.requestLimit} model requests · '
       '${k(tokens)} of ${k(u.tokenLimit)} tokens';
 }
 
@@ -67,8 +67,12 @@ class CoachSettingsScreen extends ConsumerWidget {
       );
       if (yes != true) return;
       var ok = true;
+      String? failure;
       try {
         await withdrawCloud(ref.read(coachRepositoryProvider));
+      } on CoachException catch (e) {
+        ok = false;
+        failure = e.message;
       } catch (_) {
         ok = false;
       }
@@ -78,7 +82,7 @@ class CoachSettingsScreen extends ConsumerWidget {
           context,
           ok
               ? 'Back to on-device. Your key was deleted.'
-              : 'Could not turn it off. Try again.',
+              : failure ?? 'Could not complete withdrawal. Try again.',
         );
       }
     }

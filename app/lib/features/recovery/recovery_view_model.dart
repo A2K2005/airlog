@@ -184,7 +184,7 @@ class RecoveryViewModel extends AsyncNotifier<RecoveryState> {
   Future<RecoveryState> build() async {
     ref.watch(revisionProvider);
     final repo = ref.watch(healthRepositoryProvider);
-    final now = ref.watch(clockProvider)();
+    final now = ref.watch(currentTimeProvider);
     final dateF = ref.watch(focusedDateProvider.future);
     final latestF = ref.watch(latestDateProvider.future);
     final date = await dateF;

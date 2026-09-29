@@ -990,9 +990,19 @@ class _Run {
 
     bool inList(List<double> xs) => xs.any((k) => _close(n, k));
 
-    // Numbers the user gave in the question are fine; memory numbers only
-    // outside measured metrics.
-    if (inList(_questionNumbers) ||
+    // A question can contain a mistaken hypothesis, not a measurement.
+    // Only an explicitly attributed/negated repetition can use that number
+    // when the answer names a measured metric or cites measurement evidence.
+    final before = _masked.substring(_sentences[n.sentence].start, c.start);
+    final attributed = RegExp(
+      r'(?:you (?:said|asked|reported|mentioned)|your (?:question|estimate)|not)\s*[^.!?;]{0,45}$',
+      caseSensitive: false,
+    ).hasMatch(before);
+    final negated = RegExp(r'\bnot\s*$', caseSensitive: false).hasMatch(before);
+    if ((inList(_questionNumbers) &&
+            (negated ||
+                (n.cited.isEmpty &&
+                    (attributed || !_measured.contains(n.family))))) ||
         (!_measured.contains(n.family) && inList(_memoryNumbers))) {
       c.supported = true;
       return;

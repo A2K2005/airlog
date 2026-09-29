@@ -274,7 +274,10 @@ class CoachSetupViewModel extends AsyncNotifier<CoachSetupState> {
       ref.invalidate(coachConfigProvider);
       return true;
     } catch (_) {
-      if (ref.mounted) state = AsyncData(s.copyWith(busy: false));
+      if (ref.mounted) {
+        ref.invalidateSelf();
+        ref.invalidate(coachConfigProvider);
+      }
       return false;
     }
   }

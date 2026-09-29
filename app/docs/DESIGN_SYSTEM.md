@@ -33,7 +33,7 @@ Also:
   - `app/note_card.dart`: `noteCard` (a `StatusCard` whose button routes to Profile or Sources)
   - `app/ask_entry.dart`: the coach's entry points. `AskAboutThis({required screen, date, prefill, label = 'Ask about this'})` (a quiet compact button), `AskIconButton({screen, date})` (a 48 dp header icon), `openCoach(context, AskContext?, {prefill})`, `CoachArgs` (the `/coach` route arguments) and `askIcon`. They only navigate: no provider is read, so a screen's tests need no coach overrides
   - `app/copy.dart` also holds `CoachCopy` (disclosure, consent, engine, model and cost copy) and `CoachSettingsCopy`, printed by the chat, Coach setup, Settings → Coach and the privacy policy
-- **One clock:** everything reads `clockProvider` (`app/providers.dart`). There is no second clock provider, and presentation code never calls `DateTime.now()`.
+- **One clock source:** `clockProvider` (`app/providers.dart`) supplies the injectable clock. Reactive presentation watches `currentTimeProvider`, which refreshes on minute boundaries and on resume; imperative actions read `clockProvider`. Presentation code never calls `DateTime.now()`.
 - **Navigation:** `Navigator.of(context).pushNamed(Routes.x)`, where `Routes` comes from `app/route_names.dart`.
 - **Tab screens** (Today, Sleep, Strain, Trends) are Scaffold-less bodies inside the shell. Pushed screens own their Scaffold.
 - **ScoreRing sweep:** the 700 ms sweep plays once per `playKey` (for example `'recovery:2026-09-28'`) per app process. Pass a `playKey` only for today's rings.
@@ -154,15 +154,20 @@ The look is a 1:1 copy of the user's own Figma widget PNGs (`Widget/{Small,Mediu
 |---|---|---|---|
 | DM Sans (variable) | `assets/fonts/DMSans/DMSans-Variable.ttf` | OFL 1.1 (`OFL.txt` beside it) | Bundled |
 | Subway Ticker Grid | `assets/fonts/SubwayTickerGrid/SubwayTickerGrid.ttf` | K-Type free-font licence (personal use; publishing needs K-Type's Enterprise licence) | **Gitignored.** Place the file yourself (see the README) |
+| Doto (variable) | `assets/fonts/Doto/Doto-Variable.ttf` | OFL 1.1 (`OFL.txt` beside it) | **In the repo, not declared in `pubspec.yaml`, so not bundled** |
 | Manrope 500 | `assets/fonts/Manrope/` | OFL 1.1 | Bundled; the fallback for ₂ only |
 
 **DM Sans confidence: moderate.** Against 14 text crops from the PNGs (rendered with `tool/figma/measure.py`), DM Sans won 10, with a mean error of 0.319 (Hanken Grotesk 0.327, Figtree 0.367, Plus Jakarta Sans 0.374, Inter 0.382, Manrope 0.399). Letter shapes and widths match well. The digits do not: the design's face has an oval zero and a flagged one, so digit-heavy labels (the minutes on Medium/16) differ most.
+
+Doto (OFL) is the licence-free candidate if the app is published without buying the Subway licence. Swapping means declaring it in `pubspec.yaml`, pointing `F.numerals` at it, registering its `OFL.txt` in `lib/app/licenses.dart`, and re-running the Figma diff harness below (the dot shapes differ, so the dot-numeral tiles will move).
 
 **Dot font coverage.** The face maps ASCII, Latin-1 and U+2212 (minus). `DotMatrixNumber.glyphs` is the set numbers use: `0–9 . , : % + - − /` and space. Missing: the en dash and em dash are in the file but have no ink, and U+2009 (thin space) and U+202F (narrow no-break space) are absent. `DotMatrixNumber.safe` maps these to a hyphen or a space. A missing value is `--` (`DotMatrixNumber.missing`), never a dash glyph.
 
 ## Tiles (`lib/design/tiles/`, `lib/design/components/{tile,bento,dot_matrix,sample_data}.dart`)
 
 Every label and value is a parameter; the tiles hold no copy of their own. A missing number is `--` plus a status word ("No data last night", "Learning").
+
+At large text settings, `GlowTile` provides a readable, reflowing alternative based on its complete semantic label instead of shrinking fixed-coordinate labels. Keep that label complete and meaningful, including units, unknown states and action context. Verify both standard and large-type layouts on the release device.
 
 **Kit**
 

@@ -2,12 +2,15 @@ package app.airlog.airlog
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.content.ComponentName
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 import java.time.LocalDate
+import org.json.JSONObject
 
 /**
  * Dark home-screen widget: Recovery %, Strain, Sleep. Renders the snapshot
@@ -18,6 +21,17 @@ import java.time.LocalDate
  * third_party/edge/LICENSE); layout and copy are ours.
  */
 class AirlogWidgetProvider : HomeWidgetProvider() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action in setOf(Intent.ACTION_DATE_CHANGED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)) {
+            val ids = AppWidgetManager.getInstance(context)
+                .getAppWidgetIds(ComponentName(context, AirlogWidgetProvider::class.java))
+            super.onReceive(context, Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
+            return
+        }
+        super.onReceive(context, intent)
+    }
 
     override fun onUpdate(
         context: Context,
@@ -30,24 +44,26 @@ class AirlogWidgetProvider : HomeWidgetProvider() {
         }
     }
 
-    private fun num(prefs: SharedPreferences, key: String): Long? =
-        (prefs.all[key] as? Number)?.toLong()
-
     private fun render(context: Context, prefs: SharedPreferences): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.airlog_widget)
-        val recovery = num(prefs, "airlog_recovery") ?: -1L
-        val zone = prefs.getString("airlog_zone", "none") ?: "none"
-        val strain = prefs.getString("airlog_strain", "–") ?: "–"
-        val sleep = prefs.getString("airlog_sleep", "–") ?: "–"
-        val demo = prefs.getBoolean("airlog_demo", false)
+        // A single preference makes the mode, date and scores one snapshot.
+        // Pre-upgrade individual keys are intentionally not reused.
+        val data = runCatching {
+            JSONObject(prefs.getString("airlog_snapshot_v1", "{}") ?: "{}")
+        }.getOrElse { JSONObject() }
+        val recovery = data.optInt("recovery", -1)
+        val zone = data.optString("zone", "none")
+        val strain = data.optString("strain", "–")
+        val sleep = data.optString("sleep", "–")
+        val demo = data.optBoolean("demo", false)
         // QA-08: the day shown isn't today (nothing for today has arrived):
-        // label it, never pass yesterday's numbers off as today's. The flag
-        // is written when the app last ran; the widget re-renders every
+        // label it, never pass yesterday's numbers off as today's. The
+        // widget re-renders on clock broadcasts and every
         // 30 min, so it also checks the date itself (the app may not have
         // run since midnight).
-        val date = prefs.getString("airlog_date", "") ?: ""
-        val stale = prefs.getBoolean("airlog_stale", false) ||
-            (date.isNotEmpty() && date != LocalDate.now().toString())
+        val date = data.optString("date", "")
+        val stale = date.isNotEmpty() && date != LocalDate.now().toString()
+        val quality = data.optString("quality", "")
 
         views.setTextViewText(R.id.widget_recovery, if (recovery >= 0) "$recovery%" else "–")
         views.setTextColor(
@@ -63,12 +79,12 @@ class AirlogWidgetProvider : HomeWidgetProvider() {
         views.setTextViewText(R.id.widget_sleep, sleep)
         views.setTextViewText(
             R.id.widget_caption,
-            when {
-                demo && stale -> "Airlog · demo · not today"
-                demo -> "Airlog · demo"
-                stale -> "Airlog · waiting for today"
-                else -> "Airlog"
-            },
+            listOfNotNull(
+                "Airlog",
+                if (demo) "sample data" else null,
+                if (date.isEmpty()) "waiting for data" else if (stale) date else null,
+                quality.takeIf { it.isNotEmpty() },
+            ).joinToString(" · "),
         )
         views.setOnClickPendingIntent(
             R.id.widget_root,

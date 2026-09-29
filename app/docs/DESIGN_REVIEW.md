@@ -61,6 +61,8 @@ These inks fail WCAG AA in the design itself. The brief says the PNG wins, so th
 
 In the app the labels differ from the PNG's sample text, but the ink and background at each position are the same.
 
+**PR #1 merge (2026-09-30).** Codex's PR raised `unitSoft`, `axis`, `secondary`, `tertiary` and `faint` to 80–90 % white and laid a black wash over the whole Small/2 and Medium/7 backgrounds. Both were reverted on merge (user decision, PRODUCT_PLAN §7): the inks keep the Figma levels, and the tile-wide wash is not a spot fix (it moved the Figma diff of Small/2 to 79.6 % and Medium/7 to 89.5 %). The Small/2 "ml" and Medium/7 "VO2Max" rows above stay open: a fix has to be local to that spot and keep the tile inside its diff limit.
+
 ### Before | After | Why
 
 | Before | After | Why |

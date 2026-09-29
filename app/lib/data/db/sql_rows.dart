@@ -119,7 +119,14 @@ abstract final class SqlRows {
       (r.hrSamples.isEmpty ? r : withHrSamples(r, const [])).toJson()
         ..remove('hrSamples'),
     ),
-    'hr': r.hrSamples.isEmpty ? null : encodeSamples(r.date, r.hrSamples),
+    'hr_start': r.hrSamples.isEmpty ? null : sampleAnchor(r.hrSamples),
+    'hr': r.hrSamples.isEmpty
+        ? null
+        : encodeSamples(
+            r.date,
+            r.hrSamples,
+            startMs: sampleAnchor(r.hrSamples),
+          ),
     'updated_at': nowMs,
   };
 

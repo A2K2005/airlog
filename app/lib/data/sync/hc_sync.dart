@@ -17,6 +17,7 @@ import '../services/health_connect/hc_types.dart';
 
 const String kHcTokenScope = 'changes';
 const String kHcTokenTypesKey = 'hc.token_types';
+const String kHcMetadataPendingKey = 'hc.metadata_pending';
 
 class HcSync {
   HcSync({
@@ -38,6 +39,8 @@ class HcSync {
   final int historyBackfillDays;
 
   final List<SyncLogEntry> _log = [];
+  bool _readFailed = false;
+  bool _background = false;
 
   void _note(String type, String status, {int records = 0, String? message}) =>
       _log.add(
@@ -57,6 +60,8 @@ class HcSync {
     bool background = false,
   }) async {
     _log.clear();
+    _readFailed = false;
+    _background = background;
     final dirty = <String>{};
     try {
       final avail = await hc.availability();
@@ -95,13 +100,17 @@ class HcSync {
       }
       if (granted.isEmpty) return dirty;
 
-      final tokenTypes =
+      final typeNames =
           (granted.where((t) => t != HcType.vo2max).map((t) => t.key).toList()
                 ..sort())
               .join(',');
+      final tokenTypes =
+          '$typeNames|history=${perms.historyGranted}|context=$contextEnabled';
       final saved = await app.token(SourceKind.healthConnect, kHcTokenScope);
       final savedTypes = await app.getSetting(kHcTokenTypesKey);
-      if (saved == null || savedTypes != tokenTypes) {
+      final metadataPending =
+          !background && await app.getSetting(kHcMetadataPendingKey) != null;
+      if (saved == null || savedTypes != tokenTypes || metadataPending) {
         dirty.addAll(
           await _full(
             granted,
@@ -143,10 +152,12 @@ class HcSync {
     for (final type in granted) {
       dirty.addAll(await _readWindow(type, from, now, label: reason));
     }
-    if (token != null && token.isNotEmpty) {
+    if (!_readFailed && token != null && token.isNotEmpty) {
       await app.setToken(SourceKind.healthConnect, kHcTokenScope, token);
       await app.setSetting(kHcTokenTypesKey, tokenTypes);
+      if (!_background) await app.setSetting(kHcMetadataPendingKey, null);
     } else {
+      await app.setToken(SourceKind.healthConnect, kHcTokenScope, null);
       _note(
         'changes_token',
         'error',
@@ -192,6 +203,7 @@ class HcSync {
         dirty.addAll(await _replace(type, a, b, m.rows));
       } catch (e) {
         failed++;
+        _readFailed = true;
         lastErr = e is SourceException ? e.cause : e;
       }
       a = b;
@@ -204,7 +216,7 @@ class HcSync {
     ];
     _note(
       type.key,
-      failed > 0 && kept == 0 ? 'error' : (kept == 0 ? 'empty' : 'ok'),
+      failed > 0 ? 'error' : (kept == 0 ? 'empty' : 'ok'),
       records: kept,
       message: parts.isEmpty ? null : parts.join('; '),
     );
@@ -318,8 +330,8 @@ class HcSync {
     String tokenTypes,
   ) async {
     final dirty = <String>{};
-    final upserts = <HcRecord>[];
-    final deleted = <String>[];
+    final latestUpserts = <String, List<HcRecord>>{};
+    final deleted = <String>{};
     var next = token;
     for (var page = 0; page < 100; page++) {
       final resp = await hc.changes(next);
@@ -334,11 +346,24 @@ class HcSync {
         );
         return _full(granted, history, tokenTypes, reason: 'token expired');
       }
-      upserts.addAll(resp.upserts);
-      deleted.addAll(resp.deletedIds);
+      final removed = resp.deletedIds.toSet();
+      if (resp.upserts.any((r) => removed.contains(r.id))) {
+        // The plugin splits a page into two lists and loses event ordering.
+        // An authoritative window read resolves this ambiguous page safely.
+        return _full(granted, history, tokenTypes, reason: 'ambiguous changes');
+      }
+      for (final id in resp.upserts.map((r) => r.id).toSet()) {
+        deleted.remove(id);
+        latestUpserts[id] = resp.upserts.where((r) => r.id == id).toList();
+      }
+      for (final id in removed) {
+        latestUpserts.remove(id);
+        deleted.add(id);
+      }
       next = resp.nextToken;
       if (!resp.hasMore) break;
     }
+    final upserts = latestUpserts.values.expand((records) => records).toList();
 
     // Deletions carry only a record id (no type): delete across every table.
     if (deleted.isNotEmpty) {
@@ -366,16 +391,32 @@ class HcSync {
       ingestedAt: clock(),
       contextEnabled: contextEnabled,
     );
+    if (_background && m.rows.all.any((r) => r.device == null)) {
+      await app.setSetting(kHcMetadataPendingKey, 'true');
+    }
     // An upsert replaces the whole record: drop its old rows first (a
     // shortened HeartRateRecord must not leave stale samples).
-    final ids = {
-      for (final r in m.rows.all)
-        if (r.recordId != null) r.recordId!,
-    };
+    final ids = {for (final r in plain) r.id};
     if (ids.isNotEmpty) {
       dirty.addAll(await raw.deleteRecords(SourceKind.healthConnect, ids));
       dirty.addAll(await raw.deleteRecords(SourceKind.context, ids));
       dirty.addAll(await raw.upsert(m.rows));
+    }
+    // Old HR corrections cannot be reconstructed from pruned raw samples.
+    // The store retains record→day metadata and invalidates those buckets.
+    if (granted.contains(HcType.heartRate)) {
+      final before = DayKey.of(clock().subtract(kRawHrRetention));
+      for (final day in dirty.toList()..sort()) {
+        if (day.compareTo(before) >= 0) continue;
+        dirty.addAll(
+          await _readWindow(
+            HcType.heartRate,
+            DayKey.start(day),
+            DayKey.end(day),
+            label: 'historical correction',
+          ),
+        );
+      }
     }
     for (final w in _mergeWindows(sleepWindows)) {
       if (granted.contains(HcType.sleep)) {
@@ -412,7 +453,9 @@ class HcSync {
         if (m.future > 0) 'dropped ${m.future} future-dated',
       ].join(', '),
     );
-    await app.setToken(SourceKind.healthConnect, kHcTokenScope, next);
+    if (!_readFailed) {
+      await app.setToken(SourceKind.healthConnect, kHcTokenScope, next);
+    }
     return dirty;
   }
 

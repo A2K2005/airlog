@@ -1,8 +1,8 @@
 # Airlog (working name)
 
-Airlog answers one question each morning: **how am I, and what should I do today?** It reads what your wearables already record (Fitbit / Google Health, Samsung Health, Oura, any app that writes to Health Connect) and turns it into Recovery, Strain and Sleep scores of its own. Everything is computed on your phone: no server, no account, no analytics. Every number is derived from a source measurement, never invented, and every score shows its inputs.
+Airlog turns supported wearable measurements into its own Recovery, Strain and Sleep estimates, with inputs and missing-data states shown. Scores are computed on your phone; they are wellness heuristics, not clinically validated assessments. There is no Airlog account or analytics service. Optional cloud Coach sends disclosed context to the chosen model provider only after consent; offline coaching stays local.
 
-> Status: Android build running on **demo data** until the band arrives; the Phase 0 probe runs on the real band on day 1 (see [`docs/DAY1_CHECKLIST.md`](docs/DAY1_CHECKLIST.md)). iOS is planned, not built (see [`../IOS_PLAN.md`](../IOS_PLAN.md)).
+> Status: Android launch hardening in progress. Automated tests do not establish real-device ingestion, Bluetooth, OAuth or background-sync reliability. Complete [`docs/DAY1_CHECKLIST.md`](docs/DAY1_CHECKLIST.md) before claiming those paths work. Demo data is opt-in; live mode can show no data. iOS is outside this release (planned, not built: see [`../IOS_PLAN.md`](../IOS_PLAN.md)).
 > Not affiliated with Google, Fitbit, Samsung or WHOOP. Not medical advice.
 
 ## What's inside
@@ -10,12 +10,12 @@ Airlog answers one question each morning: **how am I, and what should I do today
 | Area | What it does |
 |---|---|
 | **Today** | One plan for the day: a plain-words state (ready, steady, take it easy, rest, still learning, waiting for data), the 1–2 numbers behind it and up to 3 actions. After 18:00 it talks about tonight. Scores are labelled when an input is missing (e.g. "Recovery · without HRV") |
-| **Recovery** | Contribution of each input (HRV, resting HR, sleep, respiration; re-weighted when one is missing); each input inside its 30-day baseline band |
-| **Sleep** | Stages; slept vs sleep target (baseline + debt + strain); debt; consistency; bedtime recommendation |
+| **Recovery** | Input contributions, re-weighted when missing, against comparable prior readings. Low-confidence recovery does not support an effort target |
+| **Sleep** | Recorded stages or unavailable; slept vs estimated target (baseline + debt + strain); debt; consistency; bedtime recommendation |
 | **Strain** | HR timeline by zone; minutes per zone; per-workout strain; target strain for today's recovery. No strain score without heart rate |
-| **Trends** | 7 / 30 / 90 days; trend arrows only when statistically significant (Mann-Kendall) |
+| **Trends** | 7 / 30 / 90 days; trend arrows require comparable inputs and statistical significance. Load excludes today and insufficiently covered days |
 | **Journal** | Evening tags and what they are *associated with* in next-day recovery (≥10 days per group, Holm-corrected, with a confidence interval) |
-| **Coach** (optional) | Ask about your data in plain words, with your own Claude or Gemini key. Answers are grounded in tool calls and checked by a verifier (every number must match your data), an output policy (no diagnosis, red-flag handling) and a prompt-injection filter. Daily request and token budget. Can be hidden entirely |
+| **Coach** (optional) | Offline summaries or consented cloud questions using your Claude/Gemini key. Tool grounding, numeric verification, output policy and budgets reduce risk but do not guarantee correctness. Can be hidden entirely |
 | **Sources** | Any app via Health Connect, plus the Google Health API. One source per metric, chosen automatically and changeable; switching sources re-learns your baseline instead of mixing devices |
 | **Live** | Bluetooth heart rate (standard 0x180D): live zones and strain |
 | **Settings** | Sources, profile, sync log, export (CSV + JSON), methodology with citations, licences, delete everything |
@@ -24,7 +24,7 @@ Airlog answers one question each morning: **how am I, and what should I do today
 **HRV without guessing:** HRV is taken from the best nightly source available (Google Health deep-sleep RMSSD, then Health Connect sleep RMSSD). Spot readings are ignored, and HRV is never estimated from heart rate. With no HRV, Recovery is shown "without HRV" with its coverage.
 
 ## Design
-The UI is a 1:1 build of my own Figma widget designs (`Widget/`), checked by golden diff tests. Numerals use a dot-matrix face; motion follows short ease-out rules and respects reduced motion. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+The UI is a 1:1 build of my own Figma widget designs (`Widget/`), checked by golden diff tests. Numerals use a dot-matrix face (Subway Ticker Grid). Text inks keep the designs' levels; contrast is fixed only at the spots listed in [`docs/DESIGN_REVIEW.md`](docs/DESIGN_REVIEW.md). At large text settings a tile switches to a readable, reflowing alternative. Motion follows short ease-out rules and respects reduced motion. See [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
 
 ## Architecture
 Clean Architecture boundaries, Riverpod MVVM view-models, feature-first presentation. Scoring lives in a pure-Dart domain layer. See [`ARCHITECTURE.md`](ARCHITECTURE.md).
@@ -34,7 +34,7 @@ Clean Architecture boundaries, Riverpod MVVM view-models, feature-first presenta
 The toolchain lives on `D:\dev` (Flutter 3.47.5, JDK 17, Android SDK). Dot-source the env script in every new PowerShell window:
 
 ```powershell
-. .\tool\env.ps1
+. .\tool\env.ps1          # keeps FLUTTER_ROOT, JAVA_HOME, ANDROID_HOME etc. if set; else D:\dev
 flutter pub get
 flutter analyze
 flutter test                     # domain, data, coach evals, widgets, goldens
@@ -63,7 +63,15 @@ The outputs are in `build\app\outputs\flutter-apk\`:
 - `app-arm64-v8a-release.apk` for current phones;
 - `app-armeabi-v7a-release.apk` and `app-x86_64-release.apk` for older phones and the emulator.
 
-Release builds are signed with the debug key (`android/app/build.gradle.kts`). That is fine for sideloading but not for Play; see [`docs/PLAY_RELEASE.md`](docs/PLAY_RELEASE.md).
+**Release signing fails closed** (`android/app/build.gradle.kts`). A release task needs all four signing variables: `AIRLOG_KEYSTORE`, `AIRLOG_KEYSTORE_PASSWORD`, `AIRLOG_KEY_ALIAS` and `AIRLOG_KEY_PASSWORD` (see [`tool/setup_toolchain.md`](tool/setup_toolchain.md) and [`docs/PLAY_RELEASE.md`](docs/PLAY_RELEASE.md)). Debug signing is never a silent fallback.
+
+**Local sideload build (explicit opt-in).** With `AIRLOG_LOCAL_RELEASE=1` set and **none** of the four variables set, the release is signed with the debug key and Gradle warns "local sideload build, not for the store". A partial set of the four still fails, and a full set always wins. Never upload such a build to Play.
+
+```powershell
+$env:AIRLOG_LOCAL_RELEASE = '1'
+flutter build apk --release
+Remove-Item Env:AIRLOG_LOCAL_RELEASE
+```
 
 For startup timing marks in logcat (`adb logcat -s flutter | findstr airlog.timing`), add `--dart-define=AIRLOG_TIMING=true` to a profile or release build.
 
@@ -89,7 +97,11 @@ The tile numerals use **Subway Ticker Grid** by K-Type. Its licence doesn't allo
 assets/fonts/SubwayTickerGrid/SubwayTickerGrid.ttf
 ```
 
-K-Type's free licence covers personal use only. **Publishing the APK or the repository needs their commercial (Enterprise) licence**, or a swap to an OFL dot-matrix face.
+K-Type's free licence covers personal use only. **Publishing the APK or the repository needs their commercial (Enterprise) licence**, or a swap to an OFL dot-matrix face. **Doto** (OFL) is that licence-free candidate: it is kept in the repo at `assets/fonts/Doto/` with its `OFL.txt`, but it is not declared in `pubspec.yaml`, so it is not bundled.
+
+### Setup: toolchain and signing
+
+See [`tool/setup_toolchain.md`](tool/setup_toolchain.md) for the SDK locations, the Gradle temp-directory setting this machine needs, and the release-signing variables.
 
 ### Optional: Enhanced mode and the coach
 
@@ -100,6 +112,8 @@ flutter run --dart-define=GOOGLE_OAUTH_CLIENT_ID=<your-android-oauth-client-id>
 ```
 
 Without it, Enhanced mode shows "Not configured" and everything else works.
+
+The Android redirect scheme derives from this same client ID. If your registered redirect differs, pass `--dart-define=GOOGLE_OAUTH_REDIRECT=<registered-uri>` too. Device OAuth verification remains required.
 
 The coach works on-device with no key. For Claude or Gemini, paste your own API key in **Settings → Coach**; it is kept in Android's encrypted storage. The opt-in live eval (`tool/eval_live.dart`) costs money; see [`docs/EVALS.md`](docs/EVALS.md).
 

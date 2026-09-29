@@ -194,17 +194,15 @@ class SleepScreen extends ConsumerWidget {
           onTap: () => showSleepNeedExplain(context, a),
         ),
       ),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: AskAboutThis(screen: 'sleep', date: s.date),
-      ),
       SleepHero(
-        // Rebuilt per night: stepping days never morphs the ring.
         key: ValueKey('sleep-hero-${s.date}'),
         analysis: a,
         debtChange: s.debtChange,
-        playKey: s.isToday ? 'sleep-detail:${s.date}' : null,
         onExplain: () => showSleepNeedExplain(context, a),
+      ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: AskAboutThis(screen: 'sleep', date: s.date),
       ),
       if (s.bedtime != null)
         BedtimeCard(
@@ -316,6 +314,7 @@ SleepSummaryTile sleepSummaryTile(
     SleepStage.unknown => null,
   };
   List<String> parts(double? minutes) {
+    if (!a.hasStageData) return ['—', ''];
     final m = (minutes ?? 0).round();
     if (m < 60) return ['$m', ' min'];
     return ['${m ~/ 60}', 'h', ' ${m % 60}', 'min'];
@@ -354,6 +353,8 @@ SleepSummaryTile sleepSummaryTile(
     semanticLabel:
         'Sleep ${durationWords(a.sleptMinutes)}, performance '
         '${a.performance.round()} percent of a '
-        '${durationWords(a.needMinutes)} target. Opens how the target works.',
+        '${durationWords(a.needMinutes)} target. '
+        '${a.hasStageData ? '' : 'Sleep stages unavailable. '}'
+        'Opens how the target works.',
   );
 }

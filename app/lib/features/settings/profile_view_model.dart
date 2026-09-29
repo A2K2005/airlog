@@ -44,8 +44,9 @@ class ProfileDraft {
   String? birthYearError(DateTime now) {
     if (birthYear.trim().isEmpty) return null;
     final y = birthYearValue;
-    if (y == null || y < now.year - 100 || y > now.year - 10) {
-      return 'Enter a year between ${now.year - 100} and ${now.year - 10}';
+    if (y == null || y < now.year - 100 || y > now.year - 18) {
+      return 'Airlog is for adults. Enter a year between '
+          '${now.year - 100} and ${now.year - 18}';
     }
     return null;
   }
@@ -53,14 +54,18 @@ class ProfileDraft {
   String? get maxHrError {
     if (maxHr.trim().isEmpty) return null;
     final v = maxHrValue;
-    if (v == null || v < 100 || v > 240) return 'Between 100 and 240 bpm';
+    if (v == null || !v.isFinite || v < 100 || v > 240) {
+      return 'Between 100 and 240 bpm';
+    }
     return null;
   }
 
   String? get weightError {
     if (weight.trim().isEmpty) return null;
     final v = weightValue;
-    if (v == null || v < 30 || v > 300) return 'Between 30 and 300 kg';
+    if (v == null || !v.isFinite || v < 30 || v > 300) {
+      return 'Between 30 and 300 kg';
+    }
     return null;
   }
 

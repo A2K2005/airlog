@@ -193,6 +193,14 @@ abstract final class TodayPlanner {
     final sleep = r.sleep;
     final strain = r.strain;
     final bedtime = r.bedtime;
+    if (r.notes.any((n) => n.metric == 'age_unsupported')) {
+      return TodayPlan(
+        date: today.date,
+        state: DayState.noData,
+        headline: 'Scores are for adults',
+        summary: 'Airlog does not provide scores or training guidance for people under 18.',
+      );
+    }
 
     final lastData = sync?.lastDataAt ?? record.lastDataAt;
     final stale = lastData == null || now.difference(lastData) > staleAfter;
@@ -209,8 +217,10 @@ abstract final class TodayPlanner {
         if (HealthMonitor.isConcerning(m)) m,
     ];
     final calibrating = rec != null && (rec.calibrating || cal.calibrating);
+    final limited = rec != null && rec.confidence == RecoveryConfidence.low;
     final provisional =
-        rec != null && (!cal.established || rec.calibrating || calibrating);
+        rec != null &&
+        (!cal.established || rec.calibrating || calibrating || limited);
     final hrvNotShared = r.notShared.containsKey(Metric.hrv.code);
     final noScoreApp =
         rec == null &&
@@ -228,14 +238,14 @@ abstract final class TodayPlanner {
     if (!current || rec == null) {
       state = DayState.noData;
     } else if (concerning.length >= 2 ||
-        (!calibrating && rec.score < restBelow)) {
+        (!calibrating && !limited && rec.score < restBelow)) {
       state = DayState.rest;
     } else if (concerning.length == 1 ||
-        (!calibrating && rec.zone == RecoveryZone.red)) {
+        (!calibrating && !limited && rec.zone == RecoveryZone.red)) {
       state = DayState.easy;
     } else if (calibrating) {
       state = DayState.calibrating;
-    } else if (rec.zone == RecoveryZone.green && !stale) {
+    } else if (rec.zone == RecoveryZone.green && !stale && !limited) {
       state = DayState.ready;
     } else {
       state = DayState.steady;
@@ -243,6 +253,7 @@ abstract final class TodayPlanner {
     final recoveryDriven =
         rec != null &&
         !calibrating &&
+        !limited &&
         (rec.score < restBelow || rec.zone == RecoveryZone.red);
     final vitalsDriven =
         concerning.isNotEmpty &&
@@ -270,6 +281,10 @@ abstract final class TodayPlanner {
                 'strain still work.'
           : 'No HRV or resting heart rate arrived for last night, so there '
                 'is no Recovery score today.';
+    } else if (limited) {
+      summary =
+          'Recovery ${_recoveryWords(rec)} is based on limited inputs. '
+          'There is not enough information to recommend an effort target.';
     } else if (phase == PlanPhase.tonight) {
       final debt = bedtime!.debtMinutes >= debtMentionMinutes
           ? ', with ${PlanFormat.hm(bedtime.debtMinutes)} of sleep debt '
@@ -360,6 +375,7 @@ abstract final class TodayPlanner {
         phase == PlanPhase.today &&
         !stale &&
         !calibrating &&
+        !limited &&
         target != null) {
       final (lo, hi) = StrainEngine.targetRange(target);
       final t = PlanFormat.strain(target);

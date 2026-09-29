@@ -19,6 +19,7 @@ import 'raw_rows.dart';
 import 'schema.dart';
 import 'sql_rows.dart';
 import 'stores.dart';
+import 'write_guard.dart';
 
 class AirlogDatabase {
   AirlogDatabase._();
@@ -76,7 +77,7 @@ class AirlogDatabase {
 /// Runs [ops] in one transaction as one batch (a single platform-channel
 /// round trip on Android). Used by the demo seed.
 Future<void> runSqlOps(Database db, List<SqlOp> ops) =>
-    db.transaction((tx) async {
+    guardedWrite(db, (tx) async {
       final b = tx.batch();
       for (final op in ops) {
         if (op.sql.startsWith('INSERT')) {
@@ -328,6 +329,14 @@ class SqliteRawStore implements RawStore {
     final hrByDay = <HrDayKey, List<RawHrRow>>{};
     for (final r in batch.hr) {
       final d = dayKeyOf(r.t);
+      if (r.recordId != null) {
+        b.insert('hr_record_day', {
+          'source': r.source.code,
+          'record_id': r.recordId,
+          'origin': hrOrigin(r),
+          'date': d,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
       hrByDay.putIfAbsent((r.source, hrOrigin(r), d), () => []).add(r);
       days.add(d);
       days.add(nightKey(r.t));
@@ -359,7 +368,7 @@ class SqliteRawStore implements RawStore {
 
   @override
   Future<Set<String>> upsert(RawRows batch) =>
-      db.transaction((tx) => _upsertIn(tx, batch));
+      guardedWrite(db, (tx) => _upsertIn(tx, batch));
 
   @override
   Future<Set<String>> replaceWindow(
@@ -370,7 +379,7 @@ class SqliteRawStore implements RawStore {
     RawRows batch, {
     ScalarKind? scalar,
   }) {
-    return db.transaction((tx) async {
+    return guardedWrite(db, (tx) async {
       final days = <String>{};
       final table = _tables[kind]!;
       final (startCol, endCol) = _timeCols[kind]!;
@@ -440,9 +449,35 @@ class SqliteRawStore implements RawStore {
   ) {
     final ids = recordIds.toSet().toList();
     if (ids.isEmpty) return Future.value(<String>{});
-    return db.transaction((tx) async {
+    return guardedWrite(db, (tx) async {
       final days = <String>{};
       final hrDays = <HrDayKey, List<RawHrRow>>{};
+      for (final chunk in _chunks(ids, 400)) {
+        final indexed = await tx.query(
+          'hr_record_day',
+          where: 'source = ? AND record_id IN (${_in(chunk.length)})',
+          whereArgs: [source.code, ...chunk],
+        );
+        for (final row in indexed) {
+          final date = row['date'] as String;
+          days.add(date);
+          days.add(DayKey.add(date, 1));
+          if (!_recent(date)) {
+            // Individual samples have expired. Invalidate the whole bucket;
+            // HC sync rereads affected days before acknowledging the change.
+            await tx.delete(
+              'hr_day',
+              where: 'source = ? AND origin = ? AND date = ?',
+              whereArgs: [source.code, row['origin'], date],
+            );
+          }
+        }
+        await tx.delete(
+          'hr_record_day',
+          where: 'source = ? AND record_id IN (${_in(chunk.length)})',
+          whereArgs: [source.code, ...chunk],
+        );
+      }
       for (final kind in RawKind.values) {
         final table = _tables[kind]!;
         final (startCol, endCol) = _timeCols[kind]!;
@@ -635,13 +670,15 @@ class SqliteRawStore implements RawStore {
 
   @override
   Future<void> pruneRawHr(DateTime before) async {
-    await db.delete('raw_hr', where: 't < ?', whereArgs: [ms(before)]);
+    await guardedWrite(db, (tx) async {
+      await tx.delete('raw_hr', where: 't < ?', whereArgs: [ms(before)]);
+    });
   }
 
   @override
   Future<void> wipe({Set<SourceKind>? sources}) async {
     final (sw, sa) = _srcFilter(sources);
-    await db.transaction((tx) async {
+    await guardedWrite(db, (tx) async {
       for (final table in kRawTables) {
         await tx.delete(table, where: sw, whereArgs: sa);
       }
@@ -666,6 +703,24 @@ class SqliteAppStore implements AppStore {
   final Database db;
   final Clock clock;
 
+  @override
+  Future<T> mutate<T>(Future<T> Function() body, {DataMode? mode}) =>
+      sqliteMutation(db, body, mode: mode?.name);
+
+  @override
+  Future<List<DayBundle>> bundles(DataMode mode, String from, String to) async {
+    final rows = await db.rawQuery(
+      'SELECT r.*, s.json AS result_json FROM day_record r '
+      'JOIN day_result s ON r.mode = s.mode AND r.date = s.date '
+      'WHERE r.mode = ? AND r.date >= ? AND r.date <= ? ORDER BY r.date',
+      [mode.name, from, to],
+    );
+    return [
+      for (final r in rows)
+        DayBundle(_recordFrom(r), DayResult.fromJson(_json(r['result_json']))),
+    ];
+  }
+
   static Map<String, dynamic> _json(Object? s) =>
       jsonDecode(s as String) as Map<String, dynamic>;
 
@@ -677,7 +732,7 @@ class SqliteAppStore implements AppStore {
     String? clearFrom,
   }) async {
     final now = ms(clock());
-    await db.transaction((tx) async {
+    await guardedWrite(db, (tx) async {
       if (clearFrom != null) {
         for (final t in ['day_record', 'day_result']) {
           await tx.delete(
@@ -699,13 +754,23 @@ class SqliteAppStore implements AppStore {
         b.rawInsert(op.sql, op.args);
       }
       await b.commit(noResult: true);
+      await tx.delete(
+        'settings',
+        where: 'key = ?',
+        whereArgs: [pendingRecomputeKey(mode.name)],
+      );
     });
   }
 
   static DayRecord _recordFrom(Map<String, Object?> m) {
     final r = DayRecord.fromJson(_json(m['json']));
     final hr = m['hr'];
-    return hr is Uint8List ? withHrSamples(r, LazyHrSamples(r.date, hr)) : r;
+    return hr is Uint8List
+        ? withHrSamples(
+            r,
+            LazyHrSamples(r.date, hr, startMs: _iN(m['hr_start'])),
+          )
+        : r;
   }
 
   @override
@@ -779,8 +844,7 @@ class SqliteAppStore implements AppStore {
 
   @override
   Future<void> clearDays(DataMode mode) async {
-    await db.delete('day_record', where: 'mode = ?', whereArgs: [mode.name]);
-    await db.delete('day_result', where: 'mode = ?', whereArgs: [mode.name]);
+    await putDays(mode, const [], const [], clearFrom: '0000-00-00');
   }
 
   @override
@@ -797,26 +861,30 @@ class SqliteAppStore implements AppStore {
 
   @override
   Future<void> putJournal(DataMode mode, JournalEntry entry) async {
-    await db.insert('journal', {
-      'mode': mode.name,
-      'date': entry.date,
-      'json': jsonEncode(entry.toJson()),
-      'updated_at': ms(clock()),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await guardedWrite(db, (tx) async {
+      await tx.insert('journal', {
+        'mode': mode.name,
+        'date': entry.date,
+        'json': jsonEncode(entry.toJson()),
+        'updated_at': ms(clock()),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    });
   }
 
   /// Bulk journal write (demo seeding).
   Future<void> putJournals(DataMode mode, List<JournalEntry> entries) async {
-    final b = db.batch();
-    final now = ms(clock());
-    for (final e in entries) {
-      b.insert(
-        'journal',
-        SqlRows.journal(mode, e, now),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await b.commit(noResult: true);
+    await guardedWrite(db, (tx) async {
+      final b = tx.batch();
+      final now = ms(clock());
+      for (final e in entries) {
+        b.insert(
+          'journal',
+          SqlRows.journal(mode, e, now),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await b.commit(noResult: true);
+    });
   }
 
   @override
@@ -834,7 +902,9 @@ class SqliteAppStore implements AppStore {
 
   @override
   Future<void> clearJournal(DataMode mode) async {
-    await db.delete('journal', where: 'mode = ?', whereArgs: [mode.name]);
+    await guardedWrite(db, (tx) async {
+      await tx.delete('journal', where: 'mode = ?', whereArgs: [mode.name]);
+    });
   }
 
   @override
@@ -845,35 +915,39 @@ class SqliteAppStore implements AppStore {
 
   @override
   Future<void> setSetting(String key, String? value) async {
-    if (value == null) {
-      await db.delete('settings', where: 'key = ?', whereArgs: [key]);
-    } else {
-      await db.insert('settings', {
-        'key': key,
-        'value': value,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
+    await guardedWrite(db, (tx) async {
+      if (value == null) {
+        await tx.delete('settings', where: 'key = ?', whereArgs: [key]);
+      } else {
+        await tx.insert('settings', {
+          'key': key,
+          'value': value,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
   }
 
   @override
   Future<void> addLog(List<SyncLogEntry> entries) async {
     if (entries.isEmpty) return;
-    final b = db.batch();
-    for (final e in entries) {
-      b.insert('sync_log', {
-        'at': ms(e.at),
-        'source': e.source.code,
-        'data_type': e.dataType,
-        'status': e.status,
-        'records': e.records,
-        'message': e.message,
-      });
-    }
-    // Keep the log bounded.
-    b.rawDelete(
-      'DELETE FROM sync_log WHERE id <= (SELECT MAX(id) FROM sync_log) - 2000',
-    );
-    await b.commit(noResult: true);
+    await guardedWrite(db, (tx) async {
+      final b = tx.batch();
+      for (final e in entries) {
+        b.insert('sync_log', {
+          'at': ms(e.at),
+          'source': e.source.code,
+          'data_type': e.dataType,
+          'status': e.status,
+          'records': e.records,
+          'message': e.message,
+        });
+      }
+      // Keep the log bounded.
+      b.rawDelete(
+        'DELETE FROM sync_log WHERE id <= (SELECT MAX(id) FROM sync_log) - 2000',
+      );
+      await b.commit(noResult: true);
+    });
   }
 
   @override
@@ -904,25 +978,27 @@ class SqliteAppStore implements AppStore {
 
   @override
   Future<void> setToken(SourceKind source, String scope, String? token) async {
-    if (token == null) {
-      await db.delete(
-        'change_tokens',
-        where: 'source = ? AND scope = ?',
-        whereArgs: [source.code, scope],
-      );
-    } else {
-      await db.insert('change_tokens', {
-        'source': source.code,
-        'scope': scope,
-        'token': token,
-        'created_at': ms(clock()),
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
+    await guardedWrite(db, (tx) async {
+      if (token == null) {
+        await tx.delete(
+          'change_tokens',
+          where: 'source = ? AND scope = ?',
+          whereArgs: [source.code, scope],
+        );
+      } else {
+        await tx.insert('change_tokens', {
+          'source': source.code,
+          'scope': scope,
+          'token': token,
+          'created_at': ms(clock()),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
   }
 
   @override
   Future<void> wipe() async {
-    await db.transaction((tx) async {
+    await guardedWrite(db, (tx) async {
       for (final t in [
         'day_record',
         'day_result',

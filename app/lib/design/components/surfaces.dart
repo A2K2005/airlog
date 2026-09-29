@@ -133,8 +133,7 @@ class AppButton extends StatelessWidget {
               color: ink,
               fontWeight: FontWeight.w700,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            maxLines: bigText(context) ? null : 2,
             textAlign: TextAlign.center,
           ),
         ),
@@ -144,6 +143,7 @@ class AppButton extends StatelessWidget {
       constraints: BoxConstraints(minHeight: compact ? 36 : S.tap),
       padding: EdgeInsets.symmetric(
         horizontal: kind == AppButtonKind.quiet ? 0 : (compact ? S.x4 : S.x5),
+        vertical: S.x2,
       ),
       alignment: expand ? Alignment.center : null,
       decoration: BoxDecoration(

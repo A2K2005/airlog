@@ -38,7 +38,12 @@ class SettingsScreen extends ConsumerWidget {
     Future<void> wipe() async {
       final ok = await c.wipe();
       if (!context.mounted) return;
-      snack(context, ok ? 'All data deleted.' : 'Could not delete the data.');
+      snack(
+        context,
+        ok
+            ? 'Stored records deleted. Settings and keys kept.'
+            : 'Deletion did not finish. Some records may already be removed.',
+      );
     }
 
     // Screen readers: the hold becomes a tap, so confirm in a dialog.
@@ -49,9 +54,11 @@ class SettingsScreen extends ConsumerWidget {
         builder: (d) => AlertDialog(
           title: const Text('${SettingsCopy.deleteTitle}?'),
           content: const Text(
-            'This erases every reading, score, journal entry and live session '
-            'stored on this phone. Health Connect and Google keep their own '
-            'copies. It cannot be undone.',
+            'Deletes stored readings, scores, journal entries, live sessions, '
+            'coach chats and memories, and exports held by Airlog. Settings, '
+            'profile, cloud keys and source sign-ins stay. Copies already shared '
+            'elsewhere and records in Health Connect or Google stay. Demo data '
+            'is regenerated in Demo mode. This cannot be undone.',
           ),
           actions: [
             TextButton(
@@ -82,18 +89,36 @@ class SettingsScreen extends ConsumerWidget {
         children: [
           const OverLabel('Data'),
           const SizedBox(height: S.x3),
+          if (s?.error != null) ...[
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                s!.error!,
+                style: F.bodySm.copyWith(color: p.on(C.recRed)),
+              ),
+            ),
+            const SizedBox(height: S.x3),
+          ],
           AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text('Data mode', style: F.head.copyWith(color: p.ink)),
                 const SizedBox(height: S.x3),
-                SegmentedControl<DataMode>(
-                  values: DataMode.values,
-                  selected: s?.mode ?? DataMode.demo,
-                  label: (m) => m == DataMode.demo ? 'Demo' : 'Live',
-                  semanticsLabel: 'Data mode',
-                  onChanged: s == null ? (_) {} : c.setMode,
+                ExcludeFocus(
+                  excluding: s == null || s.busy != null,
+                  child: AbsorbPointer(
+                    absorbing: s == null || s.busy != null,
+                    child: SegmentedControl<DataMode>(
+                      values: DataMode.values,
+                      selected: s?.mode ?? DataMode.demo,
+                      label: (m) => m == DataMode.demo ? 'Demo' : 'Live',
+                      semanticsLabel: 'Data mode',
+                      onChanged: s == null || s.busy != null
+                          ? (_) {}
+                          : c.setMode,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: S.x3),
                 Text(
@@ -154,8 +179,10 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: S.x1),
                 Text(
-                  'Raw readings and every score as CSV and JSON, written to '
-                  'this phone and handed to the share sheet. Yours to keep.',
+                  'Readings, scores and journal entries for the current data '
+                  'mode and enabled sources, as CSV and JSON. This is a '
+                  'readable export, not a restorable backup. Coach chats, '
+                  'memory and settings are not included.',
                   style: F.bodySm.copyWith(color: p.ink2),
                 ),
                 const SizedBox(height: S.x3),
@@ -182,8 +209,11 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: S.x1),
                 Text(
-                  'Erases everything Airlog stored on this phone. Your '
-                  'settings stay.',
+                  'Deletes health records, journal entries, live sessions, '
+                  'coach chats and memories, and exports held by Airlog. '
+                  'Settings, profile, cloud keys and source sign-ins stay. '
+                  'Shared copies stay elsewhere. Demo data is regenerated '
+                  'in Demo mode.',
                   style: F.bodySm.copyWith(color: p.ink2),
                 ),
                 const SizedBox(height: S.x3),
@@ -217,7 +247,7 @@ class SettingsScreen extends ConsumerWidget {
               SettingsRow(
                 icon: Icons.lock_outline_rounded,
                 title: 'Privacy',
-                subtitle: 'Computed on this phone. No server, no account',
+                subtitle: 'Local by default. Optional cloud coach explained',
                 onTap: () => go(Routes.privacy),
               ),
               SettingsRow(

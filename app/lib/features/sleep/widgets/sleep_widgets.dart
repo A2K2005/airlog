@@ -13,8 +13,7 @@ import '../sleep_view_model.dart';
 
 const _cfg = SleepConfig();
 
-/// Slept against need: the ring (performance), the hours, and one bar whose
-/// segments are the need's parts with a marker where sleep ended.
+/// Target breakdown and debt beneath the screen's single sleep summary.
 class SleepHero extends StatelessWidget {
   const SleepHero({
     super.key,
@@ -42,58 +41,20 @@ class SleepHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top-aligned, as in the loading skeleton: the ring stays put when
-          // the numbers arrive.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ScoreRing(
-                label: 'Performance',
-                color: DomainColors.sleep,
-                value: a.performance,
-                unit: '%',
-                size: 104,
-                playKey: playKey,
-              ),
-              const SizedBox(width: S.x5),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('SLEPT', style: F.over.copyWith(color: p.ink3)),
-                    const SizedBox(height: S.x1),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        sleepHm(a.sleptMinutes),
-                        style: F.n44.copyWith(color: p.ink),
-                      ),
-                    ),
-                    const SizedBox(height: S.x1),
-                    Text(
-                      'of a ${sleepHm(a.needMinutes)} target'
-                      '${a.napMinutes >= 1 ? ' · incl. ${sleepHm(a.napMinutes)} nap' : ''}',
-                      style: F.tab(F.bodySm).copyWith(color: p.ink2),
-                    ),
-                    const SizedBox(height: S.x3),
-                    Text(
-                      'Debt after the night ${sleepHm(a.debtAfterMinutes)}'
-                      '${a.debtAfterMinutes >= _cfg.maxDebtMinutes - .5 ? ' (the cap)' : ''}',
-                      style: F
-                          .tab(F.cap)
-                          .copyWith(color: p.ink, fontWeight: FontWeight.w700),
-                    ),
-                    if (changeText != null)
-                      Text(
-                        changeText,
-                        style: F.tab(F.cap).copyWith(color: p.ink3),
-                      ),
-                  ],
-                ),
-              ),
-            ],
+          Text('Target and sleep debt', style: F.head.copyWith(color: p.ink)),
+          const SizedBox(height: S.x2),
+          Text(
+            'Debt after the night ${sleepHm(a.debtAfterMinutes)}'
+            '${a.debtAfterMinutes >= _cfg.maxDebtMinutes - .5 ? ' (the cap)' : ''}',
+            style: F.tab(F.bodySm).copyWith(color: p.ink2),
           ),
+          if (changeText != null)
+            Text(changeText, style: F.tab(F.cap).copyWith(color: p.ink3)),
+          if (a.napMinutes >= 1)
+            Text(
+              'Time asleep includes ${sleepHm(a.napMinutes)} of naps.',
+              style: F.tab(F.cap).copyWith(color: p.ink3),
+            ),
           if (b != null) ...[
             const SizedBox(height: S.x5),
             NeedBar(breakdown: b, slept: a.sleptMinutes),
@@ -253,7 +214,7 @@ class StageStats extends StatelessWidget {
       children: [
         stat(
           'Restorative',
-          sleepHm(a.restorativeMinutes),
+          a.hasStageData ? sleepHm(a.restorativeMinutes) : 'Unavailable',
           restorativePct == null
               ? 'deep + REM'
               : 'deep + REM · ${restorativePct!.round()} %',

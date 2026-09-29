@@ -43,7 +43,7 @@ class NumberSwap extends StatelessWidget {
         child: AnimatedBuilder(
           animation: a,
           builder: (context, c) {
-            final sigma = (1 - a.value) * 2.5;
+            final sigma = Motion.enabled(context) ? (1 - a.value) * 2.5 : 0.0;
             if (sigma < .05) return c!;
             return ImageFiltered(
               imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
@@ -95,7 +95,9 @@ class _EnterFadeState extends State<EnterFade>
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_c != null || !widget.enabled) return;
-    final delay = Motion.stagger * widget.index.clamp(0, Motion.staggerCap);
+    final delay = Motion.enabled(context)
+        ? Motion.stagger * widget.index.clamp(0, Motion.staggerCap)
+        : Duration.zero;
     final body = motion(context, Motion.slow, fade: true);
     final total = delay + body;
     if (total == Duration.zero || body == Duration.zero) return;

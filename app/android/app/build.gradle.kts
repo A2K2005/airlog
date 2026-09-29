@@ -1,7 +1,51 @@
+import java.util.Base64
+import java.net.URI
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// One OAuth build input shared with Dart prevents redirect-scheme drift.
+val dartDefines = (project.findProperty("dart-defines") as String?)
+    ?.split(",")?.mapNotNull { encoded ->
+        runCatching { String(Base64.getDecoder().decode(encoded)) }.getOrNull()
+    }?.associate { entry ->
+        entry.substringBefore("=") to entry.substringAfter("=", "")
+    } ?: emptyMap()
+val oauthClient = dartDefines["GOOGLE_OAUTH_CLIENT_ID"].orEmpty().trim()
+val oauthOverride = dartDefines["GOOGLE_OAUTH_REDIRECT"].orEmpty().trim()
+val oauthScheme = if (oauthOverride.isNotEmpty()) {
+    requireNotNull(URI(oauthOverride).scheme) { "OAuth redirect needs a URI scheme" }
+} else if (oauthClient.endsWith(".apps.googleusercontent.com")) {
+    "com.googleusercontent.apps.${oauthClient.removeSuffix(".apps.googleusercontent.com")}"
+} else { "app.airlog.oauth" }
+val releaseCredentials = listOf(
+    "AIRLOG_KEYSTORE", "AIRLOG_KEYSTORE_PASSWORD", "AIRLOG_KEY_ALIAS", "AIRLOG_KEY_PASSWORD"
+).associateWith { System.getenv(it).orEmpty() }
+val releaseConfigured = releaseCredentials.values.all { it.isNotBlank() }
+// Explicit opt-in for a local sideload build: AIRLOG_LOCAL_RELEASE=1 and NONE
+// of the four signing variables set. A full set always wins; a partial set
+// still fails closed. Never for the store (README, docs/PLAY_RELEASE.md).
+val localSideload = System.getenv("AIRLOG_LOCAL_RELEASE") == "1" &&
+    releaseCredentials.values.all { it.isBlank() }
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.path.startsWith(":app:") && it.name.endsWith("Release") }) {
+        if (localSideload) {
+            logger.warn(
+                "WARNING: local sideload build, not for the store. AIRLOG_LOCAL_RELEASE=1 " +
+                    "and no AIRLOG_* signing variables: the release is signed with the debug key."
+            )
+        } else {
+            require(releaseConfigured) {
+                "Release signing is not configured. Set AIRLOG_KEYSTORE, AIRLOG_KEYSTORE_PASSWORD, " +
+                    "AIRLOG_KEY_ALIAS and AIRLOG_KEY_PASSWORD securely. Use --debug for local QA, " +
+                    "or, for a local sideload build only, set AIRLOG_LOCAL_RELEASE=1 with none " +
+                    "of the four set."
+            }
+        }
+    }
 }
 
 android {
@@ -24,19 +68,22 @@ android {
         versionName = flutter.versionName
 
         // flutter_appauth redirect scheme (Google Health API "Enhanced mode").
-        // The default is a harmless placeholder so the app builds without a
-        // Google Cloud client. For a real client pass the reversed client id:
-        //   flutter build apk -PairlogOAuthScheme=com.googleusercontent.apps.<id>
-        //     --dart-define=GOOGLE_OAUTH_CLIENT_ID=<id>.apps.googleusercontent.com
-        // (or put airlogOAuthScheme=... in android/gradle.properties).
-        manifestPlaceholders["appAuthRedirectScheme"] =
-            (project.findProperty("airlogOAuthScheme") as String?) ?: "app.airlog.oauth"
+        manifestPlaceholders["appAuthRedirectScheme"] = oauthScheme
     }
 
+    signingConfigs {
+        create("release") {
+            if (releaseConfigured) {
+                storeFile = file(releaseCredentials.getValue("AIRLOG_KEYSTORE"))
+                storePassword = releaseCredentials.getValue("AIRLOG_KEYSTORE_PASSWORD")
+                keyAlias = releaseCredentials.getValue("AIRLOG_KEY_ALIAS")
+                keyPassword = releaseCredentials.getValue("AIRLOG_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
-            // Unsigned for now: debug keys so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (localSideload) "debug" else "release")
         }
     }
 }

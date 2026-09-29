@@ -210,7 +210,7 @@ class TodayViewModel extends AsyncNotifier<TodayState> {
   Future<TodayState> build() async {
     ref.watch(revisionProvider);
     final repo = ref.watch(healthRepositoryProvider);
-    final now = ref.watch(clockProvider)();
+    final now = ref.watch(currentTimeProvider);
     // Today always shows the newest day (no day switcher; history lives on
     // the detail screens and Trends).
     final latestF = ref.watch(latestDateProvider.future);
@@ -830,7 +830,7 @@ final todayPlanProvider = Provider.autoDispose<TodayPlan?>((ref) {
   return Engine.planToday(
     b,
     sync: sync,
-    now: ref.watch(clockProvider)(),
+    now: ref.watch(currentTimeProvider),
     appNames: s!.appNames,
   );
 });

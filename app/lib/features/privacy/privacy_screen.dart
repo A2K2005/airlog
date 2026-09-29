@@ -14,7 +14,7 @@ import '../../domain/coach/coach_contracts.dart' show CoachProvider;
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
 
-  static const updated = '29 September 2026';
+  static const updated = '30 September 2026';
 
   /// Health Connect data types read, and why: app/copy.dart's list, which
   /// the onboarding and Sources rationale print too.
@@ -51,7 +51,7 @@ class PrivacyScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: [
           Text(
-            'Your data stays on this phone',
+            'Private by default. Cloud only by choice.',
             style: F.t1.copyWith(color: p.ink),
           ),
           const SizedBox(height: S.x2),
@@ -77,7 +77,7 @@ class PrivacyScreen extends StatelessWidget {
                   ),
                   (
                     Icons.ios_share_rounded,
-                    'Export or delete everything at any time.',
+                    'Export your readings and scores, or delete local data.',
                   ),
                   (
                     Icons.chat_bubble_outline_rounded,

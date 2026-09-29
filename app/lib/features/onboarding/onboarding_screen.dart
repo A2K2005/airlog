@@ -22,7 +22,10 @@ class OnboardingScreen extends ConsumerWidget {
     ref.listen(onboardingControllerProvider, (prev, next) {
       if (next.step == OnboardingStep.done &&
           prev?.step != OnboardingStep.done) {
-        Navigator.of(context).maybePop();
+        // PopScope must rebuild with canPop=true before completing the route.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) Navigator.of(context).maybePop();
+        });
       }
     });
     final p = P.of(context);
@@ -40,9 +43,10 @@ class OnboardingScreen extends ConsumerWidget {
       ),
       OnboardingStep.choose || OnboardingStep.done => (
         _Choose(
-          onDemo: c.chooseDemo,
-          onConnect: c.showRationale,
+          onDemo: s.busy ? null : c.chooseDemo,
+          onConnect: s.busy ? null : c.showRationale,
           onBirthYear: c.setBirthYear,
+          state: s,
         ),
         _Pair(onBack: c.back),
       ),
@@ -357,8 +361,14 @@ class _Privacy extends StatelessWidget {
           icon: Icons.visibility_off_outlined,
         ),
         const BulletLine(
-          'Export everything, or delete it, whenever you like.',
+          'Export readings and scores, or delete local data, whenever you like.',
           icon: Icons.ios_share_rounded,
+        ),
+        const BulletLine(
+          'If you opt in to a cloud coach, your questions and permitted '
+          'context are sent to the provider you choose. On-device coaching '
+          'does not send them.',
+          icon: Icons.chat_bubble_outline_rounded,
         ),
         const SizedBox(height: S.x4),
         Align(
@@ -380,10 +390,12 @@ class _Choose extends StatelessWidget {
     required this.onDemo,
     required this.onConnect,
     required this.onBirthYear,
+    required this.state,
   });
-  final VoidCallback onDemo;
-  final VoidCallback onConnect;
+  final VoidCallback? onDemo;
+  final VoidCallback? onConnect;
   final ValueChanged<String> onBirthYear;
+  final OnboardingState state;
 
   @override
   Widget build(BuildContext context) {
@@ -393,7 +405,7 @@ class _Choose extends StatelessWidget {
       Color accent,
       String title,
       String body,
-      VoidCallback onTap,
+      VoidCallback? onTap,
     ) => AppCard(
       onTap: onTap,
       semanticLabel: '$title. $body',
@@ -433,6 +445,14 @@ class _Choose extends StatelessWidget {
           'You can switch at any time in Settings. Sample and real data are '
           'kept apart.',
       children: [
+        if (state.error != null) ...[
+          StatusCard(
+            title: 'Check your setup',
+            body: state.error!,
+            tone: StatusTone.warning,
+          ),
+          const SizedBox(height: S.x3),
+        ],
         option(
           Icons.favorite_border_rounded,
           C.health,
@@ -450,13 +470,16 @@ class _Choose extends StatelessWidget {
           onDemo,
         ),
         const SizedBox(height: S.x5),
-        TextField(
+        TextFormField(
+          initialValue: state.birthYear,
+          enabled: !state.busy,
           keyboardType: TextInputType.number,
           maxLength: 4,
           onChanged: onBirthYear,
           decoration: const InputDecoration(
             labelText: 'Birth year (optional)',
-            helperText: 'Sets your maximum heart rate for strain zones.',
+            helperText: 'For adults 18+. Used to estimate maximum heart rate.',
+            helperMaxLines: 2,
             counterText: '',
           ),
         ),

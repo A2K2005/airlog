@@ -17,6 +17,7 @@ import '../../domain/repositories.dart';
 import '../../domain/results.dart';
 import '../db/raw_rows.dart';
 import '../db/stores.dart';
+import '../db/write_guard.dart';
 import '../resolver/resolver.dart';
 import '../resolver/source_choice.dart';
 
@@ -162,6 +163,7 @@ class ScorePipeline {
       final all = {for (final x in (d ?? const {}).values) ...x};
       final diff = _earliest([
         next.firstDifference(old, all),
+        if (old != null && old.shape != next.shape) _earliest(all),
         // An app newly (or no longer) known not to share this metric:
         // rescore from its first night (the stand-in / "without" label).
         for (final o in _symmetricDifference(old?.notShared, next.notShared))
@@ -220,6 +222,12 @@ class ScorePipeline {
     required ResolverConfig cfg,
     required UserProfile profile,
   }) async {
+    // Another interrupted writer may have dirtied an older day. A global
+    // pending marker can only be consumed by a complete rebuild.
+    if (await app.getSetting(pendingRecomputeKey(mode.name)) != null) {
+      fromDate = null;
+    }
+    await app.setSetting(pendingRecomputeKey(mode.name), 'true');
     var appNames = const <String, String>{};
     var notShared = const <String, Set<String>>{};
     if (mode == DataMode.live) {
@@ -272,11 +280,15 @@ class ScorePipeline {
       appNames: appNames,
       notShared: notShared,
     );
+    // Keep the last complete snapshot and pending marker on engine failure.
+    if (out.engineError != null) {
+      throw StateError('Scores not computed: ${out.engineError}');
+    }
     await app.putDays(
       mode,
       out.records,
       out.results,
-      clearFrom: fromDate == null ? '0000-00-00' : keepFrom,
+      clearFrom: fromDate ?? '0000-00-00',
     );
     return out;
   }

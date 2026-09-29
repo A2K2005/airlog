@@ -280,6 +280,9 @@ class SentPayload {
     required this.approxChars,
     this.bytes,
     this.requests,
+    this.privacyVersion,
+    this.memoryContext,
+    this.mode,
   });
   final CoachProvider provider;
   final String model;
@@ -297,6 +300,11 @@ class SentPayload {
   /// Number of requests sent for this answer. [additive]
   final int? requests;
 
+  /// Only current, scoped turns may be replayed to a cloud provider.
+  final int? privacyVersion;
+  final String? memoryContext;
+  final CoachMode? mode;
+
   Map<String, dynamic> toJson() => {
     'provider': provider.name,
     'model': model,
@@ -305,6 +313,9 @@ class SentPayload {
     'approxChars': approxChars,
     if (bytes != null) 'bytes': bytes,
     if (requests != null) 'requests': requests,
+    if (privacyVersion != null) 'privacyVersion': privacyVersion,
+    if (memoryContext != null) 'memoryContext': memoryContext,
+    if (mode != null) 'mode': mode!.name,
   };
   factory SentPayload.fromJson(Map<String, dynamic> j) => SentPayload(
     provider: CoachProvider.values.byName(j['provider'] as String),
@@ -314,6 +325,11 @@ class SentPayload {
     approxChars: j['approxChars'] as int,
     bytes: j['bytes'] as int?,
     requests: j['requests'] as int?,
+    privacyVersion: j['privacyVersion'] as int?,
+    memoryContext: j['memoryContext'] as String?,
+    mode: j['mode'] == null
+        ? null
+        : CoachMode.values.byName(j['mode'] as String),
   );
 }
 
@@ -330,11 +346,13 @@ class ChatMessage {
     this.safety = false,
     this.proposedMemories = const [],
     this.proposedCategories = const [],
+    this.proposedExpiries = const [],
     this.error,
     this.sampleData = false,
     this.answeredBy,
     this.fallbackFrom,
     this.fallbackReason,
+    this.replayScope,
   });
 
   /// [answeredBy] when the on-device engine wrote the answer.
@@ -359,6 +377,9 @@ class ChatMessage {
   /// The category the model gave each proposal ([MemoryCategory] names,
   /// parallel to [proposedMemories]); empty on older messages. [additive]
   final List<String> proposedCategories;
+  final List<String?> proposedExpiries;
+  String? proposedExpiry(int i) =>
+      i < 0 || i >= proposedExpiries.length ? null : proposedExpiries[i];
   final String? error;
 
   /// The model's category for proposal [i], or null when unknown.
@@ -390,6 +411,12 @@ class ChatMessage {
   /// Another engine than the chosen model answered.
   bool get fellBack => fallbackFrom != null;
 
+  /// The privacy scope an on-device fallback answer that sent nothing was
+  /// built under (CoachServiceImpl.replayScopeOf); a cloud chat replays it
+  /// as history only while the scope still holds. Null otherwise (a sent
+  /// answer is scoped by [sent]). [additive 2026-09-30]
+  final String? replayScope;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'conversationId': conversationId,
@@ -402,11 +429,13 @@ class ChatMessage {
     'safety': safety,
     'proposedMemories': proposedMemories,
     if (proposedCategories.isNotEmpty) 'proposedCategories': proposedCategories,
+    if (proposedExpiries.isNotEmpty) 'proposedExpiries': proposedExpiries,
     if (error != null) 'error': error,
     if (sampleData) 'sampleData': true,
     if (answeredBy != null) 'answeredBy': answeredBy,
     if (fallbackFrom != null) 'fallbackFrom': fallbackFrom,
     if (fallbackReason != null) 'fallbackReason': fallbackReason,
+    if (replayScope != null) 'replayScope': replayScope,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -431,11 +460,14 @@ class ChatMessage {
       for (final c in j['proposedCategories'] as List? ?? const [])
         if (c is String) c,
     ],
+    proposedExpiries: (j['proposedExpiries'] as List? ?? const [])
+        .cast<String?>(),
     error: j['error'] as String?,
     sampleData: j['sampleData'] as bool? ?? false,
     answeredBy: j['answeredBy'] as String?,
     fallbackFrom: j['fallbackFrom'] as String?,
     fallbackReason: j['fallbackReason'] as String?,
+    replayScope: j['replayScope'] as String?,
   );
 }
 

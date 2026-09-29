@@ -119,8 +119,8 @@ class LiveState {
     this.saveError,
     this.error,
     this.errorDetail,
-    this.restingHr = 62,
-    this.maxHr = 187,
+    this.restingHr,
+    this.maxHr,
     this.profile = const UserProfile(),
     this.demo = false,
   });
@@ -161,7 +161,7 @@ class LiveState {
   final LiveError? error;
   final String? errorDetail;
 
-  final double restingHr, maxHr;
+  final double? restingHr, maxHr;
   final UserProfile profile;
   final bool demo;
 
@@ -194,10 +194,8 @@ class LiveState {
   }.contains(stage);
 
   /// bpm where display zones 1…5 start (same Karvonen maths as the engine).
-  List<double> get zoneFloors => [
-    for (final f in StrainEngine.displayZoneLowerBounds)
-      restingHr + f * (maxHr - restingHr),
-  ];
+  List<double> get zoneFloors =>
+      StrainEngine.displayFloors(restingHr: restingHr, maxHr: maxHr);
 
   LiveState copyWith({
     LiveStage? stage,
@@ -232,6 +230,7 @@ class LiveState {
     bool clearHrv = false,
     bool clearError = false,
     bool clearSave = false,
+    bool clearAnchors = false,
   }) => LiveState(
     stage: stage ?? this.stage,
     devices: devices ?? this.devices,
@@ -259,8 +258,8 @@ class LiveState {
     saveError: clearSave ? null : (saveError ?? this.saveError),
     error: clearError ? null : (error ?? this.error),
     errorDetail: clearError ? null : (errorDetail ?? this.errorDetail),
-    restingHr: restingHr ?? this.restingHr,
-    maxHr: maxHr ?? this.maxHr,
+    restingHr: clearAnchors ? restingHr : restingHr ?? this.restingHr,
+    maxHr: clearAnchors ? maxHr : maxHr ?? this.maxHr,
     profile: profile ?? this.profile,
     demo: demo ?? this.demo,
   );
@@ -307,7 +306,7 @@ class LiveController extends Notifier<LiveState> {
       final latest = await repo.latestDate();
       if (latest != null) {
         final b = await repo.day(latest);
-        rhr = b?.result.strain?.restingHrUsed ?? b?.record.restingHr;
+        rhr = b?.result.strain?.restingHrUsed;
         // The engine's own max HR for the day (override, birth year, else
         // the observed maximum: StrainResult.maxHrSource), never an
         // assumed age.
@@ -316,12 +315,15 @@ class LiveController extends Notifier<LiveState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         profile: profile,
-        restingHr: rhr ?? state.restingHr,
-        maxHr: maxHr ?? Engine.maxHrFor(profile, _now()),
+        restingHr: rhr,
+        maxHr:
+            profile.birthYear != null && _now().year - profile.birthYear! < 18
+            ? null
+            : Engine.knownMaxHrFor(profile, _now()) ?? maxHr,
+        clearAnchors: true,
       );
     } catch (_) {
-      // Defaults stay: 62 bpm resting (the engine's own fallback) and the
-      // age-30 Tanaka max. The summary says zones may be approximate.
+      // Measured HR remains usable; unavailable anchors stay unavailable.
     }
   }
 
@@ -497,12 +499,8 @@ class LiveController extends Notifier<LiveState> {
 
   void _onSample(LiveHrSample s) {
     if (!ref.mounted) return;
-    if (s.bpm <= 0 || s.contact == false) return;
-    final zone = Engine.zoneFor(
-      s.bpm.toDouble(),
-      restingHr: state.restingHr,
-      maxHr: state.maxHr,
-    );
+    if (s.bpm < 25 || s.bpm > 250 || s.contact == false) return;
+    final zone = state.zoneFloors.where((floor) => s.bpm >= floor).length;
     var next = state.copyWith(
       bpm: s.bpm,
       zone: zone,
@@ -564,6 +562,7 @@ class LiveController extends Notifier<LiveState> {
       return Engine.liveWorkoutStrain(
         _workoutSamples(),
         restingHr: state.restingHr,
+        maxHr: state.maxHr,
         config: EngineConfig(profile: state.profile),
         now: at,
       );
@@ -609,6 +608,7 @@ class LiveController extends Notifier<LiveState> {
             if (!s.t.isAfter(end)) HrSample(s.t, s.bpm.toDouble()),
         ],
         restingHr: state.restingHr,
+        maxHr: state.maxHr,
         config: EngineConfig(profile: state.profile),
         now: end,
       );

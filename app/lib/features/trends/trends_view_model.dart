@@ -11,6 +11,7 @@ import '../../app/providers.dart';
 import '../../design/design.dart';
 import '../../domain/day_key.dart';
 import '../../domain/engine/engine.dart';
+import '../../domain/engine/baselines.dart';
 import '../../domain/engine/source_apps.dart';
 import '../../domain/models.dart';
 import '../../domain/repositories.dart';
@@ -39,7 +40,7 @@ final trendsDataProvider = FutureProvider<TrendsData?>((ref) async {
   final latest = await ref.watch(latestDateProvider.future);
   if (latest == null) return null;
   final repo = ref.watch(healthRepositoryProvider);
-  final today = DayKey.of(ref.watch(clockProvider)());
+  final today = DayKey.of(ref.watch(currentTimeProvider));
   final from = DayKey.add(latest, -(kTrendDays - 1));
   final list = await repo.range(from, latest);
   // Keep only the nightly scalars + provenance: 90 days of 1-minute heart
@@ -204,19 +205,140 @@ double? _mean(Iterable<double?> xs) {
 
 /// Slots in [window] where [m]'s definition differs from the previous
 /// measured day's (a new baseline starts there).
-List<int> _sourceChangeSlots(List<DayBundle?> window, Metric m) {
+List<int> _sourceChangeSlots(
+  List<DayBundle?> window,
+  Metric m, {
+  List<DayBundle?>? history,
+}) {
   final out = <int>[];
-  String? prev;
+  final effective = _effectiveProvenance(history ?? window, m);
+  Provenance? prev;
+  var seen = false;
   for (var i = 0; i < window.length; i++) {
     final b = window[i];
     // The baseline key (definition + origin + device): a change of app or
     // device starts a new baseline, so it is drawn as a source change.
-    final d = b?.record.provenance[m]?.baselineKey;
+    final d = b == null ? null : effective[b.date];
     if (d == null) continue;
-    if (prev != null && d != prev) out.add(i);
+    if (seen && !Segment(prev).matches(d)) out.add(i);
     prev = d;
+    seen = true;
   }
   return out;
+}
+
+Map<String, Provenance?> _effectiveProvenance(List<DayBundle?> days, Metric m) {
+  final records = [
+    for (final b in days)
+      if (b != null) b.record,
+  ];
+  final effective = Baselines.effective(records, m);
+  return {
+    for (var i = 0; i < records.length; i++) records[i].date: effective[i],
+  };
+}
+
+/// Preserve calendar slots while excluding other definitions/apps/devices
+/// from the comparison. Charts can still show all measurements with markers.
+List<double?> comparableMetricValues(
+  List<DayBundle?> days,
+  Metric metric,
+  double? Function(DayBundle) value,
+) {
+  final effective = _effectiveProvenance(days, metric);
+  DayBundle? last;
+  for (final b in days.reversed) {
+    if (b != null && value(b) != null) {
+      last = b;
+      break;
+    }
+  }
+  if (last == null) return List.filled(days.length, null);
+  final segment = Segment(effective[last.date]);
+  return [
+    for (final b in days)
+      b == null || !segment.matches(effective[b.date]) ? null : value(b),
+  ];
+}
+
+List<double?> _comparableRecovery(List<DayBundle?> days) {
+  const inputs = {
+    'hrv': Metric.hrv,
+    'rhr': Metric.restingHr,
+    'sleep_hr': Metric.sleepingHr,
+    'sleep': Metric.sleep,
+    'resp': Metric.respiratoryRate,
+  };
+  final sources = {
+    for (final m in inputs.values) m: _effectiveProvenance(days, m),
+  };
+  final candidates = [
+    for (final b in days)
+      if (b != null &&
+          b.result.recovery != null &&
+          !b.result.recovery!.calibrating &&
+          b.result.recovery!.confidence != RecoveryConfidence.low)
+        b,
+  ];
+  if (candidates.isEmpty) return List.filled(days.length, null);
+  final latest = candidates.last;
+  final keys = latest.result.recovery!.components.map((c) => c.key).toSet();
+  return [
+    for (final b in days)
+      (() {
+        if (b == null ||
+            !candidates.contains(b) ||
+            b.result.algoVersion != latest.result.algoVersion) {
+          return null;
+        }
+        final r = b.result.recovery!;
+        if (r.components.length != keys.length ||
+            r.components.any((c) => !keys.contains(c.key))) {
+          return null;
+        }
+        for (final key in keys) {
+          final m = inputs[key];
+          if (m != null &&
+              !Segment(sources[m]![latest.date]).matches(sources[m]![b.date])) {
+            return null;
+          }
+        }
+        return r.score.toDouble();
+      })(),
+  ];
+}
+
+List<double?> _comparableStrain(List<DayBundle?> days, String today) {
+  final hr = _effectiveProvenance(days, Metric.hr);
+  final rhr = _effectiveProvenance(days, Metric.restingHr);
+  final candidates = [
+    for (final b in days)
+      if (b != null &&
+          b.date != today &&
+          b.result.strain != null &&
+          b.result.strain!.method != StrainMethod.none &&
+          !b.result.strain!.partial)
+        b,
+  ];
+  if (candidates.isEmpty) return List.filled(days.length, null);
+  final latest = candidates.last;
+  final basis = latest.result.strain!;
+  return [
+    for (final b in days)
+      (() {
+        if (b == null || !candidates.contains(b)) return null;
+        final s = b.result.strain!;
+        if (b.result.algoVersion != latest.result.algoVersion ||
+            s.zonesFromMaxHr != basis.zonesFromMaxHr ||
+            s.maxHrSource != basis.maxHrSource ||
+            s.maxHrUsed != basis.maxHrUsed ||
+            !Segment(hr[latest.date]).matches(hr[b.date]) ||
+            !Segment(rhr[latest.date]).matches(rhr[b.date])) {
+          return null;
+        }
+        return s.strain;
+      })(),
+  ];
 }
 
 List<String> _dates(List<DayBundle?> window, List<int> slots) => [
@@ -244,14 +366,12 @@ TrendsView buildTrendsView(TrendsData d, int days) {
     for (final b in w) b == null ? null : f(b),
   ];
 
-  final recovery = series((b) => b.result.recovery?.score.toDouble());
+  final recoveryAll = _comparableRecovery(d.days);
+  final recovery = recoveryAll.sublist(d.days.length - n);
   // Today's strain is still accumulating: it is not a reading yet, so it
   // counts neither as "latest" nor toward an arrow (QA-12).
-  final strain = series((b) {
-    if (b.date == d.today) return null;
-    final s = b.result.strain;
-    return s == null || s.method == StrainMethod.none ? null : s.strain;
-  });
+  final strainAll = _comparableStrain(d.days, d.today);
+  final strain = strainAll.sublist(d.days.length - n);
 
   HealthMetricStatus? status(HealthMetricKind k) {
     for (final m
@@ -278,15 +398,17 @@ TrendsView buildTrendsView(TrendsData d, int days) {
       unit: kind.unit,
       values: v,
       color: color,
-      trend: Engine.trend(v),
+      trend: Engine.trend(
+        comparableMetricValues(d.days, metric, f).sublist(d.days.length - n),
+      ),
       upIsGood: upIsGood,
       format: format,
       mean: st?.baseline?.mean,
       lower: st?.lower,
       upper: st?.upper,
       provenance: latestBundle?.record.provenance[metric],
-      sourceChanges: _dates(w, _sourceChangeSlots(w, metric)),
-      sourceChangeSlots: _sourceChangeSlots(w, metric),
+      sourceChanges: _dates(w, _sourceChangeSlots(w, metric, history: d.days)),
+      sourceChangeSlots: _sourceChangeSlots(w, metric, history: d.days),
       metricName: title,
     );
   }
@@ -327,7 +449,15 @@ TrendsView buildTrendsView(TrendsData d, int days) {
       values: sleep,
       axis: AxisSpec.of([...sleep, need], ticks: 4, format: axisHm, step: 120),
       color: C.sleep,
-      trend: Engine.trend(sleep),
+      trend: Engine.trend(
+        comparableMetricValues(
+          d.days,
+          Metric.sleep,
+          (b) => b.result.sleep?.hasData == true
+              ? b.result.sleep!.sleptMinutes
+              : null,
+        ).sublist(d.days.length - n),
+      ),
       upIsGood: true,
       format: axisHm,
       mean: need,
@@ -336,8 +466,11 @@ TrendsView buildTrendsView(TrendsData d, int days) {
           : 'Dashed line: your average sleep target here (${axisHm(need)}). '
                 'Duration has no personal band.',
       provenance: latestBundle?.record.provenance[Metric.sleep],
-      sourceChanges: _dates(w, _sourceChangeSlots(w, Metric.sleep)),
-      sourceChangeSlots: _sourceChangeSlots(w, Metric.sleep),
+      sourceChanges: _dates(
+        w,
+        _sourceChangeSlots(w, Metric.sleep, history: d.days),
+      ),
+      sourceChangeSlots: _sourceChangeSlots(w, Metric.sleep, history: d.days),
       metricName: 'Sleep duration',
     ),
     band(
@@ -361,15 +494,15 @@ TrendsView buildTrendsView(TrendsData d, int days) {
   ];
 
   final strainByDay = <String, double>{
-    for (final b in d.days)
-      if (b != null &&
-          b.result.strain != null &&
-          b.result.strain!.method != StrainMethod.none)
-        b.date: b.result.strain!.strain,
+    for (var i = 0; i < d.days.length; i++)
+      if (strainAll[i] != null) d.days[i]!.date: strainAll[i]!,
   };
   TrainingLoad? load;
   try {
-    load = Engine.trainingLoad(strainByDay, d.latest);
+    load = Engine.trainingLoad(
+      strainByDay,
+      d.latest == d.today ? DayKey.add(d.today, -1) : d.latest,
+    );
   } catch (_) {}
 
   final vo2All = [for (final b in d.days) b?.record.vo2max];
@@ -387,7 +520,13 @@ TrendsView buildTrendsView(TrendsData d, int days) {
       unit: 'ml/kg/min',
       values: v,
       color: C.lavender,
-      trend: Engine.trend(v),
+      trend: Engine.trend(
+        comparableMetricValues(
+          d.days,
+          Metric.vo2max,
+          (b) => b.record.vo2max,
+        ).sublist(d.days.length - n),
+      ),
       upIsGood: true,
       format: axisInt,
       provenance: prov,
@@ -397,16 +536,20 @@ TrendsView buildTrendsView(TrendsData d, int days) {
 
   List<String?> avg(
     double? Function(DayBundle b) f,
-    String Function(double) fmt,
-  ) => [
+    String Function(double) fmt, {
+    Metric? metric,
+    List<double?>? values,
+  }) => [
     for (final span in const [7, 30, 90])
       (() {
-        final m = _mean([
-          for (final b in d.days.sublist(
-            d.days.length - span.clamp(1, d.days.length),
-          ))
-            if (b != null) f(b),
-        ]);
+        final all =
+            values ??
+            (metric == null
+                ? [for (final b in d.days) b == null ? null : f(b)]
+                : comparableMetricValues(d.days, metric, f));
+        final m = _mean(
+          all.sublist(d.days.length - span.clamp(1, d.days.length)),
+        );
         return m == null ? null : fmt(m);
       })(),
   ];
@@ -415,36 +558,66 @@ TrendsView buildTrendsView(TrendsData d, int days) {
     AverageRow(
       'Recovery',
       '%',
-      avg((b) => b.result.recovery?.score.toDouble(), axisInt),
+      avg(
+        (b) => b.result.recovery?.score.toDouble(),
+        axisInt,
+        values: recoveryAll,
+      ),
     ),
     AverageRow(
       'Strain',
       '',
-      avg((b) {
-        if (b.date == d.today) return null;
-        final s = b.result.strain;
-        return s == null || s.method == StrainMethod.none ? null : s.strain;
-      }, axisFixed),
+      avg(
+        (b) {
+          if (b.date == d.today) return null;
+          final s = b.result.strain;
+          return s == null || s.method == StrainMethod.none || s.partial
+              ? null
+              : s.strain;
+        },
+        axisFixed,
+        values: strainAll,
+      ),
     ),
-    AverageRow('HRV', 'ms', avg((b) => b.record.hrvRmssd, axisInt)),
-    AverageRow('Resting HR', 'bpm', avg((b) => b.record.restingHr, axisInt)),
+    AverageRow(
+      'HRV',
+      'ms',
+      avg((b) => b.record.hrvRmssd, axisInt, metric: Metric.hrv),
+    ),
+    AverageRow(
+      'Resting HR',
+      'bpm',
+      avg((b) => b.record.restingHr, axisInt, metric: Metric.restingHr),
+    ),
     AverageRow(
       'Sleep',
       '',
-      avg((b) {
-        final s = b.result.sleep;
-        return s == null || !s.hasData ? null : s.sleptMinutes;
-      }, axisHm),
+      avg(
+        (b) {
+          final s = b.result.sleep;
+          return s == null || !s.hasData ? null : s.sleptMinutes;
+        },
+        axisHm,
+        metric: Metric.sleep,
+      ),
     ),
     AverageRow(
       'Respiratory rate',
       '/min',
-      avg((b) => b.record.respiratoryRate, axisFixed),
+      avg(
+        (b) => b.record.respiratoryRate,
+        axisFixed,
+        metric: Metric.respiratoryRate,
+      ),
     ),
     // Weight is optional (its own Health Connect permission): a row only
     // when some was granted and recorded.
     if (d.days.any((b) => b?.record.weightKg != null))
-      AverageRow('Weight', 'kg', avg((b) => b.record.weightKg, axisFixed)),
+      AverageRow(
+        'Weight',
+        'kg',
+        avg((b) => b.record.weightKg, axisFixed, metric: Metric.weight),
+      ),
   ];
 
   return TrendsView(
