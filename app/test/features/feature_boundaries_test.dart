@@ -23,6 +23,7 @@ const _appKit = {
   'note_card.dart',
   'ask_entry.dart',
   'insight_card.dart',
+  'screen_kit.dart',
 };
 
 Iterable<File> _dart(String dir) =>
