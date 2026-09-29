@@ -358,12 +358,33 @@ class HealthRepositoryImpl implements HealthRepository {
               DayKey.add(latest, -1),
               latest,
             )).reversed.toList();
+      // The plan widget's plan: the planner over the same bundle Today plans
+      // from (before 05:00, the evening's day; TodayViewModel.build).
+      final now = clock();
+      var planDay = days.firstOrNull;
+      final evening = eveningKeyOf(now);
+      if (planDay != null && now.hour < 5 && evening != planDay.date) {
+        planDay =
+            days.where((d) => d.date == evening).firstOrNull ??
+            (await app.bundles(mode, evening, evening)).firstOrNull ??
+            planDay;
+      }
+      final plan = planDay == null
+          ? null
+          : Engine.planToday(
+              planDay,
+              sync: _status,
+              now: now,
+              appNames: SourceApps.known,
+            );
       if (request != _widgetRequest || mode != _mode || _disposed) return;
       await widgets.push(
         WidgetSnapshot.fromDays(
           days,
           demo: mode == DataMode.demo,
-          today: DayKey.of(clock()),
+          today: DayKey.of(now),
+          plan: plan,
+          now: now,
         ),
       );
     } catch (_) {}
