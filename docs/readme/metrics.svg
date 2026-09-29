@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="346" viewBox="0 0 1200 346" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs><radialGradient id="g1" cx="160" cy="0" r="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#16B364" stop-opacity="0.16"/><stop offset="1" stop-color="#16B364" stop-opacity="0"/></radialGradient><radialGradient id="g2" cx="1100" cy="340" r="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2E90FA" stop-opacity="0.12"/><stop offset="1" stop-color="#2E90FA" stop-opacity="0"/></radialGradient></defs>
+<rect x="0" y="0" width="1200" height="346" rx="28" fill="#0B0B0C"/>
+<rect x="0" y="0" width="1200" height="346" rx="28" fill="url(#g1)"/>
+<rect x="0" y="0" width="1200" height="346" rx="28" fill="url(#g2)"/>
+<rect x="0.75" y="0.75" width="1198.5" height="344.5" rx="27.5" fill="none" stroke="#1E1E22" stroke-width="1.5"/>
+<rect x="32" y="32" width="368" height="132" rx="18" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
+<text x="56.0" y="90.0" font-size="42" font-weight="700" fill="#3CCB7F" text-anchor="start">1,019</text>
+<text x="56.0" y="122.0" font-size="16" font-weight="600" fill="#F4F4F5" text-anchor="start">automated tests passing</text>
+<text x="56.0" y="145.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">last full local run</text>
+<rect x="418" y="32" width="368" height="132" rx="18" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
+<text x="442.0" y="90.0" font-size="42" font-weight="700" fill="#15B79E" text-anchor="start">361/361</text>
+<text x="442.0" y="122.0" font-size="16" font-weight="600" fill="#F4F4F5" text-anchor="start">coach claims traced to your data</text>
+<text x="442.0" y="145.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">golden eval set</text>
+<rect x="804" y="32" width="368" height="132" rx="18" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
+<text x="828.0" y="90.0" font-size="42" font-weight="700" fill="#F79009" text-anchor="start">88/88</text>
+<text x="828.0" y="122.0" font-size="16" font-weight="600" fill="#F4F4F5" text-anchor="start">planted hallucinations caught</text>
+<text x="828.0" y="145.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">0 shown to the user</text>
+<rect x="32" y="182" width="368" height="132" rx="18" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
+<text x="56.0" y="240.0" font-size="42" font-weight="700" fill="#EF4444" text-anchor="start">83/83</text>
+<text x="56.0" y="272.0" font-size="16" font-weight="600" fill="#F4F4F5" text-anchor="start">red-flag questions routed to safety</text>
+<text x="56.0" y="295.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">0 of 85 benign questions flagged</text>
+<rect x="418" y="182" width="368" height="132" rx="18" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
+<text x="442.0" y="240.0" font-size="42" font-weight="700" fill="#2E90FA" text-anchor="start">18/18</text>
+<text x="442.0" y="272.0" font-size="16" font-weight="600" fill="#F4F4F5" text-anchor="start">UI tiles pass a pixel-diff test</text>
+<text x="442.0" y="295.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">against the source design</text>
+<rect x="804" y="182" width="368" height="132" rx="18" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
+<text x="828.0" y="240.0" font-size="42" font-weight="700" fill="#A3E635" text-anchor="start">0</text>
+<text x="828.0" y="272.0" font-size="16" font-weight="600" fill="#F4F4F5" text-anchor="start">Airlog servers or accounts</text>
+<text x="828.0" y="295.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">scores computed on the phone</text>
+</svg>
