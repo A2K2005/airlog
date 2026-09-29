@@ -183,6 +183,7 @@ Every copied or ported file starts with a header naming its origin file and lice
   - `coach_contracts.dart`: settings, messages, `LlmClient`, `CoachRepository`, and the errors, including `ModelUnavailable`.
   - `coach_service.dart`: the ask use case.
   - `tools.dart`, `verifier.dart`, `policy.dart`, `safety.dart`, `prompts.dart`.
+  - `personal_context.dart` (PR #1): `PersonalContext.plan`, a small deterministic retrieval plan for personal questions (memories, today, the 28-day trend of the metric asked about, journal or training load), and `MemoryContext` (corrections, review age, selection).
 - `data/coach/`:
   - Raw-HTTP `ClaudeClient` and `GeminiClient`, with `http_retry.dart`.
   - `OfflineClient`, the on-device engine.
@@ -191,13 +192,15 @@ Every copied or ported file starts with a header naming its origin file and lice
 - `features/coach/`: chat, setup, Settings → Coach, memory and history. UI strings live in `app/copy.dart`.
 
 **One question** (`CoachServiceImpl.ask`) goes through these steps:
-1. The input router (red flags and similar) returns fixed copy with no model.
+1. The input router (red flags, minors and similar) returns fixed copy with no model.
 2. The consent gate, for cloud providers.
-3. The daily budget, which fails fast.
-4. The card seed, sent as quoted data in the user message.
-5. The tool loop: ≤ 4 rounds, append-only, each model turn replayed unchanged.
-6. The verifier and the output policy, then one repair round, then the deterministic facts table.
-7. The stored message, with refs, `Verification` and `SentPayload`.
+3. The scoped history (PR #1): a cloud question replays only earlier answers built under the same provider, mode, payload version (`kCoachPayloadVersion`) and memory scope, and sample-data answers only in demo mode. A correction ("actually…") replays nothing.
+4. The daily budget, which fails fast.
+5. The card seed, sent as quoted data in the user message. A cloud provider gets a withholding notice instead of the card's facts; it reads current facts through the guarded data tools.
+6. The personal context (PR #1): `PersonalContext.plan` runs its tool calls before the model answers, and the results ride in the same user message. Only memories actually retrieved (and not due for review) can ground an answer.
+7. The tool loop: ≤ 4 rounds, append-only, each model turn replayed unchanged. Before every request the settings, consent, data mode and memory scope must still be the question's own; the repository's generation fence also stops a request (and its HTTP retries) after a settings, key, memory or chat change. A stale question stops with "No further requests were sent" and does not fall back.
+8. The verifier and the output policy, then one repair round, then the deterministic facts table.
+9. The stored message, with refs, `Verification` and `SentPayload` (which also records the privacy scope: provider, mode, payload version, memory scope).
 
 **Transport.** `http_retry.dart` retries a busy answer (429 per minute, 503, 529) at most twice inside one client call. It waits for `Retry-After` or Gemini's `retryDelay` when given, else about 2 s and then 6 s with jitter, and stays under the service's 150 s request timeout. A 429 for a day quota is never retried.
 
@@ -217,3 +220,8 @@ Every copied or ported file starts with a header naming its origin file and lice
 - **Every attempt** gets the verifier and the output policy. `MeteredClient` counts every call the provider answered, failed ones included. A retried busy answer counts once per call.
 - **The stored message** carries `answeredBy` (a model id, or `on-device`), `fallbackFrom` (the chosen model) and `fallbackReason`. For Claude, `answeredBy` is taken from the response's `model`, because a server-side refusal fallback can switch it. The chat shows a quiet line under the answer: "via 3.5 Flash-Lite", or "Answered on this phone — Gemini is unavailable right now." The reason-specific version names a rejected key or an account out of credit.
 - A refusal is an answer, not a failure: it never triggers the chain.
+- **Context parity.** Every attempt, backup models and the on-device fallback included, gets exactly the first attempt's context: the scoped history, the card seed (its withholding notice for a cloud question), the personal context, the grounded memories, the tools, the system prompt and the length. The on-device fallback of a cloud question runs behind the same source firewall as the cloud attempt (`CoachToolbox(cloud: true)`), because its answer joins the cloud chat's history. So for a user with Google Health API history, that fallback sees only what the cloud could see. Tests: `test/data/coach/fallback_context_test.dart` (Gemini byte-identical, Claude identical but for the model id, on-device transcript/tools/length/system identical).
+- **Same reasoning level.** A backup model keeps the chosen length's reasoning: Gemini `thinkingLevel`, Claude `output_config.effort`, and Haiku 4.5's manual thinking budget (`LlmModelSpec.thinkingBudget`).
+- **Skip known-down models.** `noteModelUnavailable` marks a model down until its day quota resets (midnight Pacific, persisted in `coach.models_down`) or its retry delay passes (in memory). Later questions skip it without a failed request, and the chat offers "Ask <provider> again" once it is back.
+- **Replay of fallback answers.** A backup model's answer is scoped by its `SentPayload`. An on-device fallback that sent nothing records `ChatMessage.replayScope` and is replayed only while that scope still holds.
+- **Quality bar.** A backup model stays in the chain only if its live pass rate is at least 90 % of the primary's (docs/EVALS.md §5; unmeasured until a paid-key run).
