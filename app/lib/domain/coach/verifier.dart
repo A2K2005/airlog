@@ -1226,7 +1226,13 @@ class _Run {
 
   void _events() {
     final qLower = question.toLowerCase();
-    final memLower = memories.map((m) => m.toLowerCase()).join(' | ');
+    // A memory that reads as an instruction is not the user stating a fact:
+    // it supports no event (with PR #1's personal context, memories reach
+    // every personal question).
+    final memLower = [
+      for (final m in memories)
+        if (!QuotedText.readsAsInstruction(m)) m.toLowerCase(),
+    ].join(' | ');
     for (final s in _sentences) {
       final text = lower.substring(s.start, s.end);
       final idiomSpans = [
