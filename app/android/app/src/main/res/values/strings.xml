@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="airlog_widget_description">Recovery, strain and sleep at a glance</string>
+    <string name="airlog_widget_description">Today: recovery, strain and sleep</string>
+    <string name="airlog_recovery_widget_description">Recovery: today\'s score</string>
+    <string name="airlog_plan_widget_description">Today\'s plan: how you are and what to do</string>
+    <string name="airlog_open_recovery">Open Recovery</string>
+    <string name="airlog_open_strain">Open Strain</string>
+    <string name="airlog_open_sleep">Open Sleep</string>
 </resources>

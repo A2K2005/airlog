@@ -1,95 +1,61 @@
 package app.airlog.airlog
 
-import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.content.ComponentName
-import android.content.Intent
-import android.content.SharedPreferences
-import android.graphics.Color
 import android.widget.RemoteViews
-import es.antonborri.home_widget.HomeWidgetLaunchIntent
-import es.antonborri.home_widget.HomeWidgetProvider
-import java.time.LocalDate
-import org.json.JSONObject
 
 /**
- * Dark home-screen widget: Recovery %, Strain, Sleep. Renders the snapshot
- * that lib/data/services/widget/widget_sink.dart writes through home_widget
- * after every recompute (keys in WidgetKeys). No network, no Dart here.
- * Tapping opens the app.
- * Pattern follows OpenStrap/edge OpenStrapWidgetProvider.kt (MIT, see
- * third_party/edge/LICENSE); layout and copy are ours.
+ * "Today" (medium, 348 × 164): Recovery %, Strain and Sleep performance on
+ * three plates, in the Medium/19 layout (its macros relabelled with measured
+ * metrics, PRODUCT_PLAN §7) on the fitted glow m19. This is the original
+ * Airlog widget, migrated: the class name is kept so widgets pinned before
+ * the upgrade keep working. Each plate opens its own screen.
+ * The provider pattern follows OpenStrap/edge OpenStrapWidgetProvider.kt
+ * (MIT, see third_party/edge/LICENSE); layout and copy are ours.
  */
-class AirlogWidgetProvider : HomeWidgetProvider() {
+class AirlogWidgetProvider : AirlogTileProvider() {
+    override val designWidth = 348f
+    override val designHeight = 164f
+    override val rootRoute = "/"
+    override val layoutId = R.layout.airlog_today_widget
 
-    override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action in setOf(Intent.ACTION_DATE_CHANGED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED)) {
-            val ids = AppWidgetManager.getInstance(context)
-                .getAppWidgetIds(ComponentName(context, AirlogWidgetProvider::class.java))
-            super.onReceive(context, Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
-                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
-            return
+    override fun draw(context: Context, snap: WidgetSnapshot, tile: TileCanvas): String {
+        tile.glow(WidgetStyle.recipe(context, widget = "today"))
+        val primary = WidgetStyle.ink(context, "primary")
+        tile.text("Today", 20f, 36f, tile.paint(WidgetStyle.type(context, "tileTitle"), primary))
+        headerRight(context, tile, snap, right = 328f, chipTop = 20f, baseline = 35f)
+
+        val label = tile.paint(WidgetStyle.type(context, "tileLabel"), primary)
+        val dots = tile.paint(WidgetStyle.type(context, "dot32"), primary)
+        val unit = tile.paint(WidgetStyle.type(context, "tileLabel"), WidgetStyle.ink(context, "unitSoft"), weight = 400)
+        val plate = WidgetStyle.ink(context, "plate")
+        val slots = listOf(
+            Triple("Recovery", snap.dots("recovery"), "%"),
+            Triple("Strain", snap.dots("strain"), ""),
+            Triple("Sleep", snap.dots("sleep"), "%"),
+        )
+        // Medium/19's plates, measured from the PNG: x 20 / 125.5 / 231,
+        // 97 × 90 at y 54, radius 10, white 9 %; label and value 8 px in.
+        for ((i, x) in listOf(20f, 125.5f, 231f).withIndex()) {
+            val (name, value, u) = slots[i]
+            tile.roundRect(x, 54f, x + 97f, 144f, 10f, plate)
+            tile.text(name, x + 8f, 74f, label, maxWidth = 81f)
+            val adv = tile.text(value, x + 8f, 128f, dots, maxWidth = 81f)
+            if (u.isNotEmpty() && value != WidgetCopy.MISSING) tile.text(u, x + 8f + adv + 2f, 128f, unit)
         }
-        super.onReceive(context, intent)
+
+        return listOfNotNull(
+            "Airlog Today",
+            if (snap.demo) WidgetCopy.SAMPLE else null,
+            if (snap.stale) WidgetCopy.from(snap.date) else null,
+            "Recovery " + (snap.recovery?.let { "$it percent, ${snap.recStatus}" } ?: snap.recStatus),
+            "Strain " + snap.dots("strain").let { if (it == WidgetCopy.MISSING) "no score" else "$it of 21" },
+            "Sleep " + snap.dots("sleep").let { if (it == WidgetCopy.MISSING) "no data" else "$it percent ${snap.sleepText}".trim() },
+        ).joinToString(". ")
     }
 
-    override fun onUpdate(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray,
-        widgetData: SharedPreferences,
-    ) {
-        for (id in appWidgetIds) {
-            appWidgetManager.updateAppWidget(id, render(context, widgetData))
-        }
-    }
-
-    private fun render(context: Context, prefs: SharedPreferences): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.airlog_widget)
-        // A single preference makes the mode, date and scores one snapshot.
-        // Pre-upgrade individual keys are intentionally not reused.
-        val data = runCatching {
-            JSONObject(prefs.getString("airlog_snapshot_v1", "{}") ?: "{}")
-        }.getOrElse { JSONObject() }
-        val recovery = data.optInt("recovery", -1)
-        val zone = data.optString("zone", "none")
-        val strain = data.optString("strain", "–")
-        val sleep = data.optString("sleep", "–")
-        val demo = data.optBoolean("demo", false)
-        // QA-08: the day shown isn't today (nothing for today has arrived):
-        // label it, never pass yesterday's numbers off as today's. The
-        // widget re-renders on clock broadcasts and every
-        // 30 min, so it also checks the date itself (the app may not have
-        // run since midnight).
-        val date = data.optString("date", "")
-        val stale = date.isNotEmpty() && date != LocalDate.now().toString()
-        val quality = data.optString("quality", "")
-
-        views.setTextViewText(R.id.widget_recovery, if (recovery >= 0) "$recovery%" else "–")
-        views.setTextColor(
-            R.id.widget_recovery,
-            when (zone) {
-                "green" -> Color.parseColor("#16EC06")
-                "yellow" -> Color.parseColor("#FFDE00")
-                "red" -> Color.parseColor("#FF3B30")
-                else -> Color.parseColor("#E6E8EB")
-            },
-        )
-        views.setTextViewText(R.id.widget_strain, strain)
-        views.setTextViewText(R.id.widget_sleep, sleep)
-        views.setTextViewText(
-            R.id.widget_caption,
-            listOfNotNull(
-                "Airlog",
-                if (demo) "sample data" else null,
-                if (date.isEmpty()) "waiting for data" else if (stale) date else null,
-                quality.takeIf { it.isNotEmpty() },
-            ).joinToString(" · "),
-        )
-        views.setOnClickPendingIntent(
-            R.id.widget_root,
-            HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java),
-        )
-        return views
+    override fun clicks(context: Context, views: RemoteViews) {
+        views.setOnClickPendingIntent(R.id.zone_recovery, AirlogWidgets.open(context, "/recovery"))
+        views.setOnClickPendingIntent(R.id.zone_strain, AirlogWidgets.open(context, "/strain"))
+        views.setOnClickPendingIntent(R.id.zone_sleep, AirlogWidgets.open(context, "/sleep"))
     }
 }
