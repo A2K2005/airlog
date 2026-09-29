@@ -73,20 +73,14 @@ For example, I asked for the UI to be a 1:1 copy of my Figma widget pack. Princi
 | **Google Health API as an opt-in beta** | Its OAuth verification needs an annual CASA audit ($500–$4,500). Health Connect covers the core without it | Richer overnight data for most users, for now |
 | **Flutter, not Kotlin and Compose** | Reuses existing Flutter chart and theme code, and keeps an iOS path open | First-party Health Connect SDK fidelity. One metric needs a small Kotlin bridge |
 
-<details>
-<summary><b>What I cut, and why</b></summary>
+### Out of scope, on purpose
 
-- **Pulse Age.** A fitness-age number that would have rested on an estimate, against principle 6.
-- **A strain score on days without heart rate.** Those days show the activity facts instead.
-- **An LLM rewrite of the insight cards.** The cards stay deterministic.
-- **Thumbs on insight cards.** The votes went nowhere. Hide and "Why am I seeing this?" stay.
-- **Google Health patterns that clash with the principles:** a Health tab that folds in Trends, an AI feed on Today, a floating Ask pill, a "Vitals N of M" aggregate, and customizable tiles.
-- **Food logging.** It's a different product.
-- **Vendor SDKs and paid relays.** They need partnerships or exclusive device access, or they route data through someone else's cloud.
-
-A product critic also pushed to turn the coach off by default and to cut Live workout and training load. I rejected all three and wrote down why. The coach was an explicit ask. Live heart rate is a top complaint about missing features. Training load is a differentiator on Android. See [PRODUCT_PLAN §7](PRODUCT_PLAN.md#7-decisions).
-
-</details>
+- **Scores built on estimates.** No fitness age from a heart-rate ratio and no strain without heart rate: every number is measured (principle 6).
+- **An AI feed on Today.** Today gives one answer, and commentary would bury it (principle 3).
+- **Customizable tiles and a catch-all Health tab.** A fixed, calm layout keeps the answer in the same place every morning.
+- **LLM-written insight cards.** Cards stay deterministic, so every sentence can be checked against the data.
+- **Food logging.** A different job from "How am I + what to do".
+- **Vendor SDKs and paid relays.** They need partnerships or exclusive device access, or route data through a third-party cloud. Airlog stays on the phone (principle 4).
 
 ## The product
 
@@ -185,15 +179,22 @@ Release exit criteria come from the roadmap: stable, explainable scores on 2+ we
 | **iOS version (plan ready)** | HealthKit, widgets, a workout Live Activity and Siri shortcuts, about 2.5–3.5 weeks ([IOS_PLAN](IOS_PLAN.md)) |
 | **On-device models** | Gemini Nano for phrasing (v1.5), then Gemma after benchmarking (v2) |
 
-## Built with AI agents: my role
+## Harness engineering
 
-I built Airlog as a product owner leading a team of AI agents: researchers, adversarial critics, engineers, QA testers and an independent reviewer. The agents wrote the code and drafted the research. I owned the product: the problem, the principles, the decisions and trade-offs, and what went into the build. Three examples:
+Airlog is built by a multi-agent pipeline. These mechanisms keep parallel work consistent and every change honest.
 
-- **A critic's veto held.** When some wearables didn't share a key signal, a researcher proposed filling the gap from WHOOP's cloud API and the phone camera. The critic vetoed both: WHOOP's API needs a server and its terms forbid competing apps, and camera readings have weak evidence on Android. I made the veto binding, so the app scores without the signal and says so.
-- **Research overrode a looser ask, including mine.** My Figma 1:1 request would have put "Stress Level" and "Biological Age" on screen. The precedence rule kept the design's form and replaced its content with measured metrics.
-- **Research caught a live scoring bug.** The source-app pass found that Polar Flow writes resting heart rate as a profile setting, not a measurement. The critic traced it through the code and found it could also take the slot from a real measurement. That became a build requirement.
-
-I also said no to agents. The product critic wanted the coach off by default and Live workout cut, and I kept both, with the reasons in the log.
+| Mechanism | What it guarantees |
+|---|---|
+| **Decisions log with precedence tags** | [PRODUCT_PLAN §7](PRODUCT_PLAN.md#7-decisions) is the single source of truth. Every row is tagged [U], [R] or [O], and a written precedence rule settles conflicts |
+| **Research → adversarial critic** | Key research passes get a critic review with binding vetoes ([09](research/09-hrv-workarounds.md) → [09b](research/09b-hrv-critique.md), [10](research/10-source-apps.md) → [10b](research/10b-source-apps-critique.md)), so guesses are cut before they reach code |
+| **Spec-first contracts** | Shared domain files carry a `CONTRACT FILE` header: additive changes only, each one dated and reported |
+| **One owner per file area** | Engine, data, UI and contracts each have a single owner ([ARCHITECTURE §9](app/ARCHITECTURE.md#9-ownership-the-build-agents)), so parallel edits don't collide |
+| **Boundary tests** | A Flutter or plugin import in the domain, or a screen importing the data layer, fails the test suite |
+| **Eval suites as regression gates** | Grounding, red-flag, policy, injection and privacy thresholds fail the suite on any regression |
+| **Numeric checks on generated text** | Every TodayPlan and insight card is verified against the day's data on all 90 sample days (180/180 plan checks, 346/346 cards) |
+| **Pixel-diff tests** | Each tile is diffed against its source design, and the comparator refuses to overwrite the design with a render |
+| **Handoff notes** | Each workstream logs status, decisions and changed files as it goes, so work resumes cleanly after any interruption |
+| **Shared heavy-job lock** | Builds, test runs and the emulator take one machine-wide lock, so parallel workstreams queue instead of overloading one laptop |
 
 ## Repo map
 
