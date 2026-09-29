@@ -101,7 +101,16 @@ K-Type's free licence covers personal use only. **Publishing the APK or the repo
 
 ### Setup: toolchain and signing
 
-See [`tool/setup_toolchain.md`](tool/setup_toolchain.md) for the SDK locations, the Gradle temp-directory setting this machine needs, and the release-signing variables.
+See [`tool/setup_toolchain.md`](tool/setup_toolchain.md) for the SDK locations and the release-signing variables.
+
+**Gradle temp directory (this machine).** The user temp path has a space, which breaks the Gradle daemons' loopback socket, and C: is nearly full. The fix can't live in `android/gradle.properties`: a `D:/dev/tmp` path there breaks builds on any machine without it, and daemon JVM arguments can't be made conditional in `settings.gradle.kts`. Put it in the local Gradle file instead. Create `D:\dev\tmp`, then add these lines to `%GRADLE_USER_HOME%\gradle.properties` (`D:\dev\gradle\gradle.properties`):
+
+```
+org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=2G -XX:ReservedCodeCacheSize=512m -XX:+HeapDumpOnOutOfMemoryError -Djdk.net.unixdomain.tmpdir=D:/dev/tmp -Djava.io.tmpdir=D:/dev/tmp
+kotlin.daemon.jvmargs=-Djdk.net.unixdomain.tmpdir=D:/dev/tmp -Djava.io.tmpdir=D:/dev/tmp
+```
+
+The `tool/env.ps1` banner says "no Gradle tmpdir set" until the file has them.
 
 ### Optional: Enhanced mode and the coach
 
