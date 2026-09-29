@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Airlog mark: a recovery ring, 3/4 closed, clockwise from 12 o'clock.
+     108dp adaptive-icon canvas; the ring (outer radius 26dp) stays inside
+     the 33dp safe zone. Also the Android 12+ splash icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,32 A22,22 0 1,1 54,76 A22,22 0 1,1 54,32"
+        android:fillColor="#00000000"
+        android:strokeColor="@color/airlog_ring_track"
+        android:strokeWidth="8" />
+    <path
+        android:pathData="M54,32 A22,22 0 1,1 32,54"
+        android:fillColor="#00000000"
+        android:strokeColor="@color/airlog_ring"
+        android:strokeWidth="8"
+        android:strokeLineCap="round" />
+</vector>

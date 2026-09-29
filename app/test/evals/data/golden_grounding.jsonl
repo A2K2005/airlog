@@ -1,0 +1,48 @@
+{"id": "g1", "q": "What drove my recovery today?"}
+{"id": "g2", "q": "Why is my recovery low today?"}
+{"id": "g3", "q": "How is my recovery this morning?"}
+{"id": "g4", "q": "What was my recovery yesterday?"}
+{"id": "g5", "q": "What was my recovery on Sun 20 Sep?"}
+{"id": "g6", "q": "How did I sleep last night?"}
+{"id": "g7", "q": "How did I sleep on Fri 25 Sep?"}
+{"id": "g8", "q": "How much sleep debt do I have?"}
+{"id": "g9", "q": "How consistent was my sleep this week?"}
+{"id": "g10", "q": "How much did I sleep on average over the last 14 days?"}
+{"id": "g11", "q": "How much deep and REM sleep did I get last night?", "length": "detailed"}
+{"id": "g12", "q": "What time did I go to bed last night?"}
+{"id": "g13", "q": "Is my HRV trending up or down over the last 30 days?"}
+{"id": "g14", "q": "How has my resting heart rate changed over 30 days?"}
+{"id": "g15", "q": "What's my HRV been like lately?"}
+{"id": "g16", "q": "Show my respiratory rate trend over the past 60 days"}
+{"id": "g17", "q": "How have my steps changed this month?"}
+{"id": "g18", "q": "Compare this week with last week"}
+{"id": "g19", "q": "Compare my sleep this week vs last week"}
+{"id": "g20", "q": "Is my HRV better than last week?"}
+{"id": "g21", "q": "What strain should I aim for today?"}
+{"id": "g22", "q": "Is my training load too high?"}
+{"id": "g23", "q": "How hard should I train today?"}
+{"id": "g24", "q": "What workouts did I do this week?"}
+{"id": "g25", "q": "Did I swim on Monday?"}
+{"id": "g26", "q": "Did I go for a run yesterday?"}
+{"id": "g27", "q": "How many workouts did I do in the last 30 days?"}
+{"id": "g28", "q": "What was my strain yesterday?"}
+{"id": "g29", "q": "How does alcohol affect my recovery?", "circular": true}
+{"id": "g30", "q": "Does late caffeine hurt my recovery?", "circular": true}
+{"id": "g31", "q": "Which journal factors affect my recovery most?", "circular": true}
+{"id": "g32", "q": "Does meditation help my recovery?", "circular": true}
+{"id": "g33", "q": "What does today's Health Monitor alert mean?"}
+{"id": "g34", "q": "Am I getting sick?"}
+{"id": "g35", "q": "Is anything off with my vitals on Tue 8 Sep?"}
+{"id": "g36", "q": "Where is my data missing this week?"}
+{"id": "g37", "q": "Were there any gaps in my data in the last 10 days?"}
+{"id": "g38", "q": "What does HRV mean?", "refs": 0}
+{"id": "g39", "q": "How is Recovery calculated?", "refs": 0}
+{"id": "g40", "q": "How is my strain target set?", "refs": 0}
+{"id": "g41", "q": "What is sleep debt?", "refs": 0}
+{"id": "g42", "q": "How does my HRV compare with my baseline?"}
+{"id": "g43", "q": "What was my resting heart rate yesterday?"}
+{"id": "g44", "q": "How many steps did I take yesterday?"}
+{"id": "g45", "q": "Why is my recovery what it is?", "screen": "recovery", "date": "2026-09-28"}
+{"id": "g46", "q": "How did I sleep?", "screen": "sleep", "date": "2026-09-27"}
+{"id": "g47", "q": "How hard was that day?", "screen": "strain", "date": "2026-09-26"}
+{"id": "g48", "q": "Write me a poem about my week", "refs": 1}

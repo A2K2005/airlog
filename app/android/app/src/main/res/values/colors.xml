@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher icon: the app's recovery green ring on near-black. -->
+    <color name="ic_launcher_background">#0B0C0E</color>
+    <color name="airlog_ring">#35D07F</color>
+    <color name="airlog_ring_track">#4D35D07F</color>
+    <!-- Window behind the splash and the first Flutter frame: the app's
+         scaffold background (design/tokens/colors.dart), so there is no
+         flash between them. Dark variant in values-night. -->
+    <color name="airlog_window_bg">#F4F5F7</color>
+</resources>

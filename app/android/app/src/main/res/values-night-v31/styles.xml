@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ system splash, dark: the ring on the app's near-black
+         background (#0B0C0E, same as the launcher icon, so no disc). -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/airlog_window_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/airlog_window_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/airlog_window_bg</item>
+    </style>
+</resources>
