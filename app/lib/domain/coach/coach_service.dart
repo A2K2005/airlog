@@ -17,7 +17,15 @@
 //               LlmTurn.rawAssistant unchanged
 //            ─► verifier + output policy ─► one repair round ─► both again
 //            ─► still failing: deterministic facts table + honest note
-//            ─► stored assistant message (refs, Verification, SentPayload)
+//            ─► model fallback: a model-specific failure (ModelUnavailable:
+//               its quota, busy after retries, not found) restarts the
+//               WHOLE question on the provider's next model (same key;
+//               "Use a backup model when busy"); any other failure, or the
+//               last model failing, answers on this phone (the on-device
+//               engine, no network). Never another provider. Verifier,
+//               policy and budget apply to every attempt
+//            ─► stored assistant message (refs, Verification, SentPayload,
+//               answeredBy / fallbackFrom / fallbackReason)
 //
 // General-only mode offers only tools that read no user data, replays no
 // earlier messages and never injects a card. Memory tools are offered only
@@ -115,7 +123,9 @@ class CoachServiceImpl implements CoachService {
     // 2. Cloud gate: consent for this provider + mode, adult, current text.
     final cloud = settings.provider != CoachProvider.offline;
     if (cloud) _requireConsent(settings);
-    final client = await coach.client(); // throws notConfigured (no key)
+    // The chosen model, then its same-provider backups ("Use a backup model
+    // when busy"). Throws notConfigured (no key).
+    final chain = await coach.modelChain();
 
     final useData = settings.mode == CoachMode.useMyData;
     final conv = await _conversation(conversationId, q);
@@ -143,27 +153,7 @@ class CoachServiceImpl implements CoachService {
 
     final now = clock();
     final memoryOn = useData && await coach.memoryEnabled();
-    final seeded = useData && _hasSeed(context);
-    final tools = CoachTools.forMode(settings.mode, memory: memoryOn);
     final latest = useData ? await health.latestDate() : null;
-    final system = CoachPrompts.system(
-      now: now,
-      latestDate: latest,
-      mode: settings.mode,
-      length: settings.length,
-      provider: settings.provider,
-      context: useData ? context : null,
-    );
-    final toolbox = CoachToolbox(
-      health: health,
-      coach: coach,
-      now: now,
-      cloud: cloud,
-      mode: settings.mode,
-      memoryEnabled: memoryOn,
-      seed: seeded ? context : null,
-      question: q,
-    );
     final memories = memoryOn
         ? [
             for (final m in await coach.memories())
@@ -173,6 +163,164 @@ class CoachServiceImpl implements CoachService {
           ]
         : const <String>[];
 
+    // 4. The question, on each engine in turn (model fallback, PRODUCT_PLAN
+    //    §7). Every attempt restarts the WHOLE question: a fresh tool loop,
+    //    fresh evidence, fresh refs. Models are never mixed inside one loop
+    //    (thinking blocks and thought signatures are bound to their model).
+    //    A model-specific failure (ModelUnavailable) moves to the next model
+    //    of the same provider; anything else, or the last model failing,
+    //    answers on this phone with no network. Never another provider.
+    final tally = _Tally();
+    Future<_Answer> attempt(LlmClient client, {required bool network}) =>
+        _attempt(
+          client: client,
+          network: network,
+          settings: settings,
+          q: q,
+          now: now,
+          history: history,
+          context: context,
+          useData: useData,
+          memoryOn: memoryOn,
+          memories: memories,
+          latest: latest,
+          tally: tally,
+        );
+
+    final chosen = chain.first.model;
+    _Answer? answer;
+    CoachException? failure;
+    for (var i = 0; i < chain.length && answer == null; i++) {
+      final client = chain[i];
+      // A model known to be down (its day quota, the provider's retry
+      // delay) is skipped: no failed request first, no extra wait.
+      final down = cloud ? await coach.modelDown(client.model) : null;
+      if (down != null) {
+        failure = ModelUnavailable(down.reason, 'Known to be down.');
+        continue;
+      }
+      try {
+        answer = await attempt(client, network: cloud);
+      } on CoachException catch (e) {
+        failure = e;
+        if (!cloud) break;
+        if (e is ModelUnavailable) {
+          await coach.noteModelUnavailable(client.model, e);
+          if (i < chain.length - 1) continue;
+        }
+        break;
+      }
+    }
+    var onDevice = false;
+    if (answer == null && cloud) {
+      try {
+        answer = await attempt(coach.onDeviceClient(), network: false);
+        onDevice = true;
+      } on CoachException catch (e) {
+        failure = e;
+      }
+    }
+
+    String? error;
+    String text;
+    if (answer == null) {
+      error = failure!.kind.name;
+      text = _errorText(failure);
+    } else if (answer.refused) {
+      error = CoachErrorKind.refused.name;
+      text = refusalText;
+    } else {
+      text = answer.text;
+    }
+
+    final answeredBy = !cloud || answer == null
+        ? null
+        : onDevice
+        ? ChatMessage.onDevice
+        : answer.model ?? chosen;
+    final fellBack = answeredBy != null && answeredBy != chosen;
+
+    // Nothing went over the network (every model known to be down, or the
+    // budget stopped it): there is nothing to show under "What was sent".
+    final sent = cloud && tally.attempts > 0
+        ? SentPayload(
+            provider: settings.provider,
+            model: tally.lastModel ?? chosen,
+            toolsCalled: [...tally.toolsCalled],
+            dataTypes: [
+              'Your question',
+              if (history.isNotEmpty) 'Earlier messages in this chat',
+              ...tally.dataTypes,
+            ],
+            approxChars: tally.bytes > 0 ? tally.bytes : tally.chars,
+            bytes: tally.bytes,
+            requests: tally.requests,
+          )
+        : null;
+
+    final proposals = error == null && memoryOn
+        ? answer!.proposals
+        : const <MemoryProposal>[];
+    return _store(
+      ChatMessage(
+        id: _id('a'),
+        conversationId: conv,
+        role: ChatRole.assistant,
+        text: text,
+        at: clock(),
+        refs: error == null ? answer!.refs : const [],
+        verification: answer?.report?.verification,
+        sent: sent,
+        proposedMemories: [for (final p in proposals) p.text],
+        proposedCategories: [for (final p in proposals) p.category.name],
+        error: error,
+        answeredBy: answeredBy,
+        fallbackFrom: fellBack ? chosen : null,
+        fallbackReason: fellBack ? failure?.kind.name : null,
+      ),
+    );
+  }
+
+  /// One run of the question on [client]: the card seed, the tool loop
+  /// (≤ [maxToolRounds] rounds), the verifier and output policy, one repair
+  /// round, then the facts table. [network]: a cloud request (the budget is
+  /// re-checked before each one, and what is sent is tallied); false for the
+  /// on-device engine. Throws the client's CoachException.
+  Future<_Answer> _attempt({
+    required LlmClient client,
+    required bool network,
+    required CoachSettings settings,
+    required String q,
+    required DateTime now,
+    required List<LlmItem> history,
+    required AskContext? context,
+    required bool useData,
+    required bool memoryOn,
+    required List<String> memories,
+    required String? latest,
+    required _Tally tally,
+  }) async {
+    final seeded = useData && _hasSeed(context);
+    final tools = CoachTools.forMode(settings.mode, memory: memoryOn);
+    final system = CoachPrompts.system(
+      now: now,
+      latestDate: latest,
+      mode: settings.mode,
+      length: settings.length,
+      provider: network ? settings.provider : CoachProvider.offline,
+      context: useData ? context : null,
+    );
+    final toolbox = CoachToolbox(
+      health: health,
+      coach: coach,
+      now: now,
+      cloud: network,
+      mode: settings.mode,
+      memoryEnabled: memoryOn,
+      seed: seeded ? context : null,
+      question: q,
+    );
+
     final calls = <ToolCall>[];
     final results = <ToolResult>[];
     var chars =
@@ -180,7 +328,8 @@ class CoachServiceImpl implements CoachService {
         q.length +
         [for (final i in history) _chars(i)].fold<int>(0, (a, b) => a + b) +
         _toolChars(tools);
-    var sentBytes = 0, requests = 0, rounds = 0;
+    var rounds = 0;
+    String? model;
 
     // The card's own facts, as data in the question's message (first refs
     // r1…, Google Health API withholding applied). They are evidence
@@ -191,31 +340,48 @@ class CoachServiceImpl implements CoachService {
           ])
         : const <ToolResult>[];
     results.addAll(seed);
-    // Built once and never rebuilt: every request of this ask replays the
-    // same question message, so the history stays append-only.
+    // Built once and never rebuilt: every request of this attempt replays
+    // the same question message, so the history stays append-only.
     final transcript = <LlmItem>[...history, LlmUser(q, data: seed)];
     for (final r in seed) {
       chars += _jsonChars(r.content);
     }
 
     Future<LlmTurn> request() async {
-      if (cloud) await _checkBudget();
-      final t = await client
-          .next(
-            system: system,
-            transcript: List.unmodifiable(transcript),
-            tools: tools,
-            length: settings.length,
-          )
-          .timeout(
-            requestTimeout,
-            onTimeout: () => throw const CoachException(
-              CoachErrorKind.network,
-              'The AI provider took too long to answer.',
-            ),
-          );
-      requests++;
-      sentBytes += t.sentBytes;
+      if (network) {
+        await _checkBudget();
+        tally.attempts++;
+      }
+      final LlmTurn t;
+      try {
+        t = await client
+            .next(
+              system: system,
+              transcript: List.unmodifiable(transcript),
+              tools: tools,
+              length: settings.length,
+            )
+            .timeout(
+              requestTimeout,
+              onTimeout: () => throw const CoachException(
+                CoachErrorKind.network,
+                'The AI provider took too long to answer.',
+              ),
+            );
+      } on CoachException catch (e) {
+        // A request the provider answered with an error still counts.
+        if (network && _reached(e)) {
+          tally.requests++;
+          tally.lastModel = client.model;
+        }
+        rethrow;
+      }
+      if (network) {
+        tally.requests++;
+        tally.bytes += t.sentBytes;
+        tally.lastModel = t.model ?? client.model;
+      }
+      model = t.model ?? client.model;
       return t;
     }
 
@@ -245,99 +411,76 @@ class CoachServiceImpl implements CoachService {
       }
     }
 
-    String? error;
-    String text;
-    VerificationReport? report;
-    List<SourceRef> shownRefs = const [];
-
     try {
       final first = await loop();
       if (first != null && first.refusal) {
-        error = CoachErrorKind.refused.name;
-        text = refusalText;
-      } else {
-        text = first?.text.trim() ?? '';
-        report = _verify(text, q, now, calls, results, memories, false);
-        final policy = OutputPolicy.check(text);
-        if (text.isEmpty || !report.verified || !policy.ok) {
-          // One repair round for both the verifier and the output policy.
-          final issues = text.isEmpty
-              ? ['(no answer text was produced)']
-              : report.unsupported;
-          final fix = CoachPrompts.repair(
-            issues,
-            policy: [for (final v in policy.violations) v.describe],
-            policyFixes: [for (final k in policy.kinds) OutputPolicy.fix(k)],
+        return _Answer.refusal(model);
+      }
+      var text = first?.text.trim() ?? '';
+      var report = _verify(text, q, now, calls, results, memories, false);
+      List<SourceRef> shownRefs = const [];
+      final policy = OutputPolicy.check(text);
+      if (text.isEmpty || !report.verified || !policy.ok) {
+        // One repair round for both the verifier and the output policy, on
+        // the same model.
+        final issues = text.isEmpty
+            ? ['(no answer text was produced)']
+            : report.unsupported;
+        final fix = CoachPrompts.repair(
+          issues,
+          policy: [for (final v in policy.violations) v.describe],
+          policyFixes: [for (final k in policy.kinds) OutputPolicy.fix(k)],
+        );
+        transcript.add(LlmUser(fix));
+        chars += fix.length;
+        final second = await loop();
+        final t2 = second == null || second.refusal ? '' : second.text.trim();
+        final r2 = _verify(t2, q, now, calls, results, memories, true);
+        if (t2.isNotEmpty && r2.verified && OutputPolicy.check(t2).ok) {
+          text = t2;
+          report = r2;
+        } else {
+          // Deterministic fallback: this attempt's facts, verified by
+          // construction.
+          final (table, refs) = CoachPrompts.factsTable(
+            results,
+            preferIds: report.citedRefIds,
           );
-          transcript.add(LlmUser(fix));
-          chars += fix.length;
-          final second = await loop();
-          final t2 = second == null || second.refusal ? '' : second.text.trim();
-          final r2 = _verify(t2, q, now, calls, results, memories, true);
-          if (t2.isNotEmpty && r2.verified && OutputPolicy.check(t2).ok) {
-            text = t2;
-            report = r2;
-          } else {
-            // Deterministic fallback: this turn's facts, verified by
-            // construction.
-            final (table, refs) = CoachPrompts.factsTable(
-              results,
-              preferIds: report.citedRefIds,
-            );
-            text = table;
-            report = _verify(text, q, now, calls, results, memories, true);
-            shownRefs = refs;
-          }
-        }
-        if (shownRefs.isEmpty) {
-          shownRefs = CoachPrompts.citedRefs(text, [
-            for (final r in results) ...r.refs,
-          ]);
+          text = table;
+          report = _verify(text, q, now, calls, results, memories, true);
+          shownRefs = refs;
         }
       }
-    } on CoachException catch (e) {
-      error = e.kind.name;
-      text = _errorText(e);
-    }
-
-    final sent = cloud
-        ? SentPayload(
-            provider: settings.provider,
-            model: client.model,
-            toolsCalled: [
-              for (final n in {for (final c in calls) c.name}) n,
-            ],
-            dataTypes: [
-              'Your question',
-              if (history.isNotEmpty) 'Earlier messages in this chat',
-              ...{...toolbox.dataTypes},
-            ],
-            approxChars: sentBytes > 0 ? sentBytes : chars,
-            bytes: sentBytes,
-            requests: requests,
-          )
-        : null;
-
-    return _store(
-      ChatMessage(
-        id: _id('a'),
-        conversationId: conv,
-        role: ChatRole.assistant,
+      if (shownRefs.isEmpty) {
+        shownRefs = CoachPrompts.citedRefs(text, [
+          for (final r in results) ...r.refs,
+        ]);
+      }
+      return _Answer(
         text: text,
-        at: clock(),
+        report: report,
         refs: shownRefs,
-        verification: report?.verification,
-        sent: sent,
-        proposedMemories: error == null && memoryOn
-            ? [for (final p in toolbox.proposals) p.text]
-            : const [],
-        proposedCategories: error == null && memoryOn
-            ? [for (final p in toolbox.proposals) p.category.name]
-            : const [],
-        error: error,
-      ),
-    );
+        proposals: List.of(toolbox.proposals),
+        model: model,
+      );
+    } finally {
+      if (network) {
+        // What reached the provider on this attempt, answered or not.
+        tally.chars += chars;
+        tally.toolsCalled.addAll({for (final c in calls) c.name});
+        tally.dataTypes.addAll(toolbox.dataTypes);
+      }
+    }
   }
+
+  /// The provider answered the request (with an error status): it counts
+  /// as a request (MeteredClient.reachedProvider meters the same way).
+  static bool _reached(CoachException e) => switch (e.kind) {
+    CoachErrorKind.network ||
+    CoachErrorKind.dailyLimit ||
+    CoachErrorKind.notConfigured => false,
+    _ => true,
+  };
 
   static bool _hasSeed(AskContext? c) =>
       c != null &&
@@ -374,6 +517,9 @@ class CoachServiceImpl implements CoachService {
             proposedCategories: m.proposedCategories,
             error: m.error,
             sampleData: true,
+            answeredBy: m.answeredBy,
+            fallbackFrom: m.fallbackFrom,
+            fallbackReason: m.fallbackReason,
           )
         : m;
     await coach.appendMessage(out);
@@ -495,7 +641,9 @@ class CoachServiceImpl implements CoachService {
           a.role == ChatRole.assistant &&
           a.error == null &&
           !a.safety &&
-          (!cloud || a.sent != null)) {
+          // A cloud chat replays what the cloud saw, plus answers written on
+          // this phone as its fallback (they are part of the conversation).
+          (!cloud || a.sent != null || a.fellBack)) {
         pairs.add((u.text, CoachPrompts.stripCitations(a.text)));
         i++;
       }
@@ -617,4 +765,41 @@ class CoachServiceImpl implements CoachService {
     add('Where is my data missing this week?');
     return out;
   }
+}
+
+/// What reached the provider across every attempt of one question (the
+/// "What was sent" sheet and the request count).
+class _Tally {
+  /// Requests sent (answered or not) / answered by the provider.
+  int attempts = 0, requests = 0, bytes = 0, chars = 0;
+  String? lastModel;
+  final toolsCalled = <String>{};
+  final dataTypes = <String>{};
+}
+
+/// One attempt's answer.
+class _Answer {
+  const _Answer({
+    required this.text,
+    required this.report,
+    required this.refs,
+    required this.proposals,
+    this.model,
+  }) : refused = false;
+
+  const _Answer.refusal(this.model)
+    : text = '',
+      report = null,
+      refs = const [],
+      proposals = const [],
+      refused = true;
+
+  final String text;
+  final VerificationReport? report;
+  final List<SourceRef> refs;
+  final List<MemoryProposal> proposals;
+
+  /// The model that wrote it (the provider's own word when it says).
+  final String? model;
+  final bool refused;
 }

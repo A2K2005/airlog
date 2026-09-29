@@ -9,9 +9,11 @@
 //            fallbacks, messages
 //
 // Wire rules (claude-api reference):
-//   * never `thinking` (Opus 5.5 thinking is always on; omission = adaptive),
-//     never temperature / top_p, never a forced tool_choice (400 on the 5.5
-//     models);
+//   * no `thinking` on Opus / Sonnet 5.5 (always on; omission = adaptive,
+//     `output_config.effort` sets the depth); Haiku 4.5 (no adaptive, no
+//     effort) gets manual `thinking: {type: "enabled", budget_tokens}`
+//     (LlmModelSpec.thinkingBudget); never temperature / top_p, never a
+//     forced tool_choice (400 on the 5.5 models);
 //   * a model turn is replayed as the `content` array exactly as received
 //     (thinking blocks included — preserved thinking needs an append-only,
 //     unmodified history); this client never mutates it;
@@ -96,12 +98,15 @@ class ClaudeClient implements LlmClient {
     _checkKey();
     final spec = ProviderModels.byId(model);
     final effort = spec?.effort;
+    final budget = spec?.thinkingBudget;
     final fallback = spec?.serverFallback ?? false;
 
     final List<int> bytes;
     try {
       bytes = utf8.encode(
-        jsonEncode(_requestBody(system, transcript, tools, effort, fallback)),
+        jsonEncode(
+          _requestBody(system, transcript, tools, effort, budget, fallback),
+        ),
       );
     } on JsonUnsupportedObjectError {
       throw const CoachException(
@@ -136,10 +141,20 @@ class ClaudeClient implements LlmClient {
     List<LlmItem> transcript,
     List<CoachToolSpec> tools,
     String? effort,
+    int? thinkingBudget,
     bool fallback,
   ) => {
     'model': model,
     'max_tokens': ClaudeApi.maxTokens,
+    // Manual extended thinking (Haiku 4.5): the budget must be ≥ 1024 and
+    // below max_tokens; never with effort or adaptive thinking. Its thinking
+    // blocks come back in `content` and are replayed unchanged in the tool
+    // loop (buildMessages never edits a model turn).
+    if (thinkingBudget != null)
+      'thinking': {
+        'type': 'enabled',
+        'budget_tokens': thinkingBudget.clamp(1024, ClaudeApi.maxTokens - 1),
+      },
     if (system.isNotEmpty)
       'system': [
         {'type': 'text', 'text': system, 'cache_control': _cache},
@@ -343,7 +358,16 @@ class ClaudeClient implements LlmClient {
       >= 500 && < 600 => CoachErrorKind.server,
       _ => CoachErrorKind.unknown,
     };
-    return CoachException(kind, text);
+    // Bound to this model (its rate limit, overloaded, not found): the
+    // coach may ask the provider's next model instead.
+    return isModelSpecific(res)
+        ? ModelUnavailable(
+            kind,
+            text,
+            retryAfter: serverDelay(res, DateTime.now()),
+            dayQuota: isDailyQuota(res),
+          )
+        : CoachException(kind, text);
   }
 
   // ── response ───────────────────────────────────────────────────────────
@@ -412,6 +436,9 @@ class ClaudeClient implements LlmClient {
           u('cache_read_input_tokens'),
       outputTokens: u('output_tokens'),
       sentBytes: sentBytes,
+      // The model that produced this message: a server-side refusal
+      // fallback (`fallbacks: "default"`) can answer with another one.
+      model: j['model'] is String ? j['model'] as String : null,
     );
   }
 }

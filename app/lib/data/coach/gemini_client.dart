@@ -374,7 +374,16 @@ class GeminiClient implements LlmClient {
       >= 500 && < 600 => CoachErrorKind.server,
       _ => CoachErrorKind.unknown,
     };
-    return CoachException(kind, text);
+    // Bound to this model (its quota, busy, not found): the coach may ask
+    // the provider's next model instead.
+    return isModelSpecific(res)
+        ? ModelUnavailable(
+            kind,
+            text,
+            retryAfter: serverDelay(res, DateTime.now()),
+            dayQuota: isDailyQuota(res),
+          )
+        : CoachException(kind, text);
   }
 
   // ── response ───────────────────────────────────────────────────────────

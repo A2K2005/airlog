@@ -102,6 +102,20 @@ Future<void> saveLength(CoachRepository repo, ResponseLength length) async {
   await repo.saveSettings(s.copyWith(length: length));
 }
 
+/// When [model] is known to be down (its day quota, the provider's retry
+/// delay): the chat hides "Ask … again" until it is back.
+final coachModelDownProvider = FutureProvider.autoDispose
+    .family<ModelDown?, String>(
+      (ref, model) => ref.watch(coachRepositoryProvider).modelDown(model),
+    );
+
+/// "Use a backup model when busy".
+Future<void> saveBackupModels(CoachRepository repo, bool on) async {
+  final s = await repo.settings();
+  if (s.backupModels == on) return;
+  await repo.saveSettings(s.copyWith(backupModels: on));
+}
+
 // ── launching a chat ──────────────────────────────────────────────────────
 
 /// A chat's launch arguments, as a value (the chat view-model's key).

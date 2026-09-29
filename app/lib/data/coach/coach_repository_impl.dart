@@ -6,7 +6,11 @@
 //   * client(): offline → OfflineClient (no network); Claude / Gemini →
 //     the raw-HTTP client wrapped in a MeteredClient that checks the daily
 //     budget BEFORE each request (fail fast, nothing sent) and records the
-//     request and its tokens after it.
+//     request and its tokens after it (a request the provider answered with
+//     an error counts too, with no tokens).
+//   * modelChain(): the chosen model, then the same provider's backups
+//     (ProviderModels.chainFor; "Use a backup model when busy"), each its
+//     own MeteredClient over the same key. onDeviceClient(): OfflineClient.
 //   * wipe(): chats, memories and the insight cache (HealthRepository
 //     .wipeData() calls it through DataModule).
 
@@ -20,6 +24,8 @@ import 'claude_client.dart';
 import 'coach_store.dart';
 import 'gemini_client.dart';
 import 'offline_client.dart';
+import 'provider_models.dart';
+import 'quota_clock.dart';
 import 'secret_store.dart';
 
 /// Builds a cloud client. Tests inject fakes; the app uses [defaultClients].
@@ -37,6 +43,9 @@ class CoachRepositoryImpl implements CoachRepository {
     LlmClientFactory? clients,
     http.Client? httpClient,
 
+    /// The on-device engine (tests wrap it to see what it receives).
+    this.onDevice,
+
     /// Settings to start from before anything is stored (tests, demo).
     CoachSettings? initialSettings,
   }) : clock = clock ?? DateTime.now,
@@ -49,11 +58,17 @@ class CoachRepositoryImpl implements CoachRepository {
   final SecretStore secrets;
   final DateTime Function() clock;
   final http.Client? _http;
+
+  /// The on-device engine; null = OfflineClient.
+  final LlmClient? onDevice;
   late final LlmClientFactory _clients;
   http.Client? _shared;
 
   static const settingsKey = 'coach.settings';
   static const memoryKey = 'coach.memory_enabled';
+
+  /// Models whose day quota is used up: {model: {until, reason}} (JSON).
+  static const downKey = 'coach.models_down';
 
   /// Secure-storage key for [p]'s API key.
   static String secretKeyFor(CoachProvider p) => 'coach.api_key.${p.name}';
@@ -280,9 +295,90 @@ class CoachRepositoryImpl implements CoachRepository {
   // ── Client + budget ────────────────────────────────────────────────────
 
   @override
-  Future<LlmClient> client() async {
+  Future<LlmClient> client() async => (await modelChain()).first;
+
+  @override
+  LlmClient onDeviceClient() => onDevice ?? const OfflineClient();
+
+  // ── Models known to be down ─────────────────────────────────────────────
+
+  final Map<String, ModelDown> _down = {};
+  bool _downLoaded = false;
+
+  @override
+  Future<void> noteModelUnavailable(String model, ModelUnavailable e) async {
+    final now = clock();
+    final DateTime until;
+    if (e.dayQuota) {
+      // Per-model day quotas come back at midnight Pacific (Google).
+      until = nextPacificMidnight(now);
+    } else if (e.retryAfter != null && e.retryAfter! > Duration.zero) {
+      until = now.add(e.retryAfter!);
+    } else {
+      return;
+    }
+    await _loadDown();
+    _down[model] = ModelDown(until, e.kind);
+    if (e.dayQuota) await _saveDown();
+  }
+
+  @override
+  Future<ModelDown?> modelDown(String model) async {
+    await _loadDown();
+    final d = _down[model];
+    if (d == null) return null;
+    if (!clock().isBefore(d.until)) {
+      _down.remove(model);
+      await _saveDown();
+      return null;
+    }
+    return d;
+  }
+
+  Future<void> _loadDown() async {
+    if (_downLoaded) return;
+    _downLoaded = true;
+    try {
+      final raw = await store.getValue(downKey);
+      if (raw == null) return;
+      final j = jsonDecode(raw);
+      if (j is! Map) return;
+      for (final e in j.entries) {
+        final v = e.value;
+        if (v is! Map) continue;
+        final until = DateTime.tryParse('${v['until']}');
+        final reason = CoachErrorKind.values
+            .where((k) => k.name == v['reason'])
+            .firstOrNull;
+        if (until == null || reason == null) continue;
+        _down.putIfAbsent('${e.key}', () => ModelDown(until, reason));
+      }
+    } catch (_) {
+      // Unreadable: nothing is known to be down.
+    }
+  }
+
+  /// Persists only the day-quota marks that are still in the future (a
+  /// retry delay lasts seconds; it lives in memory).
+  Future<void> _saveDown() async {
+    final now = clock();
+    final keep = {
+      for (final e in _down.entries)
+        if (e.value.until.difference(now) > const Duration(minutes: 10))
+          e.key: {
+            'until': e.value.until.toUtc().toIso8601String(),
+            'reason': e.value.reason.name,
+          },
+    };
+    try {
+      await store.setValue(downKey, keep.isEmpty ? null : jsonEncode(keep));
+    } catch (_) {}
+  }
+
+  @override
+  Future<List<LlmClient>> modelChain() async {
     final s = await settings();
-    if (s.provider == CoachProvider.offline) return const OfflineClient();
+    if (s.provider == CoachProvider.offline) return const [OfflineClient()];
     final key = await secrets.read(secretKeyFor(s.provider));
     if (key == null || key.trim().isEmpty) {
       throw CoachException(
@@ -290,21 +386,33 @@ class CoachRepositoryImpl implements CoachRepository {
         'Add your ${s.provider.label} API key in Settings → Coach.',
       );
     }
-    return MeteredClient(
-      _clients(s.provider, key.trim(), s.model),
-      before: () async {
-        final u = await usageToday();
-        if (u != null && u.exhausted) {
-          throw CoachException(
-            CoachErrorKind.dailyLimit,
-            'Today\'s ${s.provider.label} limit is reached, so nothing was '
-            'sent. It resets at midnight.',
-          );
-        }
-      },
-      after: (t) => recordUsage(s.provider, t.inputTokens, t.outputTokens),
+    final ids = ProviderModels.chainFor(
+      s.provider,
+      s.model,
+      backups: s.backupModels,
     );
+    return [
+      for (final id in ids.isEmpty ? <String?>[s.model] : ids)
+        _metered(s, key.trim(), id),
+    ];
   }
+
+  MeteredClient _metered(CoachSettings s, String key, String? model) =>
+      MeteredClient(
+        _clients(s.provider, key, model),
+        before: () async {
+          final u = await usageToday();
+          if (u != null && u.exhausted) {
+            throw CoachException(
+              CoachErrorKind.dailyLimit,
+              'Today\'s ${s.provider.label} limit is reached, so nothing was '
+              'sent. It resets at midnight.',
+            );
+          }
+        },
+        after: (t) => recordUsage(s.provider, t.inputTokens, t.outputTokens),
+        failed: () => recordUsage(s.provider, 0, 0),
+      );
 
   @override
   Future<CoachUsage?> usageToday() async {
@@ -338,12 +446,31 @@ class CoachRepositoryImpl implements CoachRepository {
 }
 
 /// Wraps a cloud client: [before] runs ahead of every request (the daily
-/// budget; it throws to stop the request), [after] records what it cost.
+/// budget; it throws to stop the request), [after] records what it cost,
+/// and [failed] records a request the provider answered with an error (a
+/// busy model, a bad key: it still counts toward the daily budget). One
+/// call counts once: the client's own retries of a busy answer inside it
+/// are not counted again. Nothing is counted when nothing was sent (the
+/// budget stop, a missing key) or no answer came back (network).
 class MeteredClient implements LlmClient {
-  MeteredClient(this.inner, {required this.before, required this.after});
+  MeteredClient(
+    this.inner, {
+    required this.before,
+    required this.after,
+    this.failed,
+  });
   final LlmClient inner;
   final Future<void> Function() before;
   final Future<void> Function(LlmTurn turn) after;
+  final Future<void> Function()? failed;
+
+  /// The provider answered the request (with an error status).
+  static bool reachedProvider(CoachException e) => switch (e.kind) {
+    CoachErrorKind.network ||
+    CoachErrorKind.dailyLimit ||
+    CoachErrorKind.notConfigured => false,
+    _ => true,
+  };
 
   @override
   CoachProvider get provider => inner.provider;
@@ -359,12 +486,18 @@ class MeteredClient implements LlmClient {
     required ResponseLength length,
   }) async {
     await before();
-    final t = await inner.next(
-      system: system,
-      transcript: transcript,
-      tools: tools,
-      length: length,
-    );
+    final LlmTurn t;
+    try {
+      t = await inner.next(
+        system: system,
+        transcript: transcript,
+        tools: tools,
+        length: length,
+      );
+    } on CoachException catch (e) {
+      if (reachedProvider(e)) await failed?.call();
+      rethrow;
+    }
     await after(t);
     return t;
   }

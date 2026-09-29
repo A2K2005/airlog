@@ -121,7 +121,8 @@ void main() {
     expect(a.verification!.verified, isTrue);
   });
 
-  test('a request that never returns times out as a network error', () async {
+  test('a request that never returns times out, and the question is '
+      'answered on this phone instead (model fallback)', () async {
     final f = Fake((_, _) => Completer<LlmTurn>().future);
     final m = CoachModule.inMemory(
       InMemoryHealthRepository.demo(now: now),
@@ -137,7 +138,14 @@ void main() {
       requestTimeout: const Duration(milliseconds: 50),
     );
     final a = await svc.ask('How did I sleep?');
-    expect(a.error, CoachErrorKind.network.name);
+    // A timeout is not bound to the model, so no backup model is asked:
+    // the on-device engine answers, labelled with why.
+    expect(a.error, isNull);
+    expect(a.answeredBy, ChatMessage.onDevice);
+    expect(a.fallbackFrom, 'fake');
+    expect(a.fallbackReason, CoachErrorKind.network.name);
+    expect(a.verification, isNotNull);
+    expect(f.transcripts, hasLength(1));
   });
 
   test('a refusal is handled gracefully', () async {

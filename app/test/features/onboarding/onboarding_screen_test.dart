@@ -37,6 +37,13 @@ class _HostState extends ConsumerState<_Host> {
   Widget build(BuildContext context) => const Scaffold(body: Text('shell'));
 }
 
+/// A repository whose start-up never finishes.
+class _NeverStarted extends ScreensBRepo {
+  _NeverStarted(super.inner);
+  @override
+  Future<String?> latestDate() => Completer<String?>().future;
+}
+
 Future<void> _toChoose(WidgetTester t) async {
   await t.tap(find.text('Next'));
   await t.pumpAndSettle();
@@ -133,8 +140,9 @@ void main() {
 
     expect(await gate(DataMode.demo, false), isTrue);
 
-    // Mode is only known after start-up: the gate waits for it.
-    final late = ScreensBRepo.demo()..modeAfterStart = DataMode.live;
+    // The gate never waits for the repository to start (QA-03/QA-04): a
+    // start-up that hasn't finished still gets an answer at once.
+    final late = _NeverStarted(ScreensBRepo.demo().inner);
     final c = ProviderContainer(
       overrides: [
         healthRepositoryProvider.overrideWithValue(late),
@@ -143,7 +151,12 @@ void main() {
     );
     addTearDown(c.dispose);
     // A fresh install is live by default: the gate is "not yet seen" only.
-    expect(await c.read(shouldShowOnboardingProvider.future), isTrue);
+    expect(
+      await c
+          .read(shouldShowOnboardingProvider.future)
+          .timeout(const Duration(seconds: 1)),
+      isTrue,
+    );
     expect(await gate(DataMode.demo, true), isFalse);
     expect(await gate(DataMode.live, false), isTrue);
     expect(await gate(DataMode.live, true), isFalse);

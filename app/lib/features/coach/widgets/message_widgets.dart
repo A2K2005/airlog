@@ -219,9 +219,21 @@ class AnswerView extends StatelessWidget {
     required this.onDismissMemory,
     required this.onOpenMemory,
     this.sample = false,
+    this.engineNote,
+    this.askAgainLabel,
+    this.onAskAgain,
   });
 
   final ChatMessage message;
+
+  /// Another engine than the chosen model wrote this answer: "via 3.5
+  /// Flash-Lite", or "Answered on this phone — …" (CoachCopy.answeredByNote).
+  final String? engineNote;
+
+  /// "Ask Claude again" under an on-device fallback answer; null = hidden
+  /// (the chosen model is still known to be down, or a question is out).
+  final String? askAgainLabel;
+  final VoidCallback? onAskAgain;
 
   /// Demo mode: the answer's numbers come from sample data, so it carries a
   /// "Sample data" tag (only when it cites any).
@@ -286,6 +298,26 @@ class AnswerView extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: VerificationPill(verification: v!),
           ),
+        ],
+        if (engineNote != null) ...[
+          const SizedBox(height: S.x2),
+          _EngineNote(
+            key: ValueKey('answer-engine-${m.id}'),
+            text: engineNote!,
+            onDevice: m.answeredBy == ChatMessage.onDevice,
+          ),
+          if (onAskAgain != null && askAgainLabel != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(
+                key: ValueKey('ask-again-${m.id}'),
+                label: askAgainLabel!,
+                kind: AppButtonKind.quiet,
+                compact: true,
+                icon: Icons.refresh_rounded,
+                onTap: onAskAgain,
+              ),
+            ),
         ],
         const SizedBox(height: S.x1),
         Wrap(
@@ -493,6 +525,36 @@ class SafetyAnswer extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The quiet line that says which engine answered, when it wasn't the
+/// chosen model (model fallback).
+class _EngineNote extends StatelessWidget {
+  const _EngineNote({super.key, required this.text, required this.onDevice});
+  final String text;
+  final bool onDevice;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            onDevice ? Icons.phone_android_rounded : Icons.swap_horiz_rounded,
+            size: 14,
+            color: p.ink3,
+          ),
+        ),
+        const SizedBox(width: S.x1),
+        Expanded(
+          child: Text(text, style: F.cap.copyWith(color: p.ink3)),
+        ),
+      ],
     );
   }
 }

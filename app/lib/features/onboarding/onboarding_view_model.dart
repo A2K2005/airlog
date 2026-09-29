@@ -2,10 +2,8 @@
 //
 // Gate (the "has the user seen onboarding?" flag). The repository has no
 // settings API, so the flag is a one-byte marker file in the app-support
-// directory, behind [OnboardingStore]. It is shown when:
-//   * the store says it has not been seen, AND
-//   * the repository is in demo mode (first launch is always demo; a user who
-//     already connected Health Connect is in live mode and never sees it).
+// directory, behind [OnboardingStore]. It is shown when the store says it
+// has not been seen: only a choice (Connect, or sample data) marks it seen.
 // Any failure reading the flag counts as "seen": onboarding is a courtesy,
 // never a wall. The default store also reports "seen" under `flutter test`,
 // so no other suite ever gets onboarding pushed over its screen; tests that
@@ -69,16 +67,15 @@ final onboardingStoreProvider = Provider<OnboardingStore>(
 );
 
 /// Whether the first-launch onboarding should be pushed now.
+///
+/// Gated only on the user never having made their choice (Connect or sample
+/// data): a fresh install is live by default, so the data mode doesn't
+/// matter. The gate deliberately does NOT wait for the repository to start
+/// (database open, a demo re-seed): the shell shows only the page colour
+/// until this resolves, so waiting here delayed every cold start by the
+/// whole repository start-up (QA-03 / QA-04).
 final shouldShowOnboardingProvider = FutureProvider<bool>((ref) async {
   try {
-    final repo = ref.watch(healthRepositoryProvider);
-    // latestDate() waits for the repository to finish starting up; before
-    // that, `mode` still holds its default (demo) even for a live user.
-    try {
-      await repo.latestDate();
-    } catch (_) {}
-    // A fresh install is live by default: onboarding is gated only on the
-    // user never having made their choice (Connect or sample data).
     return !(await ref.watch(onboardingStoreProvider).seen());
   } catch (_) {
     return false;

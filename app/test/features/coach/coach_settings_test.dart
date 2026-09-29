@@ -148,6 +148,31 @@ void main() {
     expect(find.text(CoachCopy.usageSpent), findsNothing);
   });
 
+  testWidgets('"Use a backup model when busy": cloud only, on by default, '
+      'saved when turned off', (t) async {
+    final off = FakeCoachRepository();
+    await _pump(t, off);
+    expect(find.byKey(const ValueKey('row-backup-models')), findsNothing);
+
+    final repo = FakeCoachRepository(
+      settings: _cloud,
+      keys: {CoachProvider.claude: _key},
+    );
+    await _pump(t, repo);
+    final row = find.byKey(const ValueKey('switch-backup-models'));
+    await _see(t, row);
+    expect(find.text(CoachCopy.backupModels), findsOneWidget);
+    expect(
+      find.text(CoachCopy.backupModelsBody(CoachProvider.claude)),
+      findsOneWidget,
+    );
+    expect(t.widget<Switch>(row).value, isTrue);
+    await t.tap(row);
+    await t.pumpAndSettle();
+    expect((await repo.settings()).backupModels, isFalse);
+    expect(t.widget<Switch>(row).value, isFalse);
+  });
+
   test('usage line', () {
     expect(
       usageLine(

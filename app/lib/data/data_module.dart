@@ -136,7 +136,14 @@ class DataModule {
       module._lifecycle = AppLifecycleListener(
         onResume: () => unawaited(repo.onAppResumed()),
       );
-      unawaited(BackgroundSync.register());
+      // After start-up (database open, demo seed): WorkManager's platform
+      // calls then don't queue with the first frame's (QA-03).
+      unawaited(
+        repo
+            .start()
+            .then<void>((_) {}, onError: (Object _) {})
+            .whenComplete(BackgroundSync.register),
+      );
     }
     return module;
   }

@@ -45,6 +45,7 @@ class CoachSettings {
     this.adultConfirmed = false,
     this.dailyRequestLimit = kDefaultDailyRequestLimit,
     this.dailyTokenLimit = kDefaultDailyTokenLimit,
+    this.backupModels = true,
   });
 
   /// Master switch for the Ask feature. The default `offline` provider sends
@@ -68,6 +69,13 @@ class CoachSettings {
   final int dailyRequestLimit;
   final int dailyTokenLimit;
 
+  /// "Use a backup model when busy" (on by default): when the chosen cloud
+  /// model fails for a model-specific reason (its own quota, busy after
+  /// retries, not found), the question restarts on the provider's next
+  /// model with the same key. Off: straight to the on-device answer.
+  /// Never another provider. [additive 2026-09-30]
+  final bool backupModels;
+
   bool get hasConsent => consentAt != null;
 
   CoachSettings copyWith({
@@ -83,6 +91,7 @@ class CoachSettings {
     bool? adultConfirmed,
     int? dailyRequestLimit,
     int? dailyTokenLimit,
+    bool? backupModels,
   }) => CoachSettings(
     enabled: enabled ?? this.enabled,
     provider: provider ?? this.provider,
@@ -96,6 +105,7 @@ class CoachSettings {
     adultConfirmed: adultConfirmed ?? this.adultConfirmed,
     dailyRequestLimit: dailyRequestLimit ?? this.dailyRequestLimit,
     dailyTokenLimit: dailyTokenLimit ?? this.dailyTokenLimit,
+    backupModels: backupModels ?? this.backupModels,
   );
 
   Map<String, dynamic> toJson() => {
@@ -109,6 +119,7 @@ class CoachSettings {
     'adultConfirmed': adultConfirmed,
     'dailyRequestLimit': dailyRequestLimit,
     'dailyTokenLimit': dailyTokenLimit,
+    'backupModels': backupModels,
   };
 
   factory CoachSettings.fromJson(Map<String, dynamic> j) => CoachSettings(
@@ -127,6 +138,7 @@ class CoachSettings {
     dailyRequestLimit:
         j['dailyRequestLimit'] as int? ?? kDefaultDailyRequestLimit,
     dailyTokenLimit: j['dailyTokenLimit'] as int? ?? kDefaultDailyTokenLimit,
+    backupModels: j['backupModels'] as bool? ?? true,
   );
 }
 
@@ -320,7 +332,13 @@ class ChatMessage {
     this.proposedCategories = const [],
     this.error,
     this.sampleData = false,
+    this.answeredBy,
+    this.fallbackFrom,
+    this.fallbackReason,
   });
+
+  /// [answeredBy] when the on-device engine wrote the answer.
+  static const onDevice = 'on-device';
   final String id;
   final String conversationId;
   final ChatRole role;
@@ -356,6 +374,22 @@ class ChatMessage {
   /// the chat tags it "Sample data". [additive]
   final bool sampleData;
 
+  /// Cloud answers: the model that wrote this answer (the provider's own
+  /// word for it when it says), or [onDevice]. Null for safety, error and
+  /// on-device-engine answers. [additive 2026-09-30]
+  final String? answeredBy;
+
+  /// The model the user chose, when another one answered (a backup model,
+  /// or the on-device fallback); null when the chosen model answered.
+  final String? fallbackFrom;
+
+  /// Why the chosen model didn't answer ([CoachErrorKind] name), when the
+  /// app fell back; null for a provider-side switch.
+  final String? fallbackReason;
+
+  /// Another engine than the chosen model answered.
+  bool get fellBack => fallbackFrom != null;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'conversationId': conversationId,
@@ -370,6 +404,9 @@ class ChatMessage {
     if (proposedCategories.isNotEmpty) 'proposedCategories': proposedCategories,
     if (error != null) 'error': error,
     if (sampleData) 'sampleData': true,
+    if (answeredBy != null) 'answeredBy': answeredBy,
+    if (fallbackFrom != null) 'fallbackFrom': fallbackFrom,
+    if (fallbackReason != null) 'fallbackReason': fallbackReason,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -396,6 +433,9 @@ class ChatMessage {
     ],
     error: j['error'] as String?,
     sampleData: j['sampleData'] as bool? ?? false,
+    answeredBy: j['answeredBy'] as String?,
+    fallbackFrom: j['fallbackFrom'] as String?,
+    fallbackReason: j['fallbackReason'] as String?,
   );
 }
 
@@ -490,6 +530,7 @@ class LlmTurn {
     this.inputTokens = 0,
     this.outputTokens = 0,
     this.sentBytes = 0,
+    this.model,
   });
   final String text;
   final List<ToolCall> toolCalls;
@@ -507,6 +548,11 @@ class LlmTurn {
   final int inputTokens;
   final int outputTokens;
   final int sentBytes;
+
+  /// The model the provider says produced this turn (Claude's response
+  /// `model`, which a server-side refusal fallback can change). Null = the
+  /// requested model. [additive 2026-09-30]
+  final String? model;
 }
 
 /// Provider-neutral transcript item for the LLM client. The client owns the
@@ -581,6 +627,38 @@ class CoachException implements Exception {
   String toString() => 'CoachException(${kind.name}: $message)';
 }
 
+/// A failure bound to the model that was asked, not to the account: its
+/// own quota (a per-model daily 429), busy after the client's retries
+/// (429 / 503 / 529), or not found (404). The same question may restart on
+/// the provider's next model; an account-wide failure (bad key, billing,
+/// out of credit) is a plain [CoachException]. [additive 2026-09-30]
+class ModelUnavailable extends CoachException {
+  const ModelUnavailable(
+    super.kind,
+    super.message, {
+    this.retryAfter,
+    this.dayQuota = false,
+  });
+
+  /// The provider's own wait (Retry-After, Gemini's RetryInfo.retryDelay).
+  final Duration? retryAfter;
+
+  /// The model's quota for the DAY is used up (until the provider's reset).
+  final bool dayQuota;
+
+  @override
+  String toString() => 'ModelUnavailable(${kind.name}: $message)';
+}
+
+/// A model the coach knows can't answer before [until]: later questions
+/// skip it, with no failed request first. [reason] is the failure that
+/// said so. [additive 2026-09-30]
+class ModelDown {
+  const ModelDown(this.until, this.reason);
+  final DateTime until;
+  final CoachErrorKind reason;
+}
+
 // ── Persistence (implemented in data/coach) ───────────────────────────────
 
 abstract class CoachRepository {
@@ -621,6 +699,26 @@ abstract class CoachRepository {
   /// offline provider returns a deterministic client with no network).
   /// Throws CoachException(notConfigured) when a cloud key is missing.
   Future<LlmClient> client();
+
+  /// The engines to try for one question, in order: the chosen model, then
+  /// (when [CoachSettings.backupModels] is on) the same provider's backup
+  /// models with the same key (ProviderModels.chains). Never another
+  /// provider. The offline provider: just the on-device engine. Throws like
+  /// [client]. [additive 2026-09-30]
+  Future<List<LlmClient>> modelChain();
+
+  /// The on-device engine (no network, no key): the last resort when the
+  /// cloud provider can't answer. [additive 2026-09-30]
+  LlmClient onDeviceClient();
+
+  /// Remembers that [model] can't answer for a while ([e]'s retry delay:
+  /// in memory; its day quota: until the provider's reset, persisted), so
+  /// later questions skip it. No wait known: nothing is remembered.
+  /// [additive 2026-09-30]
+  Future<void> noteModelUnavailable(String model, ModelUnavailable e);
+
+  /// When [model] is known to be down, until when and why; null = try it.
+  Future<ModelDown?> modelDown(String model);
 
   /// Today's cloud usage against the daily budget (guardrail). Null = offline
   /// provider or not tracked. It has a default so existing fakes still compile.

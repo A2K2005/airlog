@@ -203,6 +203,15 @@ class CoachChatViewModel extends AsyncNotifier<CoachChatState> {
     return true;
   }
 
+  /// "Ask (provider) again" under an answer written on this phone as the
+  /// fallback: the same question, as a new turn, with the chat's own
+  /// context (the card, when this chat discusses one).
+  Future<bool> askAgain(String answerId) async {
+    final q = state.value?.questionFor(answerId);
+    if (q == null) return false;
+    return send(q);
+  }
+
   /// Sends the last question again (an error's "Try again"), in place of the
   /// error.
   Future<void> retry() async {

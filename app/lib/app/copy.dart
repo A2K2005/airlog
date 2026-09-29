@@ -224,6 +224,61 @@ abstract final class CoachCopy {
     return CoachModel(p, want, want, '');
   }
 
+  /// A model's short name: the catalogue's ('3.5 Flash-Lite'), else read
+  /// from the id ('claude-opus-4-8' → 'Opus 4.8'; a provider can answer
+  /// with a model outside the catalogue), else the id itself.
+  static String modelName(CoachProvider p, String id) {
+    for (final m in models) {
+      if (m.provider == p && m.id == id) return m.name;
+    }
+    final c = RegExp(r'^claude-(opus|sonnet|haiku)-(\d+)-(\d+)').firstMatch(id);
+    if (c != null) {
+      final family = c.group(1)!;
+      return '${family[0].toUpperCase()}${family.substring(1)} '
+          '${c.group(2)}.${c.group(3)}';
+    }
+    final g = RegExp(r'^gemini-(\d+(?:\.\d+)?)-(flash|pro)(-lite)?')
+        .firstMatch(id);
+    if (g != null) {
+      final kind = g.group(2) == 'pro' ? 'Pro' : 'Flash';
+      return '${g.group(1)} $kind${g.group(3) == null ? '' : '-Lite'}';
+    }
+    return id;
+  }
+
+  // ── model fallback ──────────────────────────────────────────────────────
+  static const backupModels = 'Use a backup model when busy';
+
+  static String backupModelsBody(CoachProvider p) {
+    final who = providerName(p);
+    return 'If the chosen $who model is busy or out of its own quota, the '
+        'question goes to a smaller $who model with the same key. Never to '
+        'another company. When none can answer, Coach answers on this phone.';
+  }
+
+  /// The quiet line under an answer another engine wrote than the chosen
+  /// model: "via 3.5 Flash-Lite", or why it was answered on this phone.
+  /// Null when the chosen model answered.
+  static String? answeredByNote(CoachProvider p, ChatMessage m) {
+    final by = m.answeredBy;
+    if (!m.fellBack || by == null) return null;
+    if (by != ChatMessage.onDevice) return 'via ${modelName(p, by)}';
+    final who = providerName(p);
+    final why = switch (m.fallbackReason) {
+      'invalidKey' =>
+        "$who didn't accept your API key. Check it in "
+            '${CoachSettingsCopy.path}',
+      'quotaExceeded' => 'your $who account is out of credit or quota',
+      'dailyLimit' => 'today’s $who limit is reached',
+      'network' => "$who couldn't be reached",
+      _ => '$who is unavailable right now',
+    };
+    return 'Answered on this phone — $why.';
+  }
+
+  /// The action under an answer written on this phone as the fallback.
+  static String askAgain(CoachProvider p) => 'Ask ${providerName(p)} again';
+
   /// "On-device", "Claude · Opus 5.5", "Gemini · 3.8 Flash".
   static String engineLabel(CoachProvider p, String? modelId) {
     final m = model(p, modelId);

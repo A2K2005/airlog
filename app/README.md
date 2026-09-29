@@ -31,31 +31,77 @@ Clean Architecture boundaries, Riverpod MVVM view-models, feature-first presenta
 
 ## Build and run (Windows)
 
+The toolchain lives on `D:\dev` (Flutter 3.47.5, JDK 17, Android SDK). Dot-source the env script in every new PowerShell window:
+
 ```powershell
-. .\tool\env.ps1          # Flutter 3.47.5, JDK 17, Android SDK on D:\dev
+. .\tool\env.ps1
 flutter pub get
-flutter test              # domain, data, coach evals, widgets, goldens
-flutter run               # phone via USB, or the emulator:  flutter emulators --launch airlog_api35
-flutter build apk --debug # build\app\outputs\flutter-apk\app-debug.apk
+flutter analyze
+flutter test                     # domain, data, coach evals, widgets, goldens
 ```
+
+**Before the first build, add the dot-matrix font** (see *Setup* below). Without it the build stops at the font asset step.
+
+**Run on the emulator or a phone**
+
+```powershell
+flutter emulators --launch airlog_api35   # Pixel 7, Android 15 AVD
+flutter run                                # debug, hot reload
+flutter run --profile                      # timing and frame checks
+```
+
+**Release APKs.** Build from PowerShell; Gradle fails from Git Bash on this machine.
+
+```powershell
+flutter build apk --release                  # one APK for every ABI
+flutter build apk --release --split-per-abi  # one smaller APK per ABI
+adb install -r build\app\outputs\flutter-apk\app-release.apk
+```
+
+The outputs are in `build\app\outputs\flutter-apk\`:
+- `app-release.apk` (all ABIs);
+- `app-arm64-v8a-release.apk` for current phones;
+- `app-armeabi-v7a-release.apk` and `app-x86_64-release.apk` for older phones and the emulator.
+
+Release builds are signed with the debug key (`android/app/build.gradle.kts`). That is fine for sideloading but not for Play; see [`docs/PLAY_RELEASE.md`](docs/PLAY_RELEASE.md).
+
+For startup timing marks in logcat (`adb logcat -s flutter | findstr airlog.timing`), add `--dart-define=AIRLOG_TIMING=true` to a profile or release build.
+
+### Demo mode
+
+The first screen asks how to start:
+- **Connect Health Connect.** This reads your own wearable data (live mode).
+- **Try with sample data.** This is demo mode: 90 days of synthetic data generated on the phone, in a worker isolate, the first time you choose it. The demo includes a planted illness episode, so the alerts and status cards have something to show.
+
+In demo mode:
+- A "Sample data" chip sits on every screen. Coach answers are tagged the same way.
+- Nothing is read from Health Connect.
+- The data is regenerated once a day so that its 90 days end today. Before the night is complete (roughly 00:00–10:30), it is refreshed at most hourly, so Today may show a partial night in the small hours.
+- Live Bluetooth heart rate uses a simulated band.
+
+Switch at any time in **Settings → Data mode**. Demo and live data are stored apart and never mix. **Settings → Delete all data** wipes both, and in demo mode the sample data is then generated again.
 
 ### Setup: the dot-matrix font
 
-The tile numerals use **Subway Ticker Grid** by K-Type. Its licence does not allow it in this repository, so it is gitignored. Before building, download it from k-type.com and place it at:
+The tile numerals use **Subway Ticker Grid** by K-Type. Its licence doesn't allow redistribution, so `assets/fonts/SubwayTickerGrid/*.ttf` is **gitignored** and a fresh clone doesn't have it. Before building, download it from k-type.com and place it at:
 
 ```
 assets/fonts/SubwayTickerGrid/SubwayTickerGrid.ttf
 ```
 
-Without it, the build fails at the font asset step. K-Type's free licence covers personal use only; publishing the APK needs their Enterprise licence.
+K-Type's free licence covers personal use only. **Publishing the APK or the repository needs their commercial (Enterprise) licence**, or a swap to an OFL dot-matrix face.
 
-For Enhanced mode (Google Health API), which is optional:
+### Optional: Enhanced mode and the coach
+
+Enhanced mode (Google Health API) needs an OAuth client id:
 
 ```powershell
 flutter run --dart-define=GOOGLE_OAUTH_CLIENT_ID=<your-android-oauth-client-id>
 ```
 
 Without it, Enhanced mode shows "Not configured" and everything else works.
+
+The coach works on-device with no key. For Claude or Gemini, paste your own API key in **Settings → Coach**; it is kept in Android's encrypted storage. The opt-in live eval (`tool/eval_live.dart`) costs money; see [`docs/EVALS.md`](docs/EVALS.md).
 
 ## Credits
 - Scoring formulas ported from [Luraxx/pulse](https://github.com/Luraxx/pulse) (Apache-2.0), see `third_party/pulse/`.

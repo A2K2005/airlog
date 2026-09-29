@@ -48,6 +48,12 @@ enum Scripted {
   sensitiveMemory,
   errorMessage,
   cloud,
+
+  /// Opus 5.5 was busy: Sonnet 5.5 (the next model) answered.
+  viaBackup,
+
+  /// Every Claude model was busy: answered on this phone.
+  onDeviceFallback,
 }
 
 abstract final class CoachScript {
@@ -144,6 +150,40 @@ abstract final class CoachScript {
         repaired: false,
       ),
       sent: sent,
+    ),
+    Scripted.viaBackup => ChatMessage(
+      id: id,
+      conversationId: conversationId,
+      role: ChatRole.assistant,
+      text: verifiedText,
+      at: at,
+      refs: refs,
+      verification: const Verification(
+        checkedNumbers: 3,
+        unsupported: [],
+        repaired: false,
+      ),
+      sent: sent,
+      answeredBy: 'claude-sonnet-5-5',
+      fallbackFrom: 'claude-opus-5-5',
+      fallbackReason: 'server',
+    ),
+    Scripted.onDeviceFallback => ChatMessage(
+      id: id,
+      conversationId: conversationId,
+      role: ChatRole.assistant,
+      text: verifiedText,
+      at: at,
+      refs: refs,
+      verification: const Verification(
+        checkedNumbers: 3,
+        unsupported: [],
+        repaired: false,
+      ),
+      sent: sent,
+      answeredBy: ChatMessage.onDevice,
+      fallbackFrom: 'claude-opus-5-5',
+      fallbackReason: 'server',
     ),
     Scripted.fallback => ChatMessage(
       id: id,
@@ -382,6 +422,23 @@ class FakeCoachRepository implements CoachRepository {
   @override
   Future<LlmClient> client() async =>
       throw const CoachException(CoachErrorKind.notConfigured);
+
+  @override
+  Future<List<LlmClient>> modelChain() async =>
+      throw const CoachException(CoachErrorKind.notConfigured);
+
+  @override
+  LlmClient onDeviceClient() =>
+      throw UnimplementedError('The UI fakes have no on-device engine.');
+
+  /// Models the test says are down (the "Ask again" action hides).
+  final Map<String, ModelDown> down = {};
+
+  @override
+  Future<void> noteModelUnavailable(String model, ModelUnavailable e) async {}
+
+  @override
+  Future<ModelDown?> modelDown(String model) async => down[model];
 
   /// Today's cloud usage; null = offline or not tracked.
   CoachUsage? usage;

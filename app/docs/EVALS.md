@@ -86,24 +86,34 @@ Unit tests in `test/domain/coach` and `test/data/coach` back these suites:
 
 `tool/eval_live.dart` runs the golden set through the real coach stack against Claude or Gemini, on **demo data only**, and reports:
 
-- the pass rate (verified, no repair, policy-clean);
-- the repair and fallback rates;
+- the pass rate (verified, no repair, policy-clean, and written by a cloud model: an on-device fallback answer never counts as a pass);
+- the repair and facts-table fallback rates;
+- **which model answered each question**: a per-model tally, and `[model]` on every PASS/FAIL line, plus a "fell back from … (reason)" line when a backup model or this phone answered;
+- how many questions were answered on this phone;
 - the number of requests;
 - the input and output tokens;
 - the errors, split by kind (server / rateLimited / other);
-- an estimated cost, from `lib/data/coach/provider_models.dart`.
+- an estimated cost, from `lib/data/coach/provider_models.dart`. All tokens are priced at the chosen model's rate, and the summary says so when a backup model answered.
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...  flutter test tool/eval_live.dart
 GEMINI_API_KEY=...            flutter test tool/eval_live.dart --dart-define=EVAL_PROVIDER=gemini
 # options: --dart-define=EVAL_MODEL=claude-sonnet-5-5  --dart-define=EVAL_LIMIT=10
-#          --dart-define=EVAL_DELAY_MS=13000   (pause between questions; default 0)
+#          --dart-define=EVAL_DELAY_MS=13000   (pause between questions; default 20000 for Gemini, 0 for Claude)
+#          --dart-define=EVAL_COOLDOWN_MS=60000 (extra pause after a rate-limited or busy answer; default 60000)
+#          --dart-define=EVAL_BACKUPS=false     (no backup models; default true, like the app)
 ```
 
 **Rate limits and retries**
 - Both clients retry a busy answer (HTTP 429 per minute, 503, 529) at most twice (`lib/data/coach/http_retry.dart`). They wait for the server's `Retry-After` or Gemini's `retryDelay` when given, else about 2 s and then 6 s, with jitter, and stay inside the service's 150 s request timeout.
 - A 429 that says the quota is gone for the day is not retried; it reports `quotaExceeded`.
-- A free-tier Gemini key allows only a few requests per minute. Run with `EVAL_DELAY_MS=13000` (about 4–5 questions a minute), or the run measures rate limits, not quality.
+- **Model fallback** ("Use a backup model when busy", on by default; ARCHITECTURE.md §10):
+  - A model-specific failure restarts the whole question on the next model of the same provider: 3.8 Flash → 3.5 Flash-Lite, and Opus 5.5 → Sonnet 5.5 → Haiku 4.5. Model-specific means a per-model day quota, 429/503/529 after the retries, or 404.
+  - Anything else answers on this phone: an account-wide failure (key, billing, credit), a network error, or the last model failing. It never switches to the other provider.
+  - A busy provider therefore shows up as questions answered by a backup model or on-device, not as errors. Read the per-model tally before the pass rate.
+  - The cooldown also applies when a question fell back because of a busy or rate-limited model.
+  - To measure only the chosen model, run with `--dart-define=EVAL_BACKUPS=false`. Failures then still answer on-device, and those answers never count as passes.
+- A free-tier Gemini key allows only a few requests per minute, and each question makes 2–3 requests. The runner therefore paces Gemini by default: 20 s between questions, plus a 60 s cooldown after any rate-limited or busy answer so one 429 does not cascade into the rest of the run. Override with `EVAL_DELAY_MS` / `EVAL_COOLDOWN_MS`. A full 48-question Gemini run takes about 20–70 min.
 - The first Gemini run (2026-09-29, gemini-3.8-flash, no delay, before the retries existed) errored on 47 of 48 questions: 11 HTTP 503 "high demand" and 36 HTTP 429. It measured no quality.
 
 **Key handling**
@@ -114,6 +124,7 @@ GEMINI_API_KEY=...            flutter test tool/eval_live.dart --dart-define=EVA
 - A full run is about 48 questions × 2–3 requests.
 - The cost hasn't been measured yet: the only live run (Gemini, above) was almost all errors, at 3 counted requests and $0.0073.
 - The script reports its own estimate. Start with `EVAL_LIMIT=5` to see the per-question cost.
+- Every request the provider answered counts toward the in-app daily budget, failed ones included, on every model the question tried. A busy answer that the client retried counts once per call.
 
 **Gemini**
 - Use a key from a billing-enabled (paid) project. Free-tier prompts may be used for training and read by human reviewers.

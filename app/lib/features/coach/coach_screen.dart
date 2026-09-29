@@ -181,6 +181,20 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     return yes == true;
   }
 
+  /// "Ask (provider) again" under an answer written on this phone as the
+  /// fallback, once the chosen model is no longer known to be down.
+  VoidCallback? _askAgainFor(CoachChatState s, CoachConfig cfg, ChatMessage m) {
+    final from = m.fallbackFrom;
+    if (m.answeredBy != ChatMessage.onDevice || from == null) return null;
+    if (!cfg.cloud || !cfg.ready || s.sending) return null;
+    final down = ref.watch(coachModelDownProvider(from));
+    if (down.isLoading || down.value != null) return null;
+    return () {
+      _toLatest();
+      _vm.askAgain(m.id);
+    };
+  }
+
   Future<void> _pickCategory(ChatMessage m, int i, MemoryCategory cur) async {
     final c = await showCategorySheet(context, cur);
     if (c != null) _vm.pickCategory(m.id, i, c);
@@ -489,6 +503,12 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
       child = AnswerView(
         message: m,
         sample: isSampleData(ref),
+        engineNote: CoachCopy.answeredByNote(
+          m.sent?.provider ?? cfg.provider,
+          m,
+        ),
+        askAgainLabel: CoachCopy.askAgain(m.sent?.provider ?? cfg.provider),
+        onAskAgain: _askAgainFor(s, cfg, m),
         reported: s.reported.contains(m.id),
         memoryOn: cfg.memoryOn,
         onOpenRef: (r) => openRef(context, ref, r),

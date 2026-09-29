@@ -1,6 +1,10 @@
 package app.airlog.airlog
 
 import android.content.Intent
+import android.os.Bundle
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import androidx.health.connect.client.PermissionController
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -27,6 +31,20 @@ class MainActivity : FlutterFragmentActivity() {
         registerForActivityResult(PermissionController.createRequestPermissionResultContract()) {
             granted -> bridge?.onPermissionsResult(granted)
         }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // TEMP startup probe (final wave): log main-thread messages > 80 ms.
+        var t0 = 0L
+        var what = ""
+        Looper.getMainLooper().setMessageLogging { s ->
+            if (s.startsWith(">>>>>")) { t0 = SystemClock.uptimeMillis(); what = s }
+            else if (s.startsWith("<<<<<")) {
+                val d = SystemClock.uptimeMillis() - t0
+                if (d > 80) Log.w("AirlogProbe", "main ${d}ms $what")
+            }
+        }
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
