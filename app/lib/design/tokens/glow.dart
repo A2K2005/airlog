@@ -75,11 +75,15 @@ class GlowRecipe {
     required this.size,
     required this.base,
     required this.blobs,
+    this.dim = 0,
   });
 
   final Size size;
   final Color base;
   final List<GlowBlob> blobs;
+
+  /// Readability correction for the few reference glows too bright for text.
+  final double dim;
 
   /// Paints the recipe into [canvas], scaled from [size] to [target] (1:1 in
   /// the app; the scale exists only for previews).
@@ -102,6 +106,12 @@ class GlowRecipe {
         Paint()..shader = ui.Gradient.radial(Offset.zero, r, colors, stops),
       );
       canvas.restore();
+    }
+    if (dim > 0) {
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()..color = const Color(0xFF000000).withValues(alpha: dim),
+      );
     }
     canvas.restore();
   }

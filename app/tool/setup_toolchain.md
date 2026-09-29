@@ -1,4 +1,20 @@
-# Toolchain setup (reproducible)
+# Toolchain setup
+
+## Current launch setup (2026-09-30)
+
+Launch hardening uses Flutter **3.47.5**, temporarily installed at `C:\Users\Armaan\AppData\Local\Temp\airlog-flutter-3.47.5`. That temporary path is not a permanent dependency. Set `FLUTTER_ROOT`, `JAVA_HOME` (JDK 17) and `ANDROID_HOME` to your own installed locations, then dot-source `tool/env.ps1` or source `tool/env.sh`. These scripts preserve configured SDK/cache locations and do not install SDKs or require D:.
+
+Run `flutter doctor -v`, `flutter pub get`, `flutter analyze`, `flutter test`, then `flutter build apk --debug`. On Windows, serialize tests/builds in this checkout to avoid native-test DLL locks. Install the packages requested by the current Gradle build; the historical table below is not evidence that they exist on your machine. Machine-specific daemon/temp-path overrides belong in local configuration.
+
+Release tasks require **all four** environment variables: `AIRLOG_KEYSTORE` (prefer an absolute keystore path), `AIRLOG_KEYSTORE_PASSWORD`, `AIRLOG_KEY_ALIAS`, and `AIRLOG_KEY_PASSWORD`. Provision them securely; do not commit keys/passwords or expose them in transcripts. Release signing does not fall back to the debug key. With credentials configured, build the Play artifact using `flutter build appbundle --release`.
+
+Optional Google Health: `--dart-define=GOOGLE_OAUTH_CLIENT_ID=<configured-client-id>` supplies both Dart and Android manifest redirect configuration. `--dart-define=GOOGLE_OAUTH_REDIRECT=<registered-uri>` optionally overrides both together. Verify the registered package, signing certificate, redirect, cancellation and token refresh on a device; these setup notes do not claim OAuth success.
+
+Fonts are bundled under OFL, including Doto. No proprietary-font installation is required. Golden changes need visual review; old Figma fidelity measurements are historical.
+
+## Historical setup record (not current instructions)
+
+The remainder records an earlier machine setup. Its installation, successful-build and emulator claims have not been revalidated for this checkout. In particular, current env scripts and Gradle settings no longer hard-code the D: paths below.
 
 Installed on 2026-09-28 into `D:\dev` (nothing on C: except the Flutter config file):
 

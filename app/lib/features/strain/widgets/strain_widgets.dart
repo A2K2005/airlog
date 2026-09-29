@@ -11,7 +11,7 @@ import '../strain_view_model.dart';
 
 String strain1(double v) => v.toStringAsFixed(1);
 
-/// The ring, the target and the one-line recommendation.
+/// Target basis and guidance beneath the screen's single primary score tile.
 class StrainHeroCard extends StatelessWidget {
   const StrainHeroCard({super.key, required this.view, this.onExplain});
   final StrainView view;
@@ -22,36 +22,20 @@ class StrainHeroCard extends StatelessWidget {
     final p = P.of(context);
     final v = view;
     final s = v.strain;
-    final ring = ScoreRing(
-      label: 'Strain',
-      color: DomainColors.strain,
-      value: v.noInput ? null : v.strainValue,
-      max: 21,
-      valueText: v.noInput ? null : strain1(v.strainValue),
-      state: v.noInput ? RingState.noData : RingState.measured,
-      size: 136,
-      playKey: v.isToday && !v.noInput ? 'strain:${v.date}' : null,
-      onTap: onExplain,
-      semanticsLabel: v.noInput
-          ? 'Strain: no data'
-          : 'Strain ${strain1(v.strainValue)} of 21',
-    );
     final t = v.target;
     final targetBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('TARGET', style: F.over.copyWith(color: p.ink3)),
-        const SizedBox(height: S.x1 + 2),
         Text(
-          t == null ? 'None' : strain1(t),
-          style: (t == null ? F.n24 : F.n32).copyWith(
-            color: t == null ? p.ink3 : p.ink,
-          ),
+          t == null ? 'No effort target' : 'Target basis',
+          style: F.head.copyWith(color: p.ink),
         ),
         const SizedBox(height: S.x1),
         Text(
-          v.recovery == null
+          t == null && v.recovery != null
+              ? 'Recovery does not support an effort target for this day'
+              : v.recovery == null
               ? 'No recovery this morning'
               : 'from ${v.recovery} % recovery',
           style: F.tab(F.cap).copyWith(color: p.ink3),
@@ -74,29 +58,8 @@ class StrainHeroCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LayoutBuilder(
-            builder: (context, box) {
-              final stacked = box.maxWidth < 270 || bigText(context);
-              if (stacked) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(child: ring),
-                    const SizedBox(height: S.x4),
-                    targetBlock,
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  ring,
-                  const SizedBox(width: S.x5),
-                  Expanded(child: targetBlock),
-                ],
-              );
-            },
-          ),
-          if (!v.noInput) ...[
+          targetBlock,
+          if (!v.noInput && t != null) ...[
             const SizedBox(height: S.x5),
             TargetBar(strain: v.strainValue, target: t),
           ],
@@ -121,8 +84,7 @@ class StrainHeroCard extends StatelessWidget {
                 const SizedBox(width: S.x2),
                 Expanded(
                   child: Text(
-                    'Estimated from workouts + steps — heart-rate data was '
-                    'sparse',
+                    'This stored score used an older estimation method.',
                     style: F.cap.copyWith(color: p.ink2),
                   ),
                 ),
@@ -311,9 +273,7 @@ class ZoneMinutesCard extends StatelessWidget {
                 ? 'Time in zones: no minutes above zone 1'
                 : 'Time in zones. ${[for (var i = 0; i < z.length && i < 5; i++) 'Zone ${i + 1} ${z[i].round()} minutes'].join(', ')}',
             empty: total <= 0
-                ? const NoData(
-                    message: 'No minutes above 50 % of heart-rate reserve',
-                  )
+                ? const NoData(message: 'No recorded minutes in zones 1–5')
                 : null,
             child: CustomPaint(
               size: Size.infinite,
@@ -350,7 +310,7 @@ class ZoneMinutesCard extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        '${pct[i]} · ${range(i)}',
+                        '${strain.zonesFromMaxHr ? '' : '${pct[i]} · '}${range(i)}',
                         style: F.tab(F.cap).copyWith(color: p.ink3),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -371,7 +331,7 @@ class ZoneMinutesCard extends StatelessWidget {
           const SizedBox(height: S.x2),
           Text(
             'Below zone 1: ${durationWords(strain.restMinutes)}, sleep '
-            'included. Zones are shares of your heart-rate reserve'
+            'included. ${strain.zonesFromMaxHr ? 'Zones use estimated fractions of maximum heart rate' : 'Zones are shares of your heart-rate reserve'}'
             '${strain.restingHrUsed == null || maxHr == null ? '' : ' (resting ${strain.restingHrUsed!.round()}, max ${maxHr.round()} bpm)'}.',
             style: F.cap.copyWith(color: p.ink3),
           ),
@@ -524,7 +484,7 @@ class WorkoutCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Too little heart rate inside this workout, so its '
-                      'strain comes from its average HR or activity type.',
+                      'strain comes from its recorded average HR.',
                       style: F.cap.copyWith(color: p.ink3),
                     ),
                   ),

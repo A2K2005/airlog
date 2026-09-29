@@ -230,6 +230,22 @@ abstract final class DayEngine {
     final config = ctx.config;
     final now = ctx.now;
     final profile = config.profile;
+    if (profile.birthYear != null && now.year - profile.birthYear! < 18) {
+      return DayResult(
+        date: today.date,
+        algoVersion: kAlgoVersion,
+        computedAt: now,
+        health: const HealthMonitorResult(metrics: [], alert: false),
+        calibration: const Calibration(haveNights: 0),
+        notes: const [
+          StatusNote(
+            metric: 'age_unsupported',
+            title: 'Scores are for adults',
+            body: 'Airlog does not provide scores or training guidance for people under 18.',
+          ),
+        ],
+      );
+    }
     final window = ctx.window;
     final prep = cache.of(today);
     final maxHr = ctx.profileMaxHr ?? _observedMaxHr(today, history, cache);
@@ -286,7 +302,9 @@ abstract final class DayEngine {
       tau: config.strainTau,
       sex: profile.sex,
       now: now,
-      recoveryScore: recovery?.score,
+      recoveryScore: recovery?.confidence == RecoveryConfidence.low
+          ? null
+          : recovery?.score,
     );
     final strain = dayStrain.result;
 
@@ -455,9 +473,11 @@ abstract final class DayEngine {
     switch (strain.method) {
       case StrainMethod.none:
         notes.add(
-          prep.hr.isNotEmpty && maxHr == null
+          prep.hr.isEmpty
+              ? Notes.strainUnavailable
+              : maxHr == null
               ? Notes.strainNeedsMaxHr
-              : Notes.strainUnavailable,
+              : Notes.strainInvalidAnchors,
         );
       case StrainMethod.fallback:
       case StrainMethod.hrZones:
@@ -680,6 +700,9 @@ abstract final class DayEngine {
     final start = math.max(1, n - 4);
     final daily = <Set<HealthMetricKind>>[];
     for (var i = start; i < n; i++) {
+      if (i > start && win[i].date != Civil.add(win[i - 1].date, 1)) {
+        daily.add({}); // An unobserved day cannot extend a measured streak.
+      }
       if (i == n - 1) {
         daily.add(HealthMonitor.concerningKinds(todayStatuses));
         continue;
@@ -703,10 +726,14 @@ abstract final class DayEngine {
   ) {
     final seg = Baselines.segment(today, history, Metric.hrv);
     if (!seg.exists) return null;
+    final records = [...history, today];
+    final effective = Baselines.effective(records, Metric.hrv);
+    final from = Civil.add(today.date, -(Readiness.windowNights - 1));
     final lnWindow = <double>[
-      for (final r in _window(history, today, Readiness.windowNights))
-        if (Inputs.hrv(r) case final v?)
-          if (seg.seg.matches(r.provenance[Metric.hrv])) math.log(v),
+      for (var i = 0; i < records.length; i++)
+        if (records[i].date.compareTo(from) >= 0)
+          if (Inputs.hrv(records[i]) case final v?)
+            if (seg.seg.matches(effective[i])) math.log(v),
     ];
     final lnBaseline = [
       for (final v in Baselines.values(

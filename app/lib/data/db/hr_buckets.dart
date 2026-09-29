@@ -104,9 +104,17 @@ Uint16List decodeTenths(Uint8List bytes) {
 }
 
 /// Encodes a resolved day's 1-minute HR samples (for day_record storage).
-Uint8List encodeSamples(String date, List<HrSample> samples) {
-  final start = DayKey.start(date);
-  final n = minutesInDay(date);
+int sampleAnchor(List<HrSample> samples) => samples
+    .map((s) => s.t.millisecondsSinceEpoch ~/ 60000 * 60000)
+    .reduce((a, b) => a < b ? a : b);
+
+Uint8List encodeSamples(String date, List<HrSample> samples, {int? startMs}) {
+  final start = startMs == null ? DayKey.start(date) : fromMs(startMs);
+  final n = startMs == null
+      ? minutesInDay(date)
+      : samples
+            .map((s) => s.t.difference(start).inMinutes + 1)
+            .fold<int>(0, (a, b) => a > b ? a : b);
   final t = Uint16List(n);
   for (final s in samples) {
     final i = s.t.difference(start).inSeconds ~/ 60;
@@ -116,8 +124,8 @@ Uint8List encodeSamples(String date, List<HrSample> samples) {
   return encodeTenths(t);
 }
 
-List<HrSample> decodeSamples(String date, Uint8List bytes) {
-  final start = DayKey.start(date).millisecondsSinceEpoch;
+List<HrSample> decodeSamples(String date, Uint8List bytes, {int? startMs}) {
+  final start = startMs ?? DayKey.start(date).millisecondsSinceEpoch;
   final t = decodeTenths(bytes);
   return [
     for (var i = 0; i < t.length; i++)
@@ -133,13 +141,15 @@ List<HrSample> decodeSamples(String date, Uint8List bytes) {
 /// cost of a 90-day range() read, and most range consumers (trends) never
 /// touch intraday HR. Materialises on first element access.
 class LazyHrSamples extends ListBase<HrSample> {
-  LazyHrSamples(this.date, this.bytes);
+  LazyHrSamples(this.date, this.bytes, {this.startMs});
   final String date;
   final Uint8List bytes;
+  final int? startMs;
   List<HrSample>? _m;
   int? _n;
 
-  List<HrSample> get _list => _m ??= decodeSamples(date, bytes);
+  List<HrSample> get _list =>
+      _m ??= decodeSamples(date, bytes, startMs: startMs);
 
   @override
   int get length {

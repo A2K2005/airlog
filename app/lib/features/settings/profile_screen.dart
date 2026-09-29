@@ -18,7 +18,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(profileControllerProvider);
     final d = async.value;
-    final now = ref.watch(clockProvider)();
+    final now = ref.watch(currentTimeProvider);
     final dirty = d?.dirty ?? false;
     // Back with unsaved edits asks first (QA-19).
     return PopScope(

@@ -314,6 +314,8 @@ class GeminiClient implements LlmClient {
             body: bytes,
           )
           .timeout(timeout);
+    } on CoachException {
+      rethrow;
     } on TimeoutException {
       throw CoachException(
         CoachErrorKind.network,

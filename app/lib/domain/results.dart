@@ -19,7 +19,9 @@ import 'models.dart';
 ///     v1; journal insights need 10 days per group with Holm correction;
 ///     DayResult.sourceChange; new StatusNotes (not shared, app-named new
 ///     baseline, observed max HR).
-const int kAlgoVersion = 2;
+// 3: preserve unknown sleep stages, shared HR anchors, gap-aware alerts,
+// device-consistent readiness and persisted partial-strain quality.
+const int kAlgoVersion = 3;
 
 // ── Shared ───────────────────────────────────────────────────────────────
 
@@ -370,7 +372,7 @@ class WorkoutStrain {
 
   /// [ours] How this workout's strain was derived: `hrZones` = from HR
   /// samples inside the workout; `fallback` = estimated from the workout's
-  /// average HR or, without one, a MET table. Null in rows written before
+  /// recorded average HR. Null in rows written before
   /// this field existed.
   final StrainMethod? method;
 
@@ -416,6 +418,7 @@ class StrainResult {
     this.maxHrSource,
     this.steps,
     this.zonesFromMaxHr = false,
+    this.partial = true,
   });
 
   /// 0..21, `21·(1−e^(−load/τ))`, τ = 450.
@@ -457,6 +460,10 @@ class StrainResult {
   /// StrainEngine.swainSlope) instead of heart-rate reserve; flagged.
   final bool zonesFromMaxHr;
 
+  /// Incomplete HR coverage. Older cached rows have unknown coverage and
+  /// must not be treated as complete observations by load/trend consumers.
+  final bool partial;
+
   double get trackedMinutes =>
       restMinutes + zoneMinutes.fold(0.0, (a, b) => a + b);
 
@@ -477,6 +484,7 @@ class StrainResult {
     if (maxHrSource != null) 'maxHrSource': maxHrSource!.name,
     if (steps != null) 'steps': steps,
     if (zonesFromMaxHr) 'zonesFromMaxHr': true,
+    'partial': partial,
   };
   factory StrainResult.fromJson(Map<String, dynamic> j) => StrainResult(
     strain: (j['strain'] as num).toDouble(),
@@ -503,6 +511,7 @@ class StrainResult {
         : MaxHrSource.values.byName(j['maxHrSource'] as String),
     steps: j['steps'] as int?,
     zonesFromMaxHr: j['zonesFromMaxHr'] as bool? ?? false,
+    partial: j['partial'] as bool? ?? true,
   );
 }
 
@@ -544,6 +553,10 @@ class SleepAnalysis {
 
   /// [ours] How need was built: baseline + debt share + strain boost.
   final SleepNeedBreakdown? needBreakdown;
+
+  bool get hasStageData =>
+      (stageMinutes[SleepStage.unknown] ?? 0) == 0 &&
+      stageMinutes.entries.any((e) => e.key.isAsleep && e.value > 0);
 
   double get restorativeMinutes =>
       (stageMinutes[SleepStage.deep] ?? 0) +
@@ -1020,7 +1033,8 @@ class TrainingLoad {
   final double acute7;
   final double chronic28;
 
-  /// acute / chronic. <0.8 detraining, 0.8–1.3 optimal, 1.3–1.5 elevated, >1.5 high.
+  /// Acute / chronic recorded effort. Legacy state names are bucket labels,
+  /// not validated predictions of fitness, injury risk or optimal training.
   final double ratio;
   final LoadState state;
   final int daysOfHistory;

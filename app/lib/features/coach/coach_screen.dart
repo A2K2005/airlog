@@ -70,14 +70,16 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
   CoachChatViewModel get _vm => ref.read(coachChatProvider(launch).notifier);
 
   Future<void> _send([String? text]) async {
+    if (ref.read(coachChatProvider(launch)).value?.sending ?? true) return;
     final q = (text ?? _input.text).trim();
     if (q.isEmpty) return;
     final sent = _vm.send(q);
     _input.clear();
     _toLatest();
     await sent;
+    if (!mounted) return;
     _toLatest();
-    if (mounted) ref.invalidate(coachUsageProvider);
+    ref.invalidate(coachUsageProvider);
   }
 
   /// A suggestion tap: puts [q] in the composer. Nothing is sent until the
@@ -265,7 +267,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
             sending: s?.sending ?? false,
             enabled: s != null && cfgAsync.hasValue && cfg.ready && !spent,
             length: cfg.settings.length,
-            onLength: cfgAsync.hasValue
+            onLength: cfgAsync.hasValue && !(s?.sending ?? false)
                 ? (l) async {
                     await saveLength(ref.read(coachRepositoryProvider), l);
                     ref.invalidate(coachConfigProvider);

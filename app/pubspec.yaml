@@ -84,9 +84,9 @@ flutter:
       fonts:
         - asset: assets/fonts/Manrope/Manrope-500.ttf
           weight: 500
-    # Dot-matrix numerals. K-Type free font; supplied by the user;
-    # personal-use licence. Gitignored: a fresh clone needs the file at this
-    # path (from k-type.com), see README "Setup".
-    - family: Subway Ticker Grid
+    # Distributable dot-matrix numerals, SIL OFL. Bundled for offline builds.
+    - family: Doto
       fonts:
-        - asset: assets/fonts/SubwayTickerGrid/SubwayTickerGrid.ttf
+        - asset: assets/fonts/Doto/Doto-Variable.ttf
+  assets:
+    - assets/fonts/Doto/OFL.txt

@@ -314,6 +314,7 @@ class AnswerView extends StatelessWidget {
           RememberCard(
             key: ValueKey('remember-${m.id}-$i'),
             text: m.proposedMemories[i],
+            expiresOn: m.proposedExpiry(i),
             choice: choiceOf(i),
             category: categoryOf(i),
             onPickCategory: () => onPickCategory(i),
@@ -333,6 +334,7 @@ class RememberCard extends StatelessWidget {
   const RememberCard({
     super.key,
     required this.text,
+    this.expiresOn,
     required this.choice,
     required this.category,
     required this.onPickCategory,
@@ -342,6 +344,7 @@ class RememberCard extends StatelessWidget {
   });
 
   final String text;
+  final String? expiresOn;
   final MemoryChoice choice;
   final MemoryCategory category;
   final VoidCallback onPickCategory;
@@ -398,6 +401,8 @@ class RememberCard extends StatelessWidget {
           ),
           const SizedBox(height: S.x1),
           Text('“$text”', style: F.bodySm.copyWith(color: p.ink2)),
+          if (expiresOn != null)
+            Text('Use until $expiresOn', style: F.cap.copyWith(color: p.ink3)),
           Wrap(
             spacing: S.x3,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -511,10 +516,10 @@ enum ErrorFix { setup, retry, none }
   final who = CoachCopy.company(provider);
   return switch (kind) {
     CoachErrorKind.notConfigured => (
-      title: "Coach isn't set up yet",
+      title: 'Review coach settings',
       body:
-          'Add your API key in setup, or switch back to on-device, which '
-          'needs no key.',
+          'Coach is not ready, or its settings changed during this answer. '
+          'Review setup or switch to on-device. No further requests were sent.',
       fix: ErrorFix.setup,
       action: 'Open setup',
     ),
@@ -551,8 +556,8 @@ enum ErrorFix { setup, retry, none }
     CoachErrorKind.network => (
       title: 'No connection',
       body:
-          'The question could not reach $who. Check your connection and '
-          'try again. Nothing was lost.',
+          'No answer arrived from $who. Check your connection and try again. '
+          'A request may already have reached the provider.',
       fix: ErrorFix.retry,
       action: 'Try again',
     ),
@@ -570,7 +575,9 @@ enum ErrorFix { setup, retry, none }
     ),
     CoachErrorKind.unknown => (
       title: 'Something went wrong',
-      body: 'The answer did not arrive. Nothing was saved. Try again.',
+      body:
+          'The answer did not complete. Your question may remain in chat. '
+          'Try again.',
       fix: ErrorFix.retry,
       action: 'Try again',
     ),

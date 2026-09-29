@@ -139,6 +139,7 @@ abstract final class Engine {
   static WorkoutStrain liveWorkoutStrain(
     List<HrSample> samples, {
     required double? restingHr,
+    double? maxHr,
     EngineConfig config = const EngineConfig(),
     DateTime? now,
   }) {
@@ -147,11 +148,29 @@ abstract final class Engine {
       for (final s in Inputs.cleanHr(samples))
         if (!s.t.isAfter(at)) s,
     ];
-    final trueMax = maxHrFor(config.profile, at);
-    final known = restingHr != null && restingHr.isFinite;
-    final anchors = known ? null : StrainEngine.maxHrZoneAnchors(trueMax);
-    final rhr = anchors?.$1 ?? restingHr!;
-    final maxHr = anchors?.$2 ?? trueMax;
+    final trueMax = maxHr ?? DayEngine.profileMaxHr(config.profile, at)?.value;
+    final anchors = StrainEngine.zoneAnchors(
+      restingHr: restingHr,
+      maxHr: trueMax,
+    );
+    final minor =
+        config.profile.birthYear != null &&
+        at.year - config.profile.birthYear! < 18;
+    if (anchors == null || clean.isEmpty || minor) {
+      return const WorkoutStrain(
+        workoutId: 'live',
+        strain: 0,
+        zoneMinutes: [0, 0, 0, 0, 0],
+        method: StrainMethod.none,
+      );
+    }
+    final known =
+        restingHr != null &&
+        restingHr.isFinite &&
+        restingHr >= 25 &&
+        restingHr <= 150;
+    final rhr = anchors.$1;
+    final zoneMax = anchors.$2;
     final firstDt = clean.length >= 2
         ? Stats.clamp(
             clean[1].t.difference(clean[0].t).inMicroseconds / 6e7,
@@ -162,7 +181,7 @@ abstract final class Engine {
     final acc = StrainEngine.accumulate(
       clean,
       restingHr: rhr,
-      maxHr: maxHr,
+      maxHr: zoneMax,
       firstDt: firstDt,
     );
     return WorkoutStrain(
@@ -176,7 +195,7 @@ abstract final class Engine {
           ? Trimp.fromSamples(
               clean,
               restingHr: rhr,
-              maxHr: maxHr,
+              maxHr: zoneMax,
               sex: config.profile.sex,
               firstDt: firstDt,
             )
@@ -220,6 +239,10 @@ abstract final class Engine {
   static double maxHrFor(UserProfile p, DateTime now) {
     return DayEngine.maxHrFor(p, now);
   }
+
+  /// A declared profile anchor, without the legacy age-30 default.
+  static double? knownMaxHrFor(UserProfile p, DateTime now) =>
+      DayEngine.profileMaxHr(p, now)?.value;
 
   /// Journal factor → next-day recovery correlations (Pulse JournalEngine):
   /// ≥5 days with and ≥5 without; Welch SE; strongest |delta| first.

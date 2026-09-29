@@ -212,6 +212,30 @@ class GlowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (bigText(context) && semanticLabel != null) {
+      // The fixed design coordinates cannot accommodate large type. Use the
+      // same complete metric summary at the requested scale instead of
+      // silently shrinking it; the detail action remains available.
+      final readable = Container(
+        width: S.tileWideW,
+        padding: const EdgeInsets.all(S.tilePad),
+        decoration: ShapeDecoration(
+          color: P.of(context).card,
+          shape: const TileBorder(),
+        ),
+        child: Text(
+          semanticLabel!,
+          style: F.body.copyWith(color: P.of(context).ink),
+        ),
+      );
+      return onTap == null
+          ? readable
+          : Pressable(
+              onTap: onTap,
+              semanticLabel: semanticLabel,
+              child: ExcludeSemantics(child: readable),
+            );
+    }
     final body = SizedBox.fromSize(
       size: size.size,
       child: TileScope(

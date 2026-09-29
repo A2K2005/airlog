@@ -319,7 +319,9 @@ abstract final class RecoveryEngine {
       coverage: coverage,
       // Sleeping HR standing in for resting HR: pinned at reduced.
       confidence: shr != null
-          ? RecoveryConfidence.reduced
+          ? (coverage < lowCoverage
+                ? RecoveryConfidence.low
+                : RecoveryConfidence.reduced)
           : confidenceFor(hasHrv: hrv != null, coverage: coverage),
     );
   }

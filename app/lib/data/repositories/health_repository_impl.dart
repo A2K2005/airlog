@@ -28,6 +28,8 @@ import '../../domain/results.dart';
 import '../common/time.dart';
 import '../db/raw_rows.dart';
 import '../db/stores.dart';
+import '../db/write_guard.dart';
+import '../services/artifact_io.dart';
 import '../resolver/resolver.dart';
 import '../resolver/source_choice.dart';
 import '../../domain/engine/source_apps.dart';
@@ -135,6 +137,7 @@ class HealthRepositoryImpl implements HealthRepository {
   Future<void>? _ready;
   Future<void>? _inflight;
   bool _autoSynced = false;
+  bool _disposed = false;
   DateTime? _lastSync;
 
   /// Starts initialisation (idempotent). Every read awaits it. A failed
@@ -173,7 +176,9 @@ class HealthRepositoryImpl implements HealthRepository {
 
   Future<void> get ready => start();
 
-  Future<void> _init() async {
+  Future<void> _init() => app.mutate(_initOwned);
+
+  Future<void> _initOwned() async {
     final stored = await app.getSetting(kModeKey);
     // Demo only when the user chose it; a fresh install is live.
     _mode =
@@ -299,6 +304,9 @@ class HealthRepositoryImpl implements HealthRepository {
   }
 
   Future<bool> _needsRecompute(DataMode mode) async {
+    if (await app.getSetting(pendingRecomputeKey(mode.name)) != null) {
+      return true;
+    }
     final latest = await app.latestDate(mode);
     if (latest == null) {
       return (await raw.span(sources: Resolver.sourcesFor(await _cfg(mode)))) !=
@@ -336,16 +344,25 @@ class HealthRepositoryImpl implements HealthRepository {
     return (await app.record(_mode, latest))?.lastDataAt;
   }
 
+  int _widgetRequest = 0;
+
   Future<void> _pushWidget() async {
+    final request = ++_widgetRequest;
+    final mode = _mode;
     try {
-      final latest = await app.latestDate(_mode);
+      final latest = await app.latestDate(mode);
       final days = latest == null
           ? const <DayBundle>[]
-          : (await range(DayKey.add(latest, -1), latest)).reversed.toList();
+          : (await app.bundles(
+              mode,
+              DayKey.add(latest, -1),
+              latest,
+            )).reversed.toList();
+      if (request != _widgetRequest || mode != _mode || _disposed) return;
       await widgets.push(
         WidgetSnapshot.fromDays(
           days,
-          demo: _mode == DataMode.demo,
+          demo: mode == DataMode.demo,
           today: DayKey.of(clock()),
         ),
       );
@@ -353,9 +370,8 @@ class HealthRepositoryImpl implements HealthRepository {
   }
 
   Future<DayBundle?> _bundle(String date) async {
-    final r = await app.record(_mode, date);
-    final s = await app.result(_mode, date);
-    return r == null || s == null ? null : DayBundle(r, s);
+    final days = await app.bundles(_mode, date, date);
+    return days.firstOrNull;
   }
 
   // ── HealthRepository ───────────────────────────────────────────────────
@@ -366,6 +382,10 @@ class HealthRepositoryImpl implements HealthRepository {
   @override
   Future<void> setMode(DataMode mode) async {
     await start();
+    await app.mutate(() => _setMode(mode), mode: mode);
+  }
+
+  Future<void> _setMode(DataMode mode) async {
     if (mode == _mode) return;
     _mode = mode;
     await app.setSetting(kModeKey, mode.name);
@@ -411,16 +431,12 @@ class HealthRepositoryImpl implements HealthRepository {
 
   Future<List<DayBundle>> _range(String from, String to) async {
     await start();
-    final recs = await app.records(_mode, from, to);
-    final res = {for (final r in await app.results(_mode, from, to)) r.date: r};
-    return [
-      for (final r in recs)
-        if (res[r.date] != null) DayBundle(r, res[r.date]!),
-    ];
+    return app.bundles(_mode, from, to);
   }
 
   @override
   Future<void> syncNow() {
+    if (_disposed) return Future.value();
     return _inflight ??= _sync(background: false)
         .whenComplete(() => _inflight = null);
   }
@@ -442,6 +458,9 @@ class HealthRepositoryImpl implements HealthRepository {
   /// them in the Health Connect app; QA-06).
   Future<void> onAppResumed() async {
     await start();
+    // A worker owns another repository instance. Refresh cached UI reads even
+    // when it already consumed the provider's changes feed.
+    _bump();
     try {
       final before = _perms;
       final now = await healthConnectPermissions();
@@ -464,6 +483,20 @@ class HealthRepositoryImpl implements HealthRepository {
 
   Future<void> _sync({required bool background}) async {
     await start();
+    try {
+      await app.mutate(() => _syncOwned(background: background), mode: _mode);
+    } on SupersededMutation {
+      // The newer configuration/delete/sync owns the final state.
+      if (background) rethrow;
+    } catch (e) {
+      if (background) rethrow;
+      _setStatus(
+        _st(SyncPhase.error, message: 'Sync failed: ${e.runtimeType}'),
+      );
+    }
+  }
+
+  Future<void> _syncOwned({required bool background}) async {
     _autoSynced =
         true; // a sync ran this session; latestDate() needn't start one
     _setStatus(_st(SyncPhase.syncing));
@@ -505,11 +538,13 @@ class HealthRepositoryImpl implements HealthRepository {
               : '${errors.length} data type(s) failed: ${errors.map((e) => e.dataType).join(', ')}',
         ),
       );
-      if (run.outcome != null) {
-        _bump();
-        unawaited(_pushWidget());
+      _bump();
+      await _pushWidget();
+      if (background && errors.isNotEmpty) {
+        throw StateError('Background sync incomplete');
       }
     } catch (e) {
+      if (e is SupersededMutation) rethrow;
       final t = _typed(e);
       _setStatus(
         _st(
@@ -519,6 +554,7 @@ class HealthRepositoryImpl implements HealthRepository {
               : 'Sync failed: ${e.runtimeType}',
         ),
       );
+      if (background) rethrow;
     }
   }
 
@@ -618,6 +654,10 @@ class HealthRepositoryImpl implements HealthRepository {
   @override
   Future<void> setSourceEnabled(SourceKind kind, bool enabled) async {
     await start();
+    await app.mutate(() => _setSourceEnabled(kind, enabled), mode: _mode);
+  }
+
+  Future<void> _setSourceEnabled(SourceKind kind, bool enabled) async {
     if (kind == SourceKind.demo) {
       await setMode(enabled ? DataMode.demo : DataMode.live);
       return;
@@ -723,6 +763,11 @@ class HealthRepositoryImpl implements HealthRepository {
 
   @override
   Future<void> disconnectGoogleHealth() async {
+    await start();
+    await app.mutate(_disconnectGoogleHealth, mode: _mode);
+  }
+
+  Future<void> _disconnectGoogleHealth() async {
     final g = gh;
     if (g == null) return;
     await g.signOut();
@@ -754,15 +799,18 @@ class HealthRepositoryImpl implements HealthRepository {
   @override
   Future<void> saveProfile(UserProfile profile) => _guard(() async {
     await start();
-    await app.setSetting(kProfileKey, jsonEncode(profile.toJson()));
-    // Max HR / age norms change every score.
-    await pipeline.recompute(_mode, cfg: await _cfg(_mode), profile: profile);
-    _bump();
-    unawaited(_pushWidget());
+    await app.mutate(() async {
+      await app.setSetting(kProfileKey, jsonEncode(profile.toJson()));
+      // Max HR / age norms change every score.
+      await pipeline.recompute(_mode, cfg: await _cfg(_mode), profile: profile);
+      _bump();
+      unawaited(_pushWidget());
+    }, mode: _mode);
   });
 
   @override
   Future<ExportResult> exportAll() => _guard(() async {
+    final artifactEpoch = ArtifactIo.capture();
     await start();
     final cfg = await _cfg(_mode);
     final far = DateTime(2100);
@@ -774,13 +822,16 @@ class HealthRepositoryImpl implements HealthRepository {
     );
     final stamp = clock().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
     final base = await directories('exports');
-    return writeExport(
-      dir: Directory(p.join(base.path, 'airlog-${_mode.name}-$stamp')),
-      raw: rows,
-      records: await app.records(_mode, '0000-00-00', '9999-12-31'),
-      results: await app.results(_mode, '0000-00-00', '9999-12-31'),
-      journal: await app.journals(_mode),
-      mode: _mode,
+    return ArtifactIo.write(
+      artifactEpoch,
+      () async => writeExport(
+        dir: Directory(p.join(base.path, 'airlog-${_mode.name}-$stamp')),
+        raw: rows,
+        records: await app.records(_mode, '0000-00-00', '9999-12-31'),
+        results: await app.results(_mode, '0000-00-00', '9999-12-31'),
+        journal: await app.journals(_mode),
+        mode: _mode,
+      ),
     );
   });
 
@@ -788,6 +839,7 @@ class HealthRepositoryImpl implements HealthRepository {
   Future<DiagnosticsReport> diagnostics({
     int windowDays = 7,
   }) => _guard(() async {
+    final artifactEpoch = ArtifactIo.capture();
     await start();
     final now = clock();
     final from = DayKey.start(DayKey.add(DayKey.of(now), -(windowDays - 1)));
@@ -890,52 +942,58 @@ class HealthRepositoryImpl implements HealthRepository {
     }
     String? path;
     try {
-      final dir = await directories('diagnostics');
-      await dir.create(recursive: true);
-      final stamp = now.toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
-      final f = File(p.join(dir.path, 'airlog-probe-$stamp.json'));
-      await f.writeAsString(
-        const JsonEncoder.withIndent('  ').convert({
-          'generatedAt': now.toUtc().toIso8601String(),
-          'mode': _mode.name,
-          'windowDays': windowDays,
-          'verdicts': verdicts,
-          'errors': errors,
-          'permissions': perms == null
-              ? null
-              : {
-                  'availability': perms.availability.name,
-                  'granted': perms.granted,
-                  'missing': perms.missing,
-                  'history': perms.historyGranted,
-                  'background': perms.backgroundGranted,
+      path = await ArtifactIo.write(artifactEpoch, () async {
+        final dir = await directories('diagnostics');
+        await dir.create(recursive: true);
+        final stamp = now.toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+        final f = File(p.join(dir.path, 'airlog-probe-$stamp.json'));
+        await f.writeAsString(
+          const JsonEncoder.withIndent('  ').convert({
+            'generatedAt': now.toUtc().toIso8601String(),
+            'mode': _mode.name,
+            'windowDays': windowDays,
+            'verdicts': verdicts,
+            'errors': errors,
+            'permissions': perms == null
+                ? null
+                : {
+                    'availability': perms.availability.name,
+                    'granted': perms.granted,
+                    'missing': perms.missing,
+                    'history': perms.historyGranted,
+                    'background': perms.backgroundGranted,
+                  },
+            'types': [
+              for (final s in stats.values)
+                {
+                  'dataType': s.dataType,
+                  'records': s.records,
+                  'origins': s.origins,
+                  'devices': s.devices,
+                  'first': s.first?.toUtc().toIso8601String(),
+                  'last': s.last?.toUtc().toIso8601String(),
+                  'medianSpacingSec': s.medianSpacingSec,
+                  'samplesPerHour': s.samplesPerHour,
+                  'sample': [
+                    for (final pt
+                        in (points[s.dataType] ?? const <ProbePoint>[]).take(
+                          50,
+                        ))
+                      {
+                        't': pt.t.toUtc().toIso8601String(),
+                        'origin': pt.origin,
+                        if (pt.device != null) 'device': pt.device,
+                        if (pt.recordId != null) 'id': pt.recordId,
+                      },
+                  ],
                 },
-          'types': [
-            for (final s in stats.values)
-              {
-                'dataType': s.dataType,
-                'records': s.records,
-                'origins': s.origins,
-                'devices': s.devices,
-                'first': s.first?.toUtc().toIso8601String(),
-                'last': s.last?.toUtc().toIso8601String(),
-                'medianSpacingSec': s.medianSpacingSec,
-                'samplesPerHour': s.samplesPerHour,
-                'sample': [
-                  for (final pt
-                      in (points[s.dataType] ?? const <ProbePoint>[]).take(50))
-                    {
-                      't': pt.t.toUtc().toIso8601String(),
-                      'origin': pt.origin,
-                      if (pt.device != null) 'device': pt.device,
-                      if (pt.recordId != null) 'id': pt.recordId,
-                    },
-                ],
-              },
-          ],
-        }),
-      );
-      path = f.path;
+            ],
+          }),
+        );
+        return f.path;
+      });
+    } on SupersededMutation {
+      rethrow;
     } catch (_) {}
     return DiagnosticsReport(
       generatedAt: now,
@@ -977,7 +1035,21 @@ class HealthRepositoryImpl implements HealthRepository {
 
   @override
   Future<void> wipeData() async {
-    await start();
+    await ArtifactIo.wipe(
+      () async {
+        await start();
+        await app.mutate(_wipeData, mode: _mode);
+      },
+      () async {
+        for (final purpose in ['exports', 'diagnostics']) {
+          final dir = await directories(purpose);
+          if (await dir.exists()) await dir.delete(recursive: true);
+        }
+      },
+    );
+  }
+
+  Future<void> _wipeData() async {
     await raw.wipe();
     await app.wipe();
     await app.setSetting(kDemoSeededForKey, null);
@@ -1008,6 +1080,23 @@ class HealthRepositoryImpl implements HealthRepository {
     String? device,
   }) async {
     await start();
+    await app.mutate(
+      () => _saveLiveSession(
+        kind: kind,
+        samples: samples,
+        name: name,
+        device: device,
+      ),
+      mode: _mode,
+    );
+  }
+
+  Future<void> _saveLiveSession({
+    required String kind,
+    required List<LiveHrSample> samples,
+    String? name,
+    String? device,
+  }) async {
     if (samples.isEmpty) return;
     final src = _mode == DataMode.demo ? SourceKind.demo : SourceKind.ble;
     final sorted = [...samples]..sort((a, b) => a.t.compareTo(b.t));
@@ -1091,6 +1180,8 @@ class HealthRepositoryImpl implements HealthRepository {
   /// controller whose listeners already cancelled never completes it under
   /// testWidgets' fake async.
   Future<void> dispose() async {
+    _disposed = true;
+    await _inflight;
     unawaited(_revisions.close());
     unawaited(_statusCtl.close());
   }
@@ -1189,48 +1280,50 @@ class HealthRepositoryImpl implements HealthRepository {
   /// to automatic), then recomputes from the first day whose origin
   /// changes.
   @override
-  Future<void> setSourceChoice(Metric metric, String? origin) => _guard(
-    () async {
-      await start();
-      final now = clock();
-      final span = await raw.span(
-        sources: const {SourceKind.healthConnect, SourceKind.context},
-      );
-      final rows = span == null
-          ? RawRows()
-          : await raw.load(
-              span.$1,
-              now,
-              sources: const {SourceKind.healthConnect, SourceKind.context},
+  Future<void> setSourceChoice(Metric metric, String? origin) =>
+      _guard(() async {
+        await start();
+        await app.mutate(() async {
+          final now = clock();
+          final span = await raw.span(
+            sources: const {SourceKind.healthConnect, SourceKind.context},
+          );
+          final rows = span == null
+              ? RawRows()
+              : await raw.load(
+                  span.$1,
+                  now,
+                  sources: const {SourceKind.healthConnect, SourceKind.context},
+                );
+          final days =
+              originDaysOf(rows)[metric] ?? const <String, Set<String>>{};
+          final old = (await pipeline.loadPlans())[metric];
+          final chosen = origin == null
+              ? SourceChooser.update(metric, days, null, today: DayKey.of(now))
+              : SourceChooser.pin(
+                  metric,
+                  origin,
+                  days,
+                  prev: old,
+                  today: DayKey.of(now),
+                );
+          // Which apps don't share the metric is not part of the choice.
+          final next = old == null
+              ? chosen
+              : chosen?.copyWith(notShared: old.notShared);
+          await pipeline.savePlan(next, metric);
+          final all = {for (final d in days.values) ...d};
+          final from = next?.firstDifference(old, all);
+          if (_mode == DataMode.live && (from != null || next == null)) {
+            await pipeline.recompute(
+              DataMode.live,
+              fromDate: from,
+              cfg: await _cfg(DataMode.live),
+              profile: await profile(),
             );
-      final days = originDaysOf(rows)[metric] ?? const <String, Set<String>>{};
-      final old = (await pipeline.loadPlans())[metric];
-      final chosen = origin == null
-          ? SourceChooser.update(metric, days, null, today: DayKey.of(now))
-          : SourceChooser.pin(
-              metric,
-              origin,
-              days,
-              prev: old,
-              today: DayKey.of(now),
-            );
-      // Which apps don't share the metric is not part of the choice.
-      final next = old == null
-          ? chosen
-          : chosen?.copyWith(notShared: old.notShared);
-      await pipeline.savePlan(next, metric);
-      final all = {for (final d in days.values) ...d};
-      final from = next?.firstDifference(old, all);
-      if (_mode == DataMode.live && (from != null || next == null)) {
-        await pipeline.recompute(
-          DataMode.live,
-          fromDate: from,
-          cfg: await _cfg(DataMode.live),
-          profile: await profile(),
-        );
-        _bump();
-        unawaited(_pushWidget());
-      }
-    },
-  );
+            _bump();
+            unawaited(_pushWidget());
+          }
+        }, mode: _mode);
+      });
 }

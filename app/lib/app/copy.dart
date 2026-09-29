@@ -26,15 +26,18 @@ const hcReadTypes = <(String, String)>[
   ('Respiratory rate', 'Recovery and the Health Monitor.'),
   (
     'Skin temperature',
-    'The Health Monitor. A change from your usual range can be an early '
-        'sign you are run down.',
+    'The Health Monitor compares changes with your usual recorded range. '
+        'A change is not a diagnosis.',
   ),
   (
     'Sleep sessions and stages',
     'Sleep performance, debt, consistency, and Recovery.',
   ),
   ('Exercise sessions', 'Per-workout strain.'),
-  ('Steps', 'An estimate of strain when heart rate is too sparse.'),
+  (
+    'Steps',
+    'Activity context alongside your trends. Steps do not produce a strain score.',
+  ),
   ('Weight (optional)', 'Only if you grant it, shown next to your trends.'),
   ('VO₂ max', 'A cardio-fitness trend, shown as your tracker’s own estimate.'),
   (
@@ -80,7 +83,7 @@ String hcTypeName(String key) => switch (key) {
 
 /// Settings labels that other screens (the privacy policy) refer to by name.
 abstract final class SettingsCopy {
-  static const exportTitle = 'Export everything';
+  static const exportTitle = 'Export readings and scores';
   static const deleteTitle = 'Delete all data';
 
   /// "Settings → Delete all data".
@@ -239,17 +242,19 @@ abstract final class CoachCopy {
   static const useMyDataBody =
       'Coach looks up only the numbers a question needs (your scores, '
       'sleep, workouts and journal), and every number it quotes is checked '
-      'against the ones stored on this phone.';
+      'against its cited evidence. If your history includes Google Health '
+      'API data, health records stay on-device; use the on-device coach.';
   static const generalOnlyBody =
       'Coach answers from general sleep and training science, like a '
-      'textbook. It never looks at your data and sends none of it.';
+      'textbook. It sends your current question, including any personal '
+      'details you type, but does not read your stored health data.';
 
   // ── what leaves the phone ───────────────────────────────────────────────
 
   /// Sent with a question in "Use my data", and only what that question
   /// needs.
   static const sentWithData = <String>[
-    'Your question and the conversation so far',
+    'Your question and eligible earlier messages from this mode and provider',
     'Computed daily scores (Recovery, Strain, Sleep) for the days asked '
         'about',
     'Sleep and workout summaries (times, durations, stages, averages)',
@@ -259,14 +264,14 @@ abstract final class CoachCopy {
 
   /// Sent with a question in "General only".
   static const sentGeneral = <String>[
-    'Your question and the conversation so far',
+    'Your current question only; earlier messages are not sent',
   ];
 
   /// Never sent, in either mode.
   static const neverSent = <String>[
     'Raw heart-rate streams, or any second-by-second reading',
     'Google Health API (Enhanced mode) data, or scores built from it',
-    'Anything that names you: Airlog has no account',
+    'Account profile details: Airlog has no account',
   ];
 
   /// Who receives it.
@@ -317,8 +322,9 @@ abstract final class CoachCopy {
 
   // ── memories ────────────────────────────────────────────────────────────
   static const memoryAbout =
-      'Only facts you confirmed, never health numbers: those always come '
-      'fresh from your data. Memories stay on this phone, and are sent as '
+      'Facts you confirmed are context, not measurements. Health numbers '
+      'come fresh from your data. Review old facts and edit changes here. '
+      'Memories stay on this phone, and are sent as '
       'context only while a cloud engine is on.';
 
   // ── the privacy policy's section ────────────────────────────────────────
@@ -331,11 +337,14 @@ abstract final class CoachCopy {
       'You can choose a cloud engine instead: Claude (Anthropic) or Gemini '
       '(Google), with your own API key. Only after you agree on the setup '
       'screen does a question send data off the phone, and then only to '
-      'the provider you chose, never to Airlog. In “Use my data” mode that '
+      'the provider you chose, never to Airlog. Names or identifying details '
+      'you type in questions or memories are not redacted. In “Use my data” mode that '
       'is:';
   static const privacyGeneral =
-      'In “General only” mode, only your question and the conversation are '
-      'sent. Never sent, in either mode:';
+      'In “General only” mode, only your current question is sent. Earlier '
+      'messages are not sent. If your history includes Google Health API '
+      'data, health records and derived scores stay on-device in cloud '
+      'mode. The on-device coach can still use them. Data handling:';
   static const privacyMemories =
       'Memories are facts you confirmed (“training for a half marathon”), '
       'never health numbers. They stay on this phone, and are sent as '
@@ -359,7 +368,7 @@ abstract final class CoachCopy {
 
   /// The calm banner when today's cloud budget is spent.
   static const usageSpent =
-      'Today’s question limit for your AI provider is used up. It resets '
+      'Today’s model-request limit for your AI provider is used up. It resets '
       'tomorrow. On-device answers still work.';
 
   /// The tag on coach answers and insight cards in demo mode.

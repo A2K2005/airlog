@@ -191,8 +191,8 @@ abstract final class HealthMonitor {
       final names = kinds.map((k) => k.label).join(', ');
       return HealthAlert(
         kinds,
-        '${kinds.length} values outside your baseline ($names) – possible '
-        'infection or overtraining. Take it easy today.',
+        '${kinds.length} values outside your baseline ($names). '
+        'Notice how you feel; this pattern is not a diagnosis.',
       );
     }
 

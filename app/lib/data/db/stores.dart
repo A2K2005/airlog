@@ -62,6 +62,10 @@ abstract class RawStore {
 /// sync log and change tokens. Day rows are kept per [DataMode] so demo and
 /// live data never mix (switching modes keeps both).
 abstract class AppStore {
+  Future<T> mutate<T>(Future<T> Function() body, {DataMode? mode});
+
+  /// Coherent record/result pairs from one read snapshot.
+  Future<List<DayBundle>> bundles(DataMode mode, String from, String to);
   Future<void> putDays(
     DataMode mode,
     List<DayRecord> records,

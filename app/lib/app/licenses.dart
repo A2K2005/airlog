@@ -2,6 +2,7 @@
 // collects automatically.
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 bool _registered = false;
 
@@ -17,13 +18,17 @@ void registerAirlogLicenses() {
       ], _edge),
       LicenseEntryWithLineBreaks(['Pulse (score formulas)'], _pulse),
       LicenseEntryWithLineBreaks(['DM Sans (font)'], _dmSans),
-      LicenseEntryWithLineBreaks(['Subway Ticker Grid (font)'], _subway),
       LicenseEntryWithLineBreaks(['Manrope (fallback font)'], _manrope),
       LicenseEntryWithLineBreaks([
         'figma-squircle (tile corner construction)',
       ], _figmaSquircle),
     ]),
   );
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Doto (numeral font)',
+    ], await rootBundle.loadString('assets/fonts/Doto/OFL.txt'));
+  });
 }
 
 const _edge = '''MIT License
@@ -67,11 +72,6 @@ const _dmSans = '''Copyright 2014 The DM Sans Project Authors (https://github.co
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is available with a FAQ at: https://openfontlicense.org''';
-
-const _subway =
-    '''Subway Ticker Grid by K-Type (k-type.com). A free font, supplied by the
-user for this personal build under K-Type's personal-use licence. It is not
-redistributed with the source code.''';
 
 const _manrope = '''Copyright 2018 The Manrope Project Authors (https://github.com/sharanda/manrope)
 

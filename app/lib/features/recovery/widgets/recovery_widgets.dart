@@ -146,21 +146,39 @@ class ReadinessCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
+            Wrap(
+              spacing: S.x3,
+              runSpacing: S.x2,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
-                  child: Text(
-                    '7-night HRV trend',
-                    style: F.bodySm.copyWith(
-                      color: p.ink,
-                      fontWeight: FontWeight.w700,
-                    ),
+                Text(
+                  '7-night HRV trend',
+                  style: F.bodySm.copyWith(
+                    color: p.ink,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 if (r != null)
-                  StatePill(
-                    label: r.headline,
-                    color: r.state == SwcState.below ? C.amber : C.health,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: S.x2 + 2,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: p.wash(
+                        r.state == SwcState.below ? C.amber : C.health,
+                      ),
+                      borderRadius: R.rPill,
+                    ),
+                    child: Text(
+                      r.headline,
+                      style: F.cap.copyWith(
+                        color: p.on(
+                          r.state == SwcState.below ? C.amber : C.health,
+                        ),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -172,22 +190,32 @@ class ReadinessCard extends StatelessWidget {
               const SizedBox(height: S.x4),
               SwcGauge(readiness: r),
               const SizedBox(height: S.x3),
-              Row(
+              Wrap(
+                spacing: S.x3,
+                runSpacing: S.x2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Day-to-day variation ${r.cv.toStringAsFixed(1)} %',
-                      style: F.tab(F.cap).copyWith(color: p.ink3),
-                    ),
-                  ),
                   Text(
-                    'Plews method',
-                    style: F.cap.copyWith(
-                      color: p.ink2,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    'Day-to-day variation ${r.cv.toStringAsFixed(1)} %',
+                    style: F.tab(F.cap).copyWith(color: p.ink3),
                   ),
-                  Icon(Icons.chevron_right_rounded, size: 16, color: p.ink3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Plews method',
+                        style: F.cap.copyWith(
+                          color: p.ink2,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: p.ink3,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ],
@@ -218,11 +246,22 @@ class SwcGauge extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, box) {
         final w = box.maxWidth;
+        final scaler = MediaQuery.textScalerOf(context);
         Widget label(double v, String s, {TextAlign align = TextAlign.center}) {
           final x = t(v) * w;
+          final measure = TextPainter(
+            text: TextSpan(text: s, style: tick),
+            textScaler: scaler,
+            textDirection: Directionality.of(context),
+          )..layout(maxWidth: w);
+          final labelWidth = math.min(w, math.max(80.0, measure.width + 2));
+          measure.dispose();
           return Positioned(
-            left: (x - 40).clamp(0.0, math.max(0.0, w - 80)),
-            width: 80,
+            left: (x - labelWidth / 2).clamp(
+              0.0,
+              math.max(0.0, w - labelWidth),
+            ),
+            width: labelWidth,
             top: 0,
             child: Text(s, style: tick, textAlign: align, maxLines: 1),
           );
@@ -249,7 +288,7 @@ class SwcGauge extends StatelessWidget {
             ),
             const SizedBox(height: S.x1),
             SizedBox(
-              height: 18,
+              height: scaler.scale(18),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [

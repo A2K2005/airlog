@@ -114,6 +114,17 @@ class DeferredAppStore implements AppStore {
   final Future<AppStore> Function() _store;
 
   @override
+  Future<T> mutate<T>(Future<T> Function() body, {DataMode? mode}) async =>
+      (await _store()).mutate(body, mode: mode);
+
+  @override
+  Future<List<DayBundle>> bundles(
+    DataMode mode,
+    String from,
+    String to,
+  ) async => (await _store()).bundles(mode, from, to);
+
+  @override
   Future<void> putDays(
     DataMode mode,
     List<DayRecord> records,

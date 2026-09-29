@@ -1,5 +1,7 @@
 # Design review
 
+> **Historical review, not current release validation.** The tables below describe earlier renders and test runs. Launch hardening on 2026-09-30 replaced the proprietary numeral font with bundled OFL Doto, raised text inks, darkened s2/m7 backgrounds and added a readable large-type tile alternative. Current contrast tests assert at least 4.5:1 for tracked text/background pairs. Original low-contrast exemptions and 1:1 typography claims below are superseded. Golden re-approval and physical-device accessibility checks require fresh evidence; no historical pass here establishes them.
+
 This pass applies Emil Kowalski's design-engineering rules to the design system and to every screen. It also covers what the regenerated goldens show about hierarchy, spacing and contrast. Each row is one issue.
 
 **Status:**
@@ -8,7 +10,7 @@ This pass applies Emil Kowalski's design-engineering rules to the design system 
 
 ## Figma redesign
 
-The UI is now a 1:1 copy of the user's own Figma widget PNGs (`Widget/`), dark only. The sections after this one predate the redesign. Where they mention the light theme, Manrope or Barlow, that no longer applies.
+This section records the earlier Figma reproduction, dark only. It is not a description of current pixel fidelity after Doto and accessibility changes. Later sections also contain older light-theme and font references retained as history.
 
 ### Fidelity to the PNGs
 
@@ -37,9 +39,9 @@ Diff = pixels differing by more than 12/255 in any premultiplied channel ÷ tile
 
 "Text anti-aliasing" means the test rasteriser hints glyphs to the pixel grid and the design tool does not. Supersampling, mask filters and a sub-pixel transform were each tried to soften the hinting. None beat plain text overall, so plain text shipped. Backgrounds match to an RMS of 0.2–1.6/255 and the corner shape to within one anti-aliased pixel.
 
-### Contrast: where the PNG wins
+### Historical contrast exemptions (removed from launch implementation)
 
-These inks fail WCAG AA in the design itself. The brief says the PNG wins, so they ship as designed. Each is listed in `DesignContrast.spots`, and `test/design/contrast_test.dart` re-measures every ratio. Tile titles and values (`TileInk.primary`, `unit`, `secondary`) clear 4.5:1 on the darkest tile core, and `textContrastGuideline` passes on the rendered screens (`test/features/accessibility_guidelines_test.dart`).
+These were the original low-contrast design samples. They no longer justify shipping low-contrast text: brighter `TileInk` values and dimmed backgrounds replace them. The ratios in this table are historical samples, not measurements of the current UI.
 
 | Tile | Text | Ink | Background (sampled) | Ratio |
 |---|---|---|---|---|
@@ -131,7 +133,7 @@ In the app the labels differ from the PNG's sample text, but the ink and backgro
 | Skin temperature read "±0.0 vs usual 0.1" | "+0.1 °C vs usual +0.1", a real minus sign, and "Same as usual" for a delta that rounds to zero | Signed metrics are signed everywhere. The arithmetic is done on the rounded numbers, so what is shown always adds up. **Fixed** |
 | Engine constants were retyped in the explain sheets and on Methodology (1.1, 0.03, 0.8, 90 %, −7, 8/13, 90 min, 208 − 0.7 × age …) | Named constants in the engine, printed through `numText` | The copy cannot drift from the maths. **Fixed** |
 
-## Golden review
+## Historical golden review
 
 These rows come from opening every regenerated golden in the Read tool, not from the code.
 

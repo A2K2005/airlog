@@ -268,6 +268,9 @@ class SentPayload {
     required this.approxChars,
     this.bytes,
     this.requests,
+    this.privacyVersion,
+    this.memoryContext,
+    this.mode,
   });
   final CoachProvider provider;
   final String model;
@@ -285,6 +288,11 @@ class SentPayload {
   /// Number of requests sent for this answer. [additive]
   final int? requests;
 
+  /// Only current, scoped turns may be replayed to a cloud provider.
+  final int? privacyVersion;
+  final String? memoryContext;
+  final CoachMode? mode;
+
   Map<String, dynamic> toJson() => {
     'provider': provider.name,
     'model': model,
@@ -293,6 +301,9 @@ class SentPayload {
     'approxChars': approxChars,
     if (bytes != null) 'bytes': bytes,
     if (requests != null) 'requests': requests,
+    if (privacyVersion != null) 'privacyVersion': privacyVersion,
+    if (memoryContext != null) 'memoryContext': memoryContext,
+    if (mode != null) 'mode': mode!.name,
   };
   factory SentPayload.fromJson(Map<String, dynamic> j) => SentPayload(
     provider: CoachProvider.values.byName(j['provider'] as String),
@@ -302,6 +313,11 @@ class SentPayload {
     approxChars: j['approxChars'] as int,
     bytes: j['bytes'] as int?,
     requests: j['requests'] as int?,
+    privacyVersion: j['privacyVersion'] as int?,
+    memoryContext: j['memoryContext'] as String?,
+    mode: j['mode'] == null
+        ? null
+        : CoachMode.values.byName(j['mode'] as String),
   );
 }
 
@@ -318,6 +334,7 @@ class ChatMessage {
     this.safety = false,
     this.proposedMemories = const [],
     this.proposedCategories = const [],
+    this.proposedExpiries = const [],
     this.error,
     this.sampleData = false,
   });
@@ -341,6 +358,9 @@ class ChatMessage {
   /// The category the model gave each proposal ([MemoryCategory] names,
   /// parallel to [proposedMemories]); empty on older messages. [additive]
   final List<String> proposedCategories;
+  final List<String?> proposedExpiries;
+  String? proposedExpiry(int i) =>
+      i < 0 || i >= proposedExpiries.length ? null : proposedExpiries[i];
   final String? error;
 
   /// The model's category for proposal [i], or null when unknown.
@@ -368,6 +388,7 @@ class ChatMessage {
     'safety': safety,
     'proposedMemories': proposedMemories,
     if (proposedCategories.isNotEmpty) 'proposedCategories': proposedCategories,
+    if (proposedExpiries.isNotEmpty) 'proposedExpiries': proposedExpiries,
     if (error != null) 'error': error,
     if (sampleData) 'sampleData': true,
   };
@@ -394,6 +415,8 @@ class ChatMessage {
       for (final c in j['proposedCategories'] as List? ?? const [])
         if (c is String) c,
     ],
+    proposedExpiries: (j['proposedExpiries'] as List? ?? const [])
+        .cast<String?>(),
     error: j['error'] as String?,
     sampleData: j['sampleData'] as bool? ?? false,
   );

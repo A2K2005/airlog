@@ -511,6 +511,12 @@ class Resolver {
       for (final s in cfg.priority(Metric.hr)) {
         final d = hd[s];
         if (d == null || d.minutesWithData == 0) continue;
+        if (s == SourceKind.healthConnect &&
+            d.minutesWithData <= 60 &&
+            (hd[SourceKind.googleHealthApi]?.minutesWithData ?? 0) >
+                d.minutesWithData) {
+          continue;
+        }
         hrDay = d;
         rec.hrSamples.addAll(d.toSamples(utc: utcHr));
         prov[Metric.hr] = Provenance(

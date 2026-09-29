@@ -21,7 +21,7 @@ abstract final class F {
   static const ui = 'DM Sans';
 
   /// The dot-matrix numeral face.
-  static const numerals = 'Subway Ticker Grid';
+  static const numerals = 'Doto';
 
   static const _tab = [FontFeature.tabularFigures()];
 
@@ -82,7 +82,7 @@ abstract final class F {
   static const tileTiny = TextStyle(
     fontFamily: ui,
     fontFamilyFallback: _fallback,
-    fontSize: 8,
+    fontSize: 10,
     height: 1.3,
     fontWeight: FontWeight.w500,
     letterSpacing: -.16,

@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../domain/day_key.dart';
-import '../../domain/engine/engine.dart';
 import '../../domain/engine/strain.dart' show StrainEngine;
 import '../../domain/models.dart';
 import '../../domain/results.dart';
@@ -21,7 +20,7 @@ class StrainWorkoutRow {
   final Workout workout;
   final WorkoutStrain? strain;
 
-  /// Strain for this workout was estimated (average HR or a MET table),
+  /// Strain for this workout was estimated from recorded average HR,
   /// not measured from heart-rate samples inside it.
   bool get estimated => strain?.method == StrainMethod.fallback;
 }
@@ -78,7 +77,11 @@ class StrainView {
       if (w > 0) '$w ${w == 1 ? 'workout' : 'workouts'}',
       if (st != null && st > 0) '$st steps',
     ];
-    return parts.isEmpty ? 'No heart rate or activity' : parts.join(' · ');
+    return parts.isEmpty
+        ? samples.isEmpty
+              ? 'No heart rate or activity'
+              : 'Heart rate recorded; score unavailable'
+        : parts.join(' · ');
   }
 
   StrainMethod get method => strain?.method ?? StrainMethod.none;
@@ -100,8 +103,7 @@ class StrainView {
     final t = target;
     if (noInput) return 'Nothing to score for this day yet.';
     if (t == null) {
-      return 'No target: it comes from the morning’s recovery, which is '
-          'missing for this day.';
+      return 'Recovery does not support an effort target for this day.';
     }
     final d = (t - strainValue).abs().toStringAsFixed(1);
     final tt = t.toStringAsFixed(1);
@@ -137,7 +139,7 @@ final strainViewProvider = FutureProvider<StrainView?>((ref) async {
   final latest = await ref.watch(latestDateProvider.future);
   if (date == null || latest == null) return null;
   final repo = ref.watch(healthRepositoryProvider);
-  final now = ref.watch(clockProvider)();
+  final now = ref.watch(currentTimeProvider);
   final today = DayKey.of(now);
   final bundle = await repo.day(date);
   UserProfile profile;
@@ -157,8 +159,8 @@ final strainViewProvider = FutureProvider<StrainView?>((ref) async {
   }
   final rec = bundle.record;
   final s = bundle.result.strain;
-  final rhr = s?.restingHrUsed ?? rec.restingHr;
-  final maxHr = s?.maxHrUsed ?? Engine.maxHrFor(profile, now);
+  final rhr = s?.restingHrUsed;
+  final maxHr = s?.maxHrUsed;
   // The whole calendar day, also for today: the empty right-hand side is
   // honest (the day is not over), and the axis stays the same every day.
   final start = DayKey.start(date);
@@ -180,7 +182,7 @@ final strainViewProvider = FutureProvider<StrainView?>((ref) async {
     hasData: true,
     strain: s,
     recovery: bundle.result.recovery?.score,
-    zoneFloors: rhr == null ? const [] : zoneFloorsFor(rhr, maxHr),
+    zoneFloors: StrainEngine.displayFloors(restingHr: rhr, maxHr: maxHr),
     samples: rec.hrSamples,
     windowStart: start,
     windowEnd: end,

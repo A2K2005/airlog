@@ -125,12 +125,16 @@ class OnboardingState {
     this.step = OnboardingStep.what,
     this.permissions,
     this.error,
+    this.birthYear = '',
+    this.busy = false,
   });
   final OnboardingStep step;
 
   /// Result of the last Health Connect request.
   final HcPermissionState? permissions;
   final String? error;
+  final String birthYear;
+  final bool busy;
 
   int get page => switch (step) {
     OnboardingStep.what => 0,
@@ -143,10 +147,14 @@ class OnboardingState {
     HcPermissionState? permissions,
     String? error,
     bool clearError = false,
+    String? birthYear,
+    bool? busy,
   }) => OnboardingState(
     step: step ?? this.step,
     permissions: permissions ?? this.permissions,
     error: clearError ? null : (error ?? this.error),
+    birthYear: birthYear ?? this.birthYear,
+    busy: busy ?? this.busy,
   );
 }
 
@@ -155,28 +163,36 @@ class OnboardingController extends Notifier<OnboardingState> {
   OnboardingState build() => const OnboardingState();
 
   /// The birth year typed on the choose step (asked once: it sets max HR).
-  String _birthYear = '';
+  void setBirthYear(String v) =>
+      state = state.copyWith(birthYear: v.trim(), clearError: true);
 
-  void setBirthYear(String v) => _birthYear = v.trim();
+  bool _validBirthYear() {
+    if (state.birthYear.isEmpty) return true;
+    final y = int.tryParse(state.birthYear);
+    final year = ref.read(clockProvider)().year;
+    if (y != null && y >= year - 100 && y <= year - 18) return true;
+    state = state.copyWith(
+      error:
+          'Airlog is for adults. Enter a birth year between '
+          '${year - 100} and ${year - 18}, or leave it blank.',
+    );
+    return false;
+  }
 
-  /// Saves a plausible birth year into the profile (1900 … this year − 10).
+  /// Birth year is optional, but an entered value must be valid.
   Future<void> _saveBirthYear() async {
-    final y = int.tryParse(_birthYear);
+    final y = int.tryParse(state.birthYear);
     if (y == null) return;
-    final now = ref.read(clockProvider)();
-    if (y < 1900 || y > now.year - 10) return;
-    try {
-      final repo = ref.read(healthRepositoryProvider);
-      final p = await repo.profile();
-      await repo.saveProfile(
-        UserProfile(
-          birthYear: y,
-          sex: p.sex,
-          maxHrOverride: p.maxHrOverride,
-          weightKg: p.weightKg,
-        ),
-      );
-    } catch (_) {}
+    final repo = ref.read(healthRepositoryProvider);
+    final p = await repo.profile();
+    await repo.saveProfile(
+      UserProfile(
+        birthYear: y,
+        sex: p.sex,
+        maxHrOverride: p.maxHrOverride,
+        weightKg: p.weightKg,
+      ),
+    );
   }
 
   void next() => state = state.copyWith(
@@ -199,24 +215,35 @@ class OnboardingController extends Notifier<OnboardingState> {
   );
 
   /// "Connect Health Connect": explain each data type before the system sheet.
-  void showRationale() =>
-      state = state.copyWith(step: OnboardingStep.rationale, clearError: true);
+  void showRationale() {
+    if (state.busy || !_validBirthYear()) return;
+    state = state.copyWith(step: OnboardingStep.rationale, clearError: true);
+  }
 
   /// "Explore with demo data". Returns when the flag is stored.
   Future<void> chooseDemo() async {
+    if (state.busy || !_validBirthYear()) return;
+    state = state.copyWith(busy: true, clearError: true);
     final repo = ref.read(healthRepositoryProvider);
     try {
+      await _saveBirthYear();
       if (repo.mode != DataMode.demo) await repo.setMode(DataMode.demo);
-    } catch (_) {}
-    await _saveBirthYear();
-    await ref.read(onboardingStoreProvider).markSeen();
-    if (!ref.mounted) return;
-    state = state.copyWith(step: OnboardingStep.done);
+      await ref.read(onboardingStoreProvider).markSeen();
+      if (!ref.mounted) return;
+      state = state.copyWith(step: OnboardingStep.done, busy: false);
+    } catch (_) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        busy: false,
+        error: 'Could not start sample data. Your choice was not completed. Try again.',
+      );
+    }
   }
 
   /// Opens the Health Connect permission sheet. On any grant the repository
   /// switches itself to live mode (first successful grant).
   Future<void> requestHealthConnect() async {
+    if (state.step == OnboardingStep.requesting || !_validBirthYear()) return;
     state = state.copyWith(step: OnboardingStep.requesting, clearError: true);
     HcPermissionState st;
     try {
@@ -233,8 +260,17 @@ class OnboardingController extends Notifier<OnboardingState> {
       state = state.copyWith(step: OnboardingStep.denied, permissions: st);
       return;
     }
-    await _saveBirthYear();
-    await ref.read(onboardingStoreProvider).markSeen();
+    try {
+      await _saveBirthYear();
+      await ref.read(onboardingStoreProvider).markSeen();
+    } catch (_) {
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        step: OnboardingStep.choose,
+        error: 'Access was granted, but setup could not finish. Try again.',
+      );
+      return;
+    }
     if (!ref.mounted) return;
     state = state.copyWith(step: OnboardingStep.done, permissions: st);
   }

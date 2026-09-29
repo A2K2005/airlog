@@ -12,6 +12,7 @@ import 'glow.dart';
 abstract final class GlowRecipes {
   /// Small/2.png (164×218), fit rms 1.22.
   static const s2 = GlowRecipe(
+    dim: .4,
     size: Size(164, 218),
     base: Color(0xFF007101),
     blobs: [
@@ -396,6 +397,7 @@ abstract final class GlowRecipes {
 
   /// Medium/7.png (348×164), fit rms 1.59.
   static const m7 = GlowRecipe(
+    dim: .45,
     size: Size(348, 164),
     base: Color(0xFF3A6B40),
     blobs: [

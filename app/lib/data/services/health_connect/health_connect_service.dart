@@ -302,7 +302,6 @@ class HealthConnectPluginSource implements HealthConnectSource {
     DateTime to,
     List<HcRecord> recs,
   ) async {
-    if (recs.isEmpty) return recs;
     try {
       final raw = await channel.invokeListMethod<Map<Object?, Object?>>(
         'recordMeta',
@@ -312,7 +311,15 @@ class HealthConnectPluginSource implements HealthConnectSource {
           'endMs': to.millisecondsSinceEpoch,
         },
       );
-      if (raw == null || raw.isEmpty) return recs;
+      if (raw == null) {
+        throw StateError('Provider verification returned no response');
+      }
+      if (raw.isEmpty) return recs;
+      if (recs.isEmpty) {
+        throw StateError(
+          'Provider returned records but the plugin decoded none',
+        );
+      }
       final meta = <String, HcRecordMeta>{
         for (final m in raw)
           m['id'] as String: HcRecordMeta(
@@ -335,8 +342,18 @@ class HealthConnectPluginSource implements HealthConnectSource {
                   lastModified: meta[r.id]!.lastModified,
                 ),
       ];
-    } catch (_) {
-      return recs; // background isolate / older bridge: no metadata
+    } on MissingPluginException {
+      if (recs.isEmpty) {
+        throw SourceException(
+          SourceKind.healthConnect,
+          type.key,
+          'An empty background read cannot be verified; retry when Airlog opens',
+          status: 'skipped',
+        );
+      }
+      return recs; // background isolate has no activity-owned channel
+    } catch (e) {
+      throw SourceException(SourceKind.healthConnect, type.key, e);
     }
   }
 
@@ -400,12 +417,31 @@ class HealthConnectPluginSource implements HealthConnectSource {
     try {
       final r = await _h.getChanges(changesToken: token);
       if (r == null) return null;
+      final records = <HcRecord>[
+        for (final c in r.changes)
+          if (c.type == HealthChangeType.upsert && c.dataPoint != null)
+            ?recordFromPoint(c.dataPoint!),
+      ];
+      final enriched = <HcRecord>[];
+      for (final type in records.map((r) => r.type).toSet()) {
+        final group = records.where((r) => r.type == type).toList();
+        final from = group
+            .map((r) => r.start)
+            .reduce((a, b) => a.isBefore(b) ? a : b);
+        final to = group
+            .map((r) => r.end)
+            .reduce((a, b) => a.isAfter(b) ? a : b);
+        enriched.addAll(
+          await _withMeta(
+            type,
+            from,
+            to.add(const Duration(milliseconds: 1)),
+            group,
+          ),
+        );
+      }
       return HcChangesPage(
-        upserts: [
-          for (final c in r.changes)
-            if (c.type == HealthChangeType.upsert && c.dataPoint != null)
-              ?recordFromPoint(c.dataPoint!),
-        ],
+        upserts: enriched,
         deletedIds: r.deletedRecordIds,
         nextToken: r.nextChangesToken,
         hasMore: r.hasMore,

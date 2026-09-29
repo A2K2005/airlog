@@ -176,7 +176,7 @@ WeeklyBarsTile? _week(TrendsView v) {
   ];
   int wd(String k) => DayKey.start(k).weekday - 1;
   return WeeklyBarsTile(
-    title: 'This week',
+    title: 'Last 7 days',
     leadLabel: 'Most strained day:',
     leadValue: names[wd(keys[hi])],
     totals: [
@@ -187,7 +187,7 @@ WeeklyBarsTile? _week(TrendsView v) {
     days: [for (final k in keys) letters[wd(k)]],
     highlight: hi,
     semanticLabel:
-        'Strain this week: average ${mean.toStringAsFixed(1)}, highest '
+        'Recorded strain in the last 7 days: average ${mean.toStringAsFixed(1)}, highest '
         '${top.toStringAsFixed(1)} on ${names[wd(keys[hi])]}.',
   );
 }
@@ -195,10 +195,9 @@ WeeklyBarsTile? _week(TrendsView v) {
 /// Medium/20 filled with the training load: the acute:chronic ratio on the
 /// engine's four bands.
 SegmentScaleTile _loadTile(TrainingLoad l) {
-  const lo = .5, hi = 2.0;
   final label = switch (l.state) {
-    LoadState.detraining => 'Detraining',
-    LoadState.optimal => 'Optimal',
+    LoadState.detraining => 'Lower',
+    LoadState.optimal => 'Similar',
     LoadState.elevated => 'Elevated',
     LoadState.high => 'High',
   };
@@ -206,17 +205,13 @@ SegmentScaleTile _loadTile(TrainingLoad l) {
   return SegmentScaleTile(
     title: 'Training load',
     value: l.ratio.toStringAsFixed(2),
-    lead: 'your load is',
+    lead: 'vs recent',
     verdict: label,
-    marker: ((l.ratio - lo) / (hi - lo)).clamp(0.0, 1.0),
+    marker: trainingLoadMarker(l.ratio),
     bands: [
+      ScaleBand('Lower', '<${n(TrainingLoadEngine.optimalFrom)}', C.green800),
       ScaleBand(
-        'Detraining',
-        '<${n(TrainingLoadEngine.optimalFrom)}',
-        C.green800,
-      ),
-      ScaleBand(
-        'Optimal',
+        'Similar',
         '${n(TrainingLoadEngine.optimalFrom)}–${n(TrainingLoadEngine.optimalTo)}',
         C.green600,
       ),
@@ -231,4 +226,16 @@ SegmentScaleTile _loadTile(TrainingLoad l) {
         'Training load ${l.ratio.toStringAsFixed(2)}, $label: seven-day load '
         'against the 28-day average.',
   );
+}
+
+/// The tile paints four equal-width categorical bands, not a linear ratio
+/// axis. Position within each band using the same cut-points as the engine.
+double trainingLoadMarker(double ratio) {
+  const a = TrainingLoadEngine.optimalFrom;
+  const b = TrainingLoadEngine.optimalTo;
+  const c = TrainingLoadEngine.elevatedTo;
+  if (ratio < a) return .25 * (ratio / a).clamp(0.0, 1.0);
+  if (ratio <= b) return .25 + .25 * ((ratio - a) / (b - a));
+  if (ratio <= c) return .5 + .25 * ((ratio - b) / (c - b));
+  return .75 + .25 * ((ratio - c) / c).clamp(0.0, 1.0);
 }

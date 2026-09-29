@@ -40,6 +40,7 @@ class GoogleHealthClient {
     required this.refreshToken,
     http.Client? client,
     this.minInterval = const Duration(milliseconds: 200),
+    this.requestTimeout = const Duration(seconds: 20),
     this.clock = systemClock,
     Future<void> Function(Duration)? sleep,
   }) : _http = client ?? http.Client(),
@@ -49,6 +50,7 @@ class GoogleHealthClient {
   final Future<String> Function() refreshToken;
   final http.Client _http;
   final Duration minInterval;
+  final Duration requestTimeout;
   final Clock clock;
   final Future<void> Function(Duration) _sleep;
 
@@ -84,15 +86,17 @@ class GoogleHealthClient {
     var refreshed = false;
     while (true) {
       await _throttle();
-      final token = await accessToken();
+      final token = await accessToken().timeout(requestTimeout);
       requests++;
-      final res = await _http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
+      final res = await _http
+          .get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(requestTimeout);
       final code = res.statusCode;
       if (code >= 200 && code < 300) {
         final j = jsonDecode(res.body);
@@ -101,7 +105,7 @@ class GoogleHealthClient {
       }
       if (code == 401 && !refreshed) {
         refreshed = true;
-        await refreshToken(); // stores the new token; accessToken() returns it
+        await refreshToken().timeout(requestTimeout);
         continue;
       }
       if (code == 429 && attempt < 5) {
@@ -196,6 +200,11 @@ class GoogleHealthClient {
       }
       pages++;
     } while (page != null && pages < 60);
+    if (page != null) {
+      throw StateError(
+        'Google Health response exceeded pagination limit; stored data retained',
+      );
+    }
     return out;
   }
 

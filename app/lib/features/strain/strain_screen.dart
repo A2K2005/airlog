@@ -70,8 +70,8 @@ class StrainScreen extends ConsumerWidget {
           icon: Icons.bolt_rounded,
           title: 'No strain yet',
           body:
-              'Strain appears once heart rate, workouts or steps arrive '
-              'from your tracker.',
+              'Strain needs heart-rate measurements and usable heart-rate '
+              'anchors. Workouts and steps alone provide activity context.',
           actionLabel: 'Open data sources',
           onAction: () => Navigator.of(context).pushNamed(Routes.sources),
         ),
@@ -157,6 +157,15 @@ class StrainScreen extends ConsumerWidget {
       pad(
         Center(child: strainStateTile(v, () => showStrainExplain(context, v))),
       ),
+      for (final n in v.notes)
+        if (n.severity == NoteSeverity.warning) pad(noteCard(context, n)),
+      pad(
+        StrainHeroCard(
+          key: ValueKey('strain-hero-${v.date}'),
+          view: v,
+          onExplain: () => showStrainExplain(context, v),
+        ),
+      ),
       if (s != null && !v.noInput) pad(Center(child: zoneTile(s))),
       pad(
         Align(
@@ -164,18 +173,6 @@ class StrainScreen extends ConsumerWidget {
           child: AskAboutThis(screen: 'strain', date: v.date),
         ),
       ),
-      pad(
-        StrainHeroCard(
-          // Rebuilt per day: stepping days never morphs the ring.
-          key: ValueKey('strain-hero-${v.date}'),
-          view: v,
-          onExplain: () => showStrainExplain(context, v),
-        ),
-      ),
-      // Warnings qualify the number, so they sit right under it; info notes
-      // (an assumed max HR, a fallback explanation) follow the charts.
-      for (final n in v.notes)
-        if (n.severity == NoteSeverity.warning) pad(noteCard(context, n)),
       if (s != null && !v.noInput) ...[
         pad(
           AppCard(
@@ -285,7 +282,7 @@ ArcStateTile strainStateTile(StrainView v, VoidCallback onTap) {
         ? 'Strain ${v.strainValue.toStringAsFixed(1)} of 21. $caption. '
               'Workout calories ${kcal.round()}, active ${active.round()} '
               'minutes. Opens how strain is calculated.'
-        : 'No strain score without heart rate. $caption.',
+        : 'Strain score unavailable. $caption.',
   );
 }
 

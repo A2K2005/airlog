@@ -215,14 +215,14 @@ abstract final class TileInk {
   static const unit = Color(0xE0FFFFFF);
 
   /// Water's unit line: white 70 % (Small/2).
-  static const unitSoft = Color(0xB3FFFFFF);
+  static const unitSoft = Color(0xE6FFFFFF);
 
   /// Health Alert's time axis: white 64 % (Medium/5).
-  static const axis = Color(0xA3FFFFFF);
+  static const axis = Color(0xE0FFFFFF);
 
   /// Secondary labels ("Average", "Time Sleep", "Stress Level"): white 55 %
   /// (Medium/16, Large/1, Large/5).
-  static const secondary = Color(0x8CFFFFFF);
+  static const secondary = Color(0xCCFFFFFF);
 
   /// Your BMI's ranges: white 78 % (Medium/20).
   static const soft = Color(0xC7FFFFFF);
@@ -231,11 +231,11 @@ abstract final class TileInk {
   static const dim = Color(0xA6FFFFFF);
 
   /// Sleep's axis times: white 34 % (Large/1).
-  static const faint = Color(0x57FFFFFF);
+  static const faint = Color(0xCCFFFFFF);
 
   /// Tertiary captions (Weekly Progress's labels, axis times): white 40 %
   /// (Large/7, Large/1).
-  static const tertiary = Color(0x66FFFFFF);
+  static const tertiary = Color(0xCCFFFFFF);
 }
 
 /// Where the design's own ink is below the WCAG floor at its anchor, and the

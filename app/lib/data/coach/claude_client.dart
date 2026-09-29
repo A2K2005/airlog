@@ -299,6 +299,8 @@ class ClaudeClient implements LlmClient {
       return await _http
           .post(Uri.parse(ClaudeApi.endpoint), headers: headers, body: bytes)
           .timeout(timeout);
+    } on CoachException {
+      rethrow;
     } on TimeoutException {
       throw CoachException(
         CoachErrorKind.network,

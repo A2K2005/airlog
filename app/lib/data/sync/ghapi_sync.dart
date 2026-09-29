@@ -14,6 +14,7 @@ import '../common/time.dart';
 import '../db/raw_rows.dart';
 import '../db/stores.dart';
 import '../services/google_health/google_health_source.dart';
+import 'score_pipeline.dart';
 
 const String kGhLastSyncKey = 'ghapi.last_sync_ms';
 
@@ -52,7 +53,7 @@ class GhSync {
       note('google_health', 'skipped', message: 'Not configured');
       return dirty;
     }
-    if (!await gh.signedIn) {
+    if (!await gh.signedIn.timeout(const Duration(seconds: 20))) {
       note('google_health', 'denied', message: 'Not signed in');
       return dirty;
     }
@@ -73,6 +74,11 @@ class GhSync {
     ) async {
       try {
         final f = await fetch();
+        if (f.rawCount > 0 && f.rows.length == 0) {
+          throw StateError(
+            '${f.rawCount} points received but no value decoded; stored data retained',
+          );
+        }
         for (final (k, s) in kinds) {
           final part = RawRows(
             hr: k == RawKind.hr ? f.rows.hr : null,
@@ -152,9 +158,15 @@ class GhSync {
       now,
       sources: const {SourceKind.healthConnect},
     );
+    final hrPlan = (await ScorePipeline(
+      raw: raw,
+      app: app,
+    ).loadPlans())[Metric.hr];
     final covered = {
       for (final d in have.hrDays)
-        if (d.minutesWithData > 60) d.date,
+        if (d.minutesWithData > 60 &&
+            (hrPlan == null || d.origin == hrPlan.originOn(d.date)))
+          d.date,
     };
     var fetched = 0;
     for (
@@ -166,6 +178,11 @@ class GhSync {
       try {
         final end = DayKey.end(d).isAfter(now) ? now : DayKey.end(d);
         final f = await gh.heartRate(DayKey.start(d), end);
+        if (f.rawCount > 0 && f.rows.hr.isEmpty) {
+          throw StateError(
+            'Heart rate response could not be decoded; stored data retained',
+          );
+        }
         dirty.addAll(
           await raw.replaceWindow(
             SourceKind.googleHealthApi,

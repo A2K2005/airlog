@@ -88,6 +88,10 @@ HcMapResult mapHcRecords(
   final stages = <String, List<HcRecord>>{};
 
   for (final r in records) {
+    if (r.end.isBefore(r.start) || (r.value != null && !r.value!.isFinite)) {
+      continue;
+    }
+    if (r.value != null && r.type != HcType.skinTemp && r.value! < 0) continue;
     if (r.end.isAfter(cutoff) || r.start.isAfter(cutoff)) {
       future++;
       continue;
@@ -202,7 +206,10 @@ HcMapResult mapHcRecords(
   for (final s in sessions.values) {
     final st = <StageSpan>[
       for (final x in stages[s.id] ?? const <HcRecord>[])
-        if (x.stage != null && x.end.isAfter(x.start))
+        if (x.stage != null &&
+            x.end.isAfter(x.start) &&
+            x.end.isAfter(s.start) &&
+            x.start.isBefore(s.end))
           StageSpan(
             x.stage!,
             x.start.isBefore(s.start) ? s.start : x.start,

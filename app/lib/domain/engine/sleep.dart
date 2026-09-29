@@ -120,8 +120,17 @@ abstract final class SleepEngine {
         debtMinutes: currentDebtMinutes,
       );
     }
-    // Wake times are mornings (no midnight wrap) → plain mean (Pulse :89-93).
-    final habitualWake = Stats.mean(wakeMinutes);
+    // Clock times wrap at midnight. An opposing/ambiguous schedule has no
+    // single habitual wake time, so keep the duration target without a clock.
+    final x = Stats.mean(wakeMinutes.map((m) => math.cos(m * math.pi / 720)));
+    final y = Stats.mean(wakeMinutes.map((m) => math.sin(m * math.pi / 720)));
+    if (!x.isFinite || !y.isFinite || math.sqrt(x * x + y * y) < 0.1) {
+      return BedtimeRecommendation(
+        projectedNeedMinutes: projected,
+        debtMinutes: currentDebtMinutes,
+      );
+    }
+    final habitualWake = (math.atan2(y, x) * 720 / math.pi + 1440) % 1440;
     final bedtime = ((habitualWake - projected) % 1440 + 1440) % 1440;
     return BedtimeRecommendation(
       projectedNeedMinutes: projected,
@@ -205,10 +214,7 @@ abstract final class SleepEngine {
     }
 
     // Pulse SleepEngine.swift:168-171.
-    var stageMinutes = main?.stageMinutes ?? const <SleepStage, double>{};
-    if (stageMinutes.isEmpty && main != null) {
-      stageMinutes = {SleepStage.light: Inputs.asleep(main)};
-    }
+    final stageMinutes = main?.stageMinutes ?? const <SleepStage, double>{};
     final eff = main?.efficiency;
 
     return SleepNight(

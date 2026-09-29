@@ -66,7 +66,7 @@ class Composer extends StatelessWidget {
                       maxLines: 4,
                       textInputAction: TextInputAction.send,
                       textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => onSend(),
+                      onSubmitted: enabled && !sending ? (_) => onSend() : null,
                       style: F.body.copyWith(color: p.ink),
                       decoration: InputDecoration(
                         hintText: hint,

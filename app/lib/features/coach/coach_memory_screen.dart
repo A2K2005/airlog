@@ -9,6 +9,7 @@ import '../../app/copy.dart';
 import '../../app/providers.dart';
 import '../../design/design.dart';
 import '../../domain/coach/coach_contracts.dart';
+import '../../domain/coach/personal_context.dart';
 import '../../domain/day_key.dart';
 import 'coach_memory_view_model.dart';
 
@@ -21,7 +22,7 @@ class CoachMemoryScreen extends ConsumerWidget {
     final async = ref.watch(coachMemoryProvider);
     final vm = ref.read(coachMemoryProvider.notifier);
     final s = async.value;
-    final today = DayKey.of(ref.watch(clockProvider)());
+    final today = DayKey.of(ref.watch(currentTimeProvider));
 
     Future<void> edit([MemoryFact? f]) async {
       final r = await showFactSheet(context, fact: f, today: today);
@@ -222,18 +223,20 @@ class _FactRow extends StatelessWidget {
     final p = P.of(context);
     final until = fact.expiresOn;
     final ended = CoachMemoryState.expired(fact, today);
-    final note = until == null
-        ? null
-        : ended
-        ? 'Ended ${shortDay(until)} · no longer used'
-        : 'Until ${shortDay(until)}';
+    final confirmed = DayKey.of(fact.updatedAt ?? fact.createdAt);
+    final needsReview = MemoryContext.needsReview(fact, today);
+    final note = ended
+        ? 'Ended ${shortDay(until!)} · no longer used'
+        : 'Confirmed ${shortDay(confirmed)}'
+              '${until == null ? '' : ' · Until ${shortDay(until)}'}'
+              '${needsReview ? ' · Review whether this still applies' : ''}';
     return Row(
       children: [
         Expanded(
           child: Pressable(
             onTap: onEdit,
             scale: .985,
-            semanticLabel: '${fact.text}${note == null ? '' : '. $note'}. Edit',
+            semanticLabel: '${fact.text}. $note. Edit',
             child: ExcludeSemantics(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(S.card, S.x3, 0, S.x3),
@@ -246,14 +249,13 @@ class _FactRow extends StatelessWidget {
                         fact.text,
                         style: F.body.copyWith(color: ended ? p.ink3 : p.ink),
                       ),
-                      if (note != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            note,
-                            style: F.tab(F.cap).copyWith(color: p.ink3),
-                          ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          note,
+                          style: F.tab(F.cap).copyWith(color: p.ink3),
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -315,6 +317,8 @@ class _FactSheetState extends State<_FactSheet> {
       context: context,
       initialDate: _until == null
           ? DateTime(start.year, start.month, start.day + 7)
+          : _until!.compareTo(widget.today) < 0
+          ? start
           : DayKey.start(_until!),
       firstDate: start,
       lastDate: DateTime(start.year + 2, start.month, start.day),

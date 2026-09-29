@@ -104,7 +104,7 @@ class SleepState {
   /// Deep + REM share of time asleep (main sleep), 0…100.
   double? get restorativePct {
     final a = analysis;
-    if (a == null) return null;
+    if (a == null || !a.hasStageData) return null;
     final asleep = [
       SleepStage.light,
       SleepStage.deep,
@@ -149,7 +149,7 @@ class SleepViewModel extends AsyncNotifier<SleepState> {
   Future<SleepState> build() async {
     ref.watch(revisionProvider);
     final repo = ref.watch(healthRepositoryProvider);
-    final now = ref.watch(clockProvider)();
+    final now = ref.watch(currentTimeProvider);
     final dateF = ref.watch(focusedDateProvider.future);
     final latestF = ref.watch(latestDateProvider.future);
     final date = await dateF;

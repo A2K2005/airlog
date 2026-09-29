@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../design/design.dart';
 import '../../../domain/engine/strain.dart' show StrainEngine;
+import '../../../domain/results.dart' show StrainMethod;
 import '../live_view_model.dart';
 
 /// The hero number: F.n96, tabular (never re-flows). It changes about once
@@ -64,10 +65,12 @@ class ZoneBand extends StatelessWidget {
     required this.zone,
     required this.floors,
     this.active = true,
+    this.zonesFromMaxHr = false,
   });
   final int zone;
   final List<double> floors;
   final bool active;
+  final bool zonesFromMaxHr;
 
   static final _pct = zoneRanges(
     StrainEngine.displayZoneLowerBounds,
@@ -89,7 +92,9 @@ class ZoneBand extends StatelessWidget {
     final fade = motion(context, Motion.base, fade: true);
     return Semantics(
       label: active
-          ? '$name, ${_pct[z]} of heart-rate reserve'
+          ? zonesFromMaxHr
+                ? '$name, $range, estimated from maximum heart rate'
+                : '$name, ${_pct[z]} of heart-rate reserve'
           : 'Zone unknown',
       child: ExcludeSemantics(
         child: Column(
@@ -133,7 +138,7 @@ class ZoneBand extends StatelessWidget {
             const SizedBox(height: S.x2),
             Text(
               active
-                  ? '$name · ${_pct[z]} HRR${range.isEmpty ? '' : ' · $range'}'
+                  ? '$name${zonesFromMaxHr ? '' : ' · ${_pct[z]} HRR'}${range.isEmpty ? '' : ' · $range'}'
                   : 'Zone appears with the first reading',
               textAlign: TextAlign.center,
               style: F
@@ -254,7 +259,18 @@ class LiveDashboard extends StatelessWidget {
         const SizedBox(height: S.x5),
         Center(child: BigBpm(bpm: s.bpm)),
         const SizedBox(height: S.x4),
-        ZoneBand(zone: s.zone, floors: s.zoneFloors, active: s.bpm != null),
+        if (s.zoneFloors.isNotEmpty)
+          ZoneBand(
+            zone: s.zone,
+            floors: s.zoneFloors,
+            active: s.bpm != null,
+            zonesFromMaxHr: s.restingHr == null,
+          )
+        else
+          Text(
+            'Heart rate is available. Zones and strain need a usable maximum heart rate.',
+            style: F.bodySm.copyWith(color: p.ink2),
+          ),
         const SizedBox(height: S.x6),
         if (recording || cooling) ...[
           AppCard(
@@ -267,7 +283,9 @@ class LiveDashboard extends StatelessWidget {
                     Expanded(
                       child: _Stat(
                         'Strain',
-                        live == null ? '0.0' : live.strain.toStringAsFixed(1),
+                        live == null || live.method == StrainMethod.none
+                            ? '–'
+                            : live.strain.toStringAsFixed(1),
                         color: p.on(DomainColors.strain),
                       ),
                     ),
@@ -522,7 +540,9 @@ class WorkoutSummary extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    w == null ? '0.0' : w.strain.toStringAsFixed(1),
+                    w == null || w.method == StrainMethod.none
+                        ? '–'
+                        : w.strain.toStringAsFixed(1),
                     style: F.n64.copyWith(color: p.on(DomainColors.strain)),
                   ),
                   const SizedBox(width: S.x2),

@@ -26,6 +26,7 @@
 // own date and context in the system prompt.
 
 import 'dart:async';
+import 'dart:convert';
 
 import '../day_key.dart';
 import '../repositories.dart';
@@ -34,12 +35,14 @@ import 'coach_contracts.dart';
 import 'format.dart';
 import 'policy.dart';
 import 'prompts.dart';
+import 'personal_context.dart';
 import 'safety.dart';
 import 'tools.dart';
 import 'verifier.dart';
 
 /// Version of the cloud disclosure the user must have accepted.
 const int kCoachConsentVersion = 1;
+const int kCoachPayloadVersion = 3;
 
 class CoachServiceImpl implements CoachService {
   CoachServiceImpl({
@@ -91,7 +94,13 @@ class CoachServiceImpl implements CoachService {
     }
 
     // 1. Input router: fixed response, no model, no network.
-    final flag = SafetyCheck.check(q);
+    var flag = SafetyCheck.check(q);
+    if (flag == null) {
+      final birthYear = (await health.profile()).birthYear;
+      if (birthYear != null && clock().year - birthYear < 18) {
+        flag = const SafetyVerdict(RedFlag.minor, SafetyCheck.minorMessage);
+      }
+    }
     if (flag != null) {
       final conv = await _conversation(conversationId, q);
       await _storeUser(conv, q);
@@ -118,9 +127,11 @@ class CoachServiceImpl implements CoachService {
     final client = await coach.client(); // throws notConfigured (no key)
 
     final useData = settings.mode == CoachMode.useMyData;
+    final memoryScope = await _memoryScope();
+    final dataMode = health.mode;
     final conv = await _conversation(conversationId, q);
-    final history = useData
-        ? await _history(conv, cloud: cloud)
+    final history = useData && !MemoryContext.isCorrection(q)
+        ? await _history(conv, cloud: cloud, memoryScope: memoryScope)
         : const <LlmItem>[];
     await _storeUser(conv, q);
 
@@ -164,14 +175,9 @@ class CoachServiceImpl implements CoachService {
       seed: seeded ? context : null,
       question: q,
     );
-    final memories = memoryOn
-        ? [
-            for (final m in await coach.memories())
-              if (m.expiresOn == null ||
-                  m.expiresOn!.compareTo(DayKey.of(now)) >= 0)
-                m.text,
-          ]
-        : const <String>[];
+    // Only memory actually retrieved this turn can ground an answer.
+    // Stale facts remain labelled context but cannot validate current claims.
+    final memories = toolbox.groundedMemories;
 
     final calls = <ToolCall>[];
     final results = <ToolResult>[];
@@ -182,23 +188,48 @@ class CoachServiceImpl implements CoachService {
         _toolChars(tools);
     var sentBytes = 0, requests = 0, rounds = 0;
 
-    // The card's own facts, as data in the question's message (first refs
-    // r1…, Google Health API withholding applied). They are evidence
-    // (results) but not a call: nothing asked for them.
+    // On-device gets the card facts. Cloud gets a withholding notice and
+    // must read current facts through the guarded data tools instead.
     final seed = seeded
         ? await toolbox.run(const [
             ToolCall(id: 'seed_card', name: CoachTools.insightCard, input: {}),
           ])
         : const <ToolResult>[];
     results.addAll(seed);
+    // Read bounded, question-relevant evidence before the model answers.
+    // No extra model request; the same consent/source firewall applies.
+    final contextCalls = cloud && useData
+        ? PersonalContext.plan(q, DayKey.of(now), memory: memoryOn)
+        : const <ToolCall>[];
+    final personal = await toolbox.run(contextCalls);
+    calls.addAll(contextCalls);
+    results.addAll(personal);
     // Built once and never rebuilt: every request of this ask replays the
     // same question message, so the history stays append-only.
-    final transcript = <LlmItem>[...history, LlmUser(q, data: seed)];
-    for (final r in seed) {
+    final transcript = <LlmItem>[
+      ...history,
+      LlmUser(q, data: [...seed, ...personal]),
+    ];
+    for (final r in [...seed, ...personal]) {
       chars += _jsonChars(r.content);
     }
 
     Future<LlmTurn> request() async {
+      final current = await coach.settings();
+      if (!current.enabled ||
+          current.provider != settings.provider ||
+          current.mode != settings.mode ||
+          current.consentAt != settings.consentAt ||
+          current.consentVersion != settings.consentVersion ||
+          health.mode != dataMode ||
+          await _memoryScope() != memoryScope) {
+        throw const CoachException(
+          CoachErrorKind.notConfigured,
+          'Coach settings or data mode changed. No further requests were '
+          'sent. Start a new question with your current settings.',
+        );
+      }
+      if (cloud) _requireConsent(current);
       if (cloud) await _checkBudget();
       final t = await client
           .next(
@@ -216,6 +247,12 @@ class CoachServiceImpl implements CoachService {
           );
       requests++;
       sentBytes += t.sentBytes;
+      if (health.mode != dataMode) {
+        throw const CoachException(
+          CoachErrorKind.notConfigured,
+          'Data mode changed while answering. Start a new question.',
+        );
+      }
       return t;
     }
 
@@ -315,6 +352,9 @@ class CoachServiceImpl implements CoachService {
             approxChars: sentBytes > 0 ? sentBytes : chars,
             bytes: sentBytes,
             requests: requests,
+            privacyVersion: kCoachPayloadVersion,
+            memoryContext: memoryScope,
+            mode: settings.mode,
           )
         : null;
 
@@ -333,6 +373,9 @@ class CoachServiceImpl implements CoachService {
             : const [],
         proposedCategories: error == null && memoryOn
             ? [for (final p in toolbox.proposals) p.category.name]
+            : const [],
+        proposedExpiries: error == null && memoryOn
+            ? [for (final p in toolbox.proposals) p.expiresOn]
             : const [],
         error: error,
       ),
@@ -372,6 +415,7 @@ class CoachServiceImpl implements CoachService {
             safety: m.safety,
             proposedMemories: m.proposedMemories,
             proposedCategories: m.proposedCategories,
+            proposedExpiries: m.proposedExpiries,
             error: m.error,
             sampleData: true,
           )
@@ -384,11 +428,11 @@ class CoachServiceImpl implements CoachService {
   static String budgetText(CoachUsage u) {
     final byRequests = u.requests >= u.requestLimit;
     final what = byRequests
-        ? '${u.requestLimit} questions'
+        ? '${u.requestLimit} model requests'
         : '${CoachFormat.grouped(u.tokenLimit)} tokens';
     return 'You\'ve reached today\'s limit for ${u.provider.label} '
-        '($what), so nothing was sent. It resets at midnight. You can raise '
-        'the limit or switch to the on-device coach in Settings → Coach.';
+        '($what). No further requests will be sent. It resets at midnight. '
+        'You can switch to the on-device coach in Settings → Coach.';
   }
 
   Future<void> _checkBudget() async {
@@ -453,10 +497,11 @@ class CoachServiceImpl implements CoachService {
       'Your AI provider account is out of credit or quota.',
     CoachErrorKind.dailyLimit =>
       e.message ??
-          "You've reached today's limit, so nothing was sent. It resets at "
+          "You've reached today's limit. No further requests were sent. It resets at "
               'midnight.',
     CoachErrorKind.network =>
-      'Couldn\'t reach the AI provider. Check your connection and try again.',
+      'No answer arrived from the AI provider. A request may already have '
+          'reached it. Check your connection and try again.',
     CoachErrorKind.server =>
       'The AI provider had a problem. Try again shortly.',
     CoachErrorKind.refused => refusalText,
@@ -486,8 +531,25 @@ class CoachServiceImpl implements CoachService {
   /// were themselves produced for a cloud provider (sent != null) are
   /// replayed: an on-device answer was built without the Google Health API
   /// filter and must never leave the phone as history.
-  Future<List<LlmItem>> _history(String conv, {required bool cloud}) async {
+  Future<String> _memoryScope() async {
+    if (!await coach.memoryEnabled()) return 'off';
+    final today = DayKey.of(clock());
+    final facts = [
+      for (final m in await coach.memories())
+        if (m.expiresOn == null || m.expiresOn!.compareTo(today) >= 0)
+          '${m.id}|${m.updatedAt?.toIso8601String()}|${m.expiresOn}|${MemoryContext.needsReview(m, today)}',
+    ];
+    facts.sort();
+    return jsonEncode(facts);
+  }
+
+  Future<List<LlmItem>> _history(
+    String conv, {
+    required bool cloud,
+    required String memoryScope,
+  }) async {
     final msgs = await coach.messages(conv);
+    final settings = await coach.settings();
     final pairs = <(String, String)>[];
     for (var i = 0; i + 1 < msgs.length; i++) {
       final u = msgs[i], a = msgs[i + 1];
@@ -495,7 +557,12 @@ class CoachServiceImpl implements CoachService {
           a.role == ChatRole.assistant &&
           a.error == null &&
           !a.safety &&
-          (!cloud || a.sent != null)) {
+          a.sampleData == (health.mode == DataMode.demo) &&
+          (!cloud ||
+              (a.sent?.provider == settings.provider &&
+                  a.sent?.mode == settings.mode &&
+                  a.sent?.privacyVersion == kCoachPayloadVersion &&
+                  a.sent?.memoryContext == memoryScope))) {
         pairs.add((u.text, CoachPrompts.stripCitations(a.text)));
         i++;
       }
