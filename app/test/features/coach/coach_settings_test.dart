@@ -144,7 +144,11 @@ void main() {
     await _pump(t, repo);
     await _see(t, find.byKey(const ValueKey('row-usage')));
     expect(find.text(InsightCopy.usageTitle), findsOneWidget);
-    expect(find.text('3 of 50 questions · 12k of 200k tokens'), findsOneWidget);
+    // PR #1: the meter counts model requests (a question can take several).
+    expect(
+      find.text('3 of 50 model requests · 12k of 200k tokens'),
+      findsOneWidget,
+    );
     expect(find.text(CoachCopy.usageSpent), findsNothing);
   });
 
@@ -185,7 +189,7 @@ void main() {
           tokenLimit: 200000,
         ),
       ),
-      '50 of 50 questions · 1.5k of 200k tokens',
+      '50 of 50 model requests · 1.5k of 200k tokens',
     );
   });
 }
