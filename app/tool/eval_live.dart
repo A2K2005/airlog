@@ -18,6 +18,15 @@
 //              rate-limited or busy answer, so one 429 does not cascade)
 //            --dart-define=EVAL_BACKUPS=false  (no backup models: measure
 //              only the chosen model; failures still answer on-device)
+//            --dart-define=EVAL_FOLLOWUPS=false  (skip the follow-up set)
+//            --dart-define=EVAL_FOLLOWUP_LIMIT=5  (first N follow-up chats)
+//
+// After the grounding set it runs the follow-up set
+// (test/evals/data/golden_followups.jsonl): two-turn chats whose second
+// question only makes sense with the first. Both sets report the pass rate
+// per model (the model that wrote each answer). To measure a backup model
+// on its own for the quality bar in docs/EVALS.md, run with
+// EVAL_MODEL=<backup> and EVAL_BACKUPS=false.
 //
 // Without the key it prints how to run it and does nothing. The key is read
 // from the environment only: never printed, logged or written anywhere.
@@ -50,11 +59,48 @@ const _cooldownMs = int.fromEnvironment(
   defaultValue: 60000,
 );
 
-/// 45 min of questions plus the pauses (and a cooldown per question, worst
-/// case) between them.
+const _followups = bool.fromEnvironment('EVAL_FOLLOWUPS', defaultValue: true);
+const _followupLimit = int.fromEnvironment(
+  'EVAL_FOLLOWUP_LIMIT',
+  defaultValue: 1000,
+);
+
+/// 60 min of questions plus the pauses (and a cooldown per question, worst
+/// case) between them: about 50 grounding questions and 20 follow-up asks.
 final evalTimeout =
-    const Duration(minutes: 45) +
-    const Duration(milliseconds: _delayMs + _cooldownMs) * 60;
+    const Duration(minutes: 60) +
+    const Duration(milliseconds: _delayMs + _cooldownMs) * 80;
+
+/// A live pass: no error, written by a model (an on-device fallback says
+/// nothing about the model), verified without the repair round, and clean
+/// under the output policy.
+bool _passes(ChatMessage a) {
+  final v = a.verification;
+  return a.error == null &&
+      a.answeredBy != ChatMessage.onDevice &&
+      (v?.verified ?? false) &&
+      !(v?.repaired ?? true) &&
+      OutputPolicy.check(a.text).ok;
+}
+
+/// Pass count and total per model that wrote the answer.
+class _PerModel {
+  final pass = <String, int>{};
+  final total = <String, int>{};
+  void add(String model, bool ok) {
+    total[model] = (total[model] ?? 0) + 1;
+    if (ok) pass[model] = (pass[model] ?? 0) + 1;
+  }
+
+  Iterable<String> lines() sync* {
+    final keys = total.keys.toList()..sort((a, b) => total[b]! - total[a]!);
+    for (final k in keys) {
+      final p = pass[k] ?? 0, n = total[k]!;
+      yield '  ${k.padRight(24)}$p/$n  '
+          '${(100 * p / n).toStringAsFixed(1)}% pass';
+    }
+  }
+}
 
 void main() {
   test('live eval (opt-in)', () async {
@@ -109,6 +155,7 @@ void main() {
     // Which engine wrote each answer (model fallback: a backup model of the
     // same provider, or on-device); errors are tallied as "error".
     final byModel = <String, int>{};
+    final perModel = _PerModel();
     var onDevice = 0;
     final out = StringBuffer();
     for (final (i, r) in rows.indexed) {
@@ -130,12 +177,8 @@ void main() {
       if (local) onDevice++;
       // An on-device fallback answer is verified by construction: it says
       // nothing about the model, so it never counts as a pass.
-      final ok =
-          a.error == null &&
-          !local &&
-          (v?.verified ?? false) &&
-          !(v?.repaired ?? true) &&
-          OutputPolicy.check(a.text).ok;
+      final ok = _passes(a);
+      perModel.add(by, ok);
       if (ok) pass++;
       if (v?.verified ?? false) verified++;
       if (v?.repaired ?? false) repaired++;
@@ -174,6 +217,54 @@ void main() {
         );
       }
     }
+    // Follow-ups: two turns in one chat; the second answer is scored.
+    final fu = _followups
+        ? [
+            for (final line in File(
+              'test/evals/data/golden_followups.jsonl',
+            ).readAsLinesSync())
+              if (line.trim().isNotEmpty)
+                jsonDecode(line) as Map<String, dynamic>,
+          ].take(_followupLimit).toList()
+        : const <Map<String, dynamic>>[];
+    final fuPerModel = _PerModel();
+    var fuPass = 0;
+    final fuOut = StringBuffer();
+    for (final r in fu) {
+      Future<void> pause() async {
+        if (delayMs > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: delayMs));
+        }
+      }
+
+      await pause();
+      final a1 = await coach.service.ask(r['q1'] as String);
+      await pause();
+      final a2 = await coach.service.ask(
+        r['q2'] as String,
+        conversationId: a1.conversationId,
+      );
+      final by = a2.error != null ? 'error' : a2.answeredBy ?? model;
+      // Turn 1 must have been answered by a model too, or the follow-up
+      // says nothing about carrying a model's own earlier answer.
+      final ok = a1.error == null && _passes(a2);
+      fuPerModel.add(by, ok);
+      if (ok) fuPass++;
+      fuOut.writeln('${ok ? 'PASS' : 'FAIL'} ${r['id']} [$by] ${r['q2']}');
+      if (!ok) {
+        fuOut.writeln(
+          '     turn 1: ${a1.error ?? a1.answeredBy ?? model} · '
+          '${a2.error ?? ''} ${a2.verification?.unsupported ?? ''} '
+          '${a2.text.replaceAll('\n', ' ')}',
+        );
+      }
+      const busy = {'server', 'rateLimited'};
+      if ((busy.contains(a2.error) || busy.contains(a2.fallbackReason)) &&
+          _cooldownMs > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: _cooldownMs));
+      }
+    }
+
     final u = await coach.repository.usageToday();
     final cost = u == null
         ? null
@@ -199,6 +290,16 @@ void main() {
           '  ${e.key.padRight(24)}${e.value}  ${pct(e.value)}',
       ], '\n')
       ..writeln()
+      ..writeln('pass rate per model (grounding):')
+      ..writeAll(perModel.lines(), '\n')
+      ..writeln()
+      ..writeln(
+        'follow-ups                ${fu.length} chats · pass $fuPass'
+        '${fu.isEmpty ? '' : '  ${(100 * fuPass / fu.length).toStringAsFixed(1)}%'}',
+      )
+      ..writeln('pass rate per model (follow-ups):')
+      ..writeAll(fuPerModel.lines(), '\n')
+      ..writeln()
       ..writeln(
         'delay between questions   $delayMs ms (cooldown $_cooldownMs ms)',
       )
@@ -212,10 +313,12 @@ void main() {
       );
     print(summary);
     print(out);
+    if (fu.isNotEmpty) print('follow-ups:\n$fuOut');
     try {
       final dir = Directory('build/evals')..createSync(recursive: true);
-      File('${dir.path}/live_${provider.name}.txt')
-          .writeAsStringSync('$summary\n$out');
+      File('${dir.path}/live_${provider.name}.txt').writeAsStringSync(
+        '$summary\n$out${fu.isEmpty ? '' : '\nfollow-ups:\n$fuOut'}',
+      );
     } catch (_) {}
   }, timeout: Timeout(evalTimeout));
 }
