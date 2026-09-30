@@ -4,4 +4,13 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <application>
+        <!-- Debug only: pins a home-screen widget from adb (emulator QA,
+             docs/WIDGETS_PLAN.md §9). Exported so `adb shell am broadcast`
+             can reach it; release builds don't contain it. -->
+        <receiver
+            android:name=".DebugWidgetPinReceiver"
+            android:exported="true" />
+    </application>
 </manifest>

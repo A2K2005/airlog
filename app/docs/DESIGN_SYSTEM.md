@@ -205,6 +205,14 @@ At large text settings, `GlowTile` provides a readable, reflowing alternative ba
 | `HeartRateTile` | Medium/10 | Gallery only | Not wired: Live keeps its own zone band |
 | `BandMediumTile` | Medium/7 | Gallery only | Not wired: VO₂ max stays a Trends chart ("<source>'s estimate") |
 
+**Home-screen widgets** (`docs/WIDGETS_PLAN.md`) are drawn natively in Kotlin from the same recipes, inks and type (`res/raw/airlog_widget_glows.json`, generated and checked by `test/data/widget_glows_test.dart`):
+
+| Widget | PNG | Metric shown |
+|---|---|---|
+| Recovery (small) | Small/5 (the `RingScoreTile` look) | Recovery % with Today's status word (Good / Fair / Low, Learning, No data) and basis |
+| Today plan (medium) | `PlanTile` vocabulary, glow `PlanTile.glowFor` | The plan's basis, headline and first action with its why |
+| Today (medium) | Medium/19 (its macros relabelled) | Recovery %, Strain, Sleep performance %, one plate each |
+
 Cut: Small/17 and Medium/8 (Pulse Age, removed from v1). The other PNGs in `Widget/` show metrics the app does not measure, and are unused.
 
 ## Figma diff goldens (`test/goldens/figma_diff_test.dart`)

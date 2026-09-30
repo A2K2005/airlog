@@ -706,6 +706,54 @@ abstract final class GlowRecipes {
     ],
   );
 
+  /// Medium/19.png (348×164), fit rms 0.36.
+  static const m19 = GlowRecipe(
+    size: Size(348, 164),
+    base: Color(0xFF75401D),
+    blobs: [
+      GlowBlob(
+        center: Offset(321.85, 166.40),
+        radii: Size(206.46, 65.20),
+        rotation: 0.1086,
+        softness: 0.6353,
+        alpha: 1.0000,
+        color: Color(0xFF000001),
+      ),
+      GlowBlob(
+        center: Offset(-695.81, 779.29),
+        radii: Size(1096.63, 629.49),
+        rotation: -0.2133,
+        softness: 0.0775,
+        alpha: 0.3779,
+        color: Color(0xFFFF9564),
+      ),
+      GlowBlob(
+        center: Offset(325.01, 159.48),
+        radii: Size(82.94, 27.58),
+        rotation: 0.0182,
+        softness: 0.3220,
+        alpha: 1.0000,
+        color: Color(0xFF000000),
+      ),
+      GlowBlob(
+        center: Offset(178.35, -81.70),
+        radii: Size(1096.63, 76.73),
+        rotation: -0.0028,
+        softness: 0.5932,
+        alpha: 1.0000,
+        color: Color(0xFF4F2600),
+      ),
+      GlowBlob(
+        center: Offset(-69.00, -182.78),
+        radii: Size(1096.63, 154.39),
+        rotation: 0.5237,
+        softness: 0.4808,
+        alpha: 0.2236,
+        color: Color(0xFF000000),
+      ),
+    ],
+  );
+
   /// Medium/20.png (348×164), fit rms 0.47.
   static const m20 = GlowRecipe(
     size: Size(348, 164),

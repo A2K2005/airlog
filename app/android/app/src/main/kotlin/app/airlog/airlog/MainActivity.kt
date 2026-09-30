@@ -19,6 +19,10 @@ import io.flutter.plugin.common.MethodChannel
  * ACTION_SHOW_PERMISSIONS_RATIONALE (Android ≤ 13) or through the
  * ViewPermissionUsageActivity alias (Android 14+). Both land on the Flutter
  * route "/privacy".
+ *
+ * A home-screen widget opens it with [AirlogWidgets.ACTION_OPEN_ROUTE] and a
+ * route from the allow-list [AirlogWidgets.ROUTES] (WIDGETS_PLAN §6): the
+ * initial route on a cold start, pushed on a warm one.
  */
 class MainActivity : FlutterFragmentActivity() {
 
@@ -55,12 +59,18 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun getInitialRoute(): String? =
-        if (isPrivacyIntent(intent)) PRIVACY_ROUTE else super.getInitialRoute()
+        if (isPrivacyIntent(intent)) PRIVACY_ROUTE
+        else widgetRoute(intent) ?: super.getInitialRoute()
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (isPrivacyIntent(intent)) {
             flutterEngine?.navigationChannel?.pushRoute(PRIVACY_ROUTE)
+            return
+        }
+        // "/" is Today, the root: bringing the app forward is enough.
+        widgetRoute(intent)?.takeIf { it != "/" }?.let {
+            flutterEngine?.navigationChannel?.pushRoute(it)
         }
     }
 
@@ -72,6 +82,12 @@ class MainActivity : FlutterFragmentActivity() {
 
     companion object {
         const val PRIVACY_ROUTE = "/privacy"
+
+        /** The allow-listed route a widget tap asks for, or null. */
+        fun widgetRoute(i: Intent?): String? =
+            i?.takeIf { it.action == AirlogWidgets.ACTION_OPEN_ROUTE }
+                ?.getStringExtra(AirlogWidgets.EXTRA_ROUTE)
+                ?.takeIf { it in AirlogWidgets.ROUTES }
 
         fun isPrivacyIntent(i: Intent?): Boolean =
             i?.action == "androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" ||
