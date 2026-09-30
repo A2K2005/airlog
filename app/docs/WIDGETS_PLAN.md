@@ -95,3 +95,27 @@ A PendingIntent opens `MainActivity` with action `app.airlog.airlog.OPEN_ROUTE` 
 - The "hide values" privacy flag, once the app has the setting.
 - iOS widgets (IOS_PLAN.md).
 - Widget picker preview images made from real renders.
+
+## 11. Built, verified, deferred (1 Oct 2026)
+
+**Built.** The three widgets in §2 (Recovery small, Today plan medium, Today medium), drawn natively on a Canvas in `AirlogWidgetRender.kt` and the three providers, reading only `airlog_snapshot_v1` (v2 keys). A debug-only `DebugWidgetPinReceiver` pins them from adb.
+
+**Verified.**
+- `flutter analyze`: no issues. Tests: `test/data/widget_sink_test.dart`, `test/data/widget_glows_test.dart`, `test/data/in_memory_repository_test.dart`, `test/design/`, `test/architecture_test.dart` and `test/features/feature_boundaries_test.dart` pass (262, 0 failures). `flutter build apk --debug` succeeds.
+- On the `airlog_api35` emulator (Pixel launcher), with each widget pinned through `requestPinAppWidget`. Screenshots are in `docs/screenshots/widgets/`:
+  - sample data at 00:31, before the 05:00 planner boundary (`*_sample_night`, `plan_sample_tonight`);
+  - sample data at 10:00 (`*_sample_day`);
+  - the next day, with no Dart run: the clock was moved forward, then `TIME_SET` and the debug refresh were sent (`*_sample_stale`). Every widget shows "From 1 Oct", and the plan widget drops its action line for "Open Airlog for the latest plan";
+  - app data cleared (`*_empty`): `--` in every dot slot, with "No data yet" and "Open Airlog to get started", and no Sample data chip.
+- Both fonts render from `flutter_assets`: Subway Ticker Grid for the dot numerals, including `--`, and DM Sans for the labels. Every sample-data state shows the "Sample data" chip.
+- Tapping the Today widget's Sleep plate opens the Sleep screen.
+- Fixed during verification: the Today layout used a plain `<View>` spacer, which RemoteViews refuses to inflate, so the launcher showed "Can't load widget". It is now a `FrameLayout`.
+
+**Observations (not changed).**
+- The Today widget's plates follow Medium/19 and show only the `%` unit. "of 21" and the time asleep are in the `contentDescription` only, not drawn as §2's table says. Figma wins (see the Status line).
+- Between 00:00 and 05:00, the Recovery widget and the Recovery plate show "No data", because today's recovery doesn't exist yet. The plan widget says "Tonight" (the evening's day). This matches the app's own Today screen at the same hour.
+- No pixel-level comparison of Figma against the emulator was made; the screenshots were checked by eye against `Widget/Small/5.png` and `Widget/Medium/19.png`.
+
+**Deferred.**
+- Everything in §10.
+- Not exercised on the device: the Recovery and Strain plate taps, the cold-start versus warm-start routing, resizing (`onAppWidgetOptionsChanged`), the RTC boundary alarm firing on its own, and a live-mode background (workmanager) redraw.
