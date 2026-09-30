@@ -156,6 +156,11 @@ class WidgetSnapshot {
 
   static const noData = 'No score';
 
+  /// README screenshots only: `--dart-define=AIRLOG_README_SHOTS=true`
+  /// writes [demo] as false so the widgets draw sample values without the
+  /// "Sample data" chip. Off by default; release builds never set it.
+  static const readmeShots = bool.fromEnvironment('AIRLOG_README_SHOTS');
+
   /// What a dot-matrix slot shows without a number. The dot face has no en
   /// dash (DotMatrixNumber.missing).
   static const missingDots = '--';
@@ -239,7 +244,7 @@ class WidgetSnapshot {
       'sleep': minutes == null || minutes <= 0
           ? '–'
           : PlanFormat.hm(minutes.toDouble()),
-      'demo': demo,
+      'demo': demo && !readmeShots,
       'stale': stale,
       'quality': quality.join(' · '),
       'updatedAt': updatedAt.millisecondsSinceEpoch,
