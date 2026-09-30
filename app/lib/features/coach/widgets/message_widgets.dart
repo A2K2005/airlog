@@ -235,7 +235,10 @@ class SourceChip extends StatelessWidget {
         borderRadius: R.rMd,
         border: Border.all(color: p.line),
       ),
+      // Label and day on top, the value under them: two tiles share a row,
+      // so a value beside the label would cut "Recovery" and the date short.
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CiteMark(number: number, inline: false),
           const SizedBox(width: S.x2),
@@ -245,7 +248,7 @@ class SourceChip extends StatelessWidget {
               children: [
                 Text(
                   metric,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: F.cap.copyWith(
                     color: p.ink,
@@ -259,10 +262,13 @@ class SourceChip extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: F.tab(F.micro).copyWith(color: p.ink3),
                   ),
+                if (shown != null) ...[
+                  const SizedBox(height: S.x1),
+                  FittedBox(fit: BoxFit.scaleDown, child: shown),
+                ],
               ],
             ),
           ),
-          if (shown != null) ...[const SizedBox(width: S.x1), shown],
           if (onTap != null)
             Icon(Icons.chevron_right_rounded, size: 16, color: p.ink3),
         ],
