@@ -49,7 +49,6 @@ import org.json.JSONObject
 
 /** Widget-only strings (WIDGETS_PLAN §4). Everything else comes from Dart. */
 object WidgetCopy {
-    const val SAMPLE = "Sample data"
     const val NO_DATA = "No data yet"
     const val START = "Open Airlog to get started"
     const val LATEST_PLAN = "Open Airlog for the latest plan"
@@ -268,23 +267,6 @@ class TileCanvas(private val context: Context, val dw: Float, val dh: Float, val
         }
     }
 
-    private fun chipPaint(): TextPaint =
-        paint(WidgetStyle.type(context, "micro"), WidgetStyle.ink(context, "chipInk", 0xFFF7B955.toInt()))
-
-    /** The "Sample data" chip's width (SampleDataChip: 10 px side padding). */
-    fun sampleChipWidth(): Float = chipPaint().measureText(WidgetCopy.SAMPLE) + 2 * CHIP_PAD_X
-
-    /** The "Sample data" chip (amber wash, micro 600), its left edge at [left]. */
-    fun sampleChip(left: Float, top: Float) {
-        val p = chipPaint()
-        val w = sampleChipWidth()
-        val h = CHIP_HEIGHT
-        roundRect(left, top, left + w, top + h, h / 2, WidgetStyle.ink(context, "chipBg", 0x29F79009))
-        val fm = p.fontMetrics
-        val base = top + h / 2 - (fm.ascent + fm.descent) / 2
-        canvas.withClip { drawText(WidgetCopy.SAMPLE, left + CHIP_PAD_X, base, p) }
-    }
-
     private inline fun Canvas.withClip(block: Canvas.() -> Unit) {
         save()
         clipPath(outline)
@@ -298,9 +280,6 @@ class TileCanvas(private val context: Context, val dw: Float, val dh: Float, val
     val drawCanvas: Canvas get() = canvas
 
     companion object {
-        const val CHIP_PAD_X = 10f
-        const val CHIP_HEIGHT = 21f
-
         /**
          * tilePath (lib/design/components/tile.dart), ported from
          * figma-squircle (MIT). The circular arc of each corner is centred on
@@ -453,28 +432,23 @@ abstract class AirlogTileProvider : HomeWidgetProvider() {
     open val layoutId: Int = R.layout.airlog_tile_widget
 
     /**
-     * The top-right corner of a medium tile: the "Sample data" chip in demo
-     * mode, and the day shown when it isn't today (QA-08) or "No data yet".
-     * Returns the left edge of what it drew.
+     * The top-right corner of a medium tile: the day shown when it isn't
+     * today (QA-08) or "No data yet". Demo mode draws the same as connected
+     * mode (no data-mode label on widgets). Returns the left edge of what it
+     * drew.
      */
     protected fun headerRight(
         context: Context,
         tile: TileCanvas,
         snap: WidgetSnapshot,
         right: Float,
-        chipTop: Float,
         baseline: Float,
         notes: Boolean = true,
     ): Float {
         var x = right
-        if (snap.demo) {
-            val w = tile.sampleChipWidth()
-            tile.sampleChip(x - w, chipTop)
-            x -= w + 8f
-        }
         val note = when {
             !notes -> null
-            snap.empty -> if (snap.demo) null else WidgetCopy.NO_DATA
+            snap.empty -> WidgetCopy.NO_DATA
             snap.stale -> WidgetCopy.from(snap.date)
             else -> null
         }

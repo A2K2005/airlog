@@ -25,7 +25,9 @@ import '../../../domain/models.dart';
 import '../../db/raw_rows.dart';
 
 const String kDemoOrigin = 'app.airlog.demo';
-const String kDemoDevice = 'Fitbit Air (demo)';
+// Display name only; no "(demo)": the data mode is labelled only on the
+// data-mode screens (PRODUCT_PLAN §7, 2026-10-01).
+const String kDemoDevice = 'Fitbit Air';
 
 /// Bump when the generator changes so stored demo data is re-seeded.
 const int kDemoGeneratorVersion = 2;

@@ -3,7 +3,7 @@
 // by default (Claude or Gemini is connected in Settings → Coach).
 //
 //  * Header: the title, Conversations and New chat. Nothing else (no
-//    data-mode label: sample data is shown app-wide).
+//    data-mode label: only the data-mode screens label it).
 //  * Empty: "Ask about your data", what the engine can do, the starters,
 //    and one dismissible card nudging towards Claude or Gemini.
 //  * Messages: questions; answers as a short reply in plain text (the
@@ -370,8 +370,8 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
       backgroundColor: p.bg,
       appBar: AppBar(
         title: const Text(ChatCopy.title),
-        // No data-mode label in the chat: sample data is shown app-wide
-        // (the Today strip, Data sources).
+        // No data-mode label in the chat: only the data-mode screens
+        // (onboarding choice, Settings, Data sources) label it.
         actions: [
           AppIconButton(
             icon: Icons.history_rounded,

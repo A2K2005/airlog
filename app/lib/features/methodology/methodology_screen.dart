@@ -675,8 +675,7 @@ class MethodologyScreen extends StatelessWidget {
               'one), never a mix. Your usual is built only from nights '
               'measured the same way by the same app as today. So if you '
               'switch apps, or go from all-night to deep-sleep HRV, Airlog '
-              'learns your usual again instead of mixing the two. Sample data '
-              'and your data are stored apart.',
+              'learns your usual again instead of mixing the two.',
           [
             const ExplainSection(
               title: 'Where it comes from',
@@ -846,10 +845,7 @@ class MethodologyScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('How scores work'),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text('How scores work')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: [

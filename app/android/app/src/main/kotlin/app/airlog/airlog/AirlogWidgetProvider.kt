@@ -22,7 +22,7 @@ class AirlogWidgetProvider : AirlogTileProvider() {
         tile.glow(WidgetStyle.recipe(context, widget = "today"))
         val primary = WidgetStyle.ink(context, "primary")
         tile.text("Today", 20f, 36f, tile.paint(WidgetStyle.type(context, "tileTitle"), primary))
-        headerRight(context, tile, snap, right = 328f, chipTop = 20f, baseline = 35f)
+        headerRight(context, tile, snap, right = 328f, baseline = 35f)
 
         val label = tile.paint(WidgetStyle.type(context, "tileLabel"), primary)
         val dots = tile.paint(WidgetStyle.type(context, "dot32"), primary)
@@ -45,7 +45,6 @@ class AirlogWidgetProvider : AirlogTileProvider() {
 
         return listOfNotNull(
             "Airlog Today",
-            if (snap.demo) WidgetCopy.SAMPLE else null,
             if (snap.stale) WidgetCopy.from(snap.date) else null,
             "Recovery " + (snap.recovery?.let { "$it percent, ${snap.recStatus}" } ?: snap.recStatus),
             "Strain " + snap.dots("strain").let { if (it == WidgetCopy.MISSING) "no score" else "$it out of 21" },

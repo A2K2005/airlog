@@ -2,8 +2,8 @@
 // data check. A hero to run it; three counts; what the numbers mean; the app
 // each measurement reads; then, per data type, the records, how often they
 // arrive, which apps wrote them and the devices. Power-user detail (package
-// and type names) stays: it is data. In sample-data mode everything is
-// labelled as sample.
+// and type names) stays: it is data. Demo mode looks the same as connected
+// mode (the data mode is labelled only on the data-mode screens).
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,10 +31,7 @@ class DiagnosticsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Diagnostics'),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text('Diagnostics')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: [
@@ -93,33 +90,6 @@ class DiagnosticsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          if (s.demo) ...[
-            const SizedBox(height: S.x3),
-            AppCard(
-              tone: CardTone.tinted,
-              accent: C.amber,
-              padding: const EdgeInsets.fromLTRB(S.x3, S.x2, S.x3, S.x2),
-              child: Row(
-                children: [
-                  const IconBadge(
-                    icon: Icons.science_outlined,
-                    accent: C.amber,
-                    size: 32,
-                  ),
-                  const SizedBox(width: S.x3),
-                  Expanded(
-                    child: Text(
-                      'This checks the sample data, not a tracker.',
-                      style: F.bodySm.copyWith(
-                        color: p.ink,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: S.x5),
           if (s.running && r == null)
             const AppCard(child: SkeletonLines(lines: 6)),
@@ -153,7 +123,7 @@ class DiagnosticsScreen extends ConsumerWidget {
       ]),
       const SizedBox(height: S.x3),
       Text(
-        '${s.demo ? 'Sample data · ' : ''}Checked ${dayTime(r.generatedAt)} · '
+        'Checked ${dayTime(r.generatedAt)} · '
         'last ${r.windowDays} days · ${r.types.length} kinds of data',
         style: F.tab(F.cap).copyWith(color: p.ink3),
       ),
@@ -208,7 +178,6 @@ class DiagnosticsScreen extends ConsumerWidget {
           padding: const EdgeInsets.only(bottom: S.x3),
           child: _TypeCard(
             stat: t,
-            demo: s.demo,
             inUse: {for (final row in s.sources) row.chosen},
           ),
         ),
@@ -332,13 +301,8 @@ class _Verdict extends StatelessWidget {
 }
 
 class _TypeCard extends StatelessWidget {
-  const _TypeCard({
-    required this.stat,
-    required this.demo,
-    this.inUse = const {},
-  });
+  const _TypeCard({required this.stat, this.inUse = const {}});
   final DiagnosticsTypeStat stat;
-  final bool demo;
 
   /// Apps (display names or packages) that some metric reads.
   final Set<String> inUse;
@@ -446,8 +410,6 @@ class _TypeCard extends StatelessWidget {
                     const SizedBox(width: S.x2),
                     if (inUse.contains(o.key))
                       StatePill.tone(PillTone.good, 'In use')
-                    else if (demo)
-                      StatePill.tone(PillTone.attention, 'Sample')
                     else
                       StatePill.tone(PillTone.off, 'Available'),
                   ],

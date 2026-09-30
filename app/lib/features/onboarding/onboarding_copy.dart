@@ -31,7 +31,7 @@ abstract final class OnboardingCopy {
   static const heroStatB = 'Resting HR vs usual';
   static const heroValueB = '−3 bpm';
   static const heroLabel =
-      'Sample Recovery: your body is ready. 78 percent, Good. HRV 13% above '
+      'Recovery: your body is ready. 78 percent, Good. HRV 13% above '
       'your usual. Resting heart rate 3 bpm below your usual.';
 
   static const recovery = 'Recovery';
@@ -85,8 +85,7 @@ abstract final class OnboardingCopy {
   static const sampleTitle = 'Try sample data';
   static const sampleBody = 'Look around with 90 days of sample data.';
   static const sampleBusy = 'Setting up sample data…';
-  static const sampleLabel =
-      '$sampleTitle. $sampleBody Every screen is marked Sample data.';
+  static const sampleLabel = '$sampleTitle. $sampleBody';
 
   static const birthYear = 'Birth year';
   static const birthYearCaption = 'Optional · for ages 18+';

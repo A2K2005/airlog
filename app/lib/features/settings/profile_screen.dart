@@ -62,10 +62,7 @@ class ProfileScreen extends ConsumerWidget {
     DateTime now,
   ) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text('Profile')),
       body: d == null
           ? ListView(
               padding: const EdgeInsets.all(S.gutter),

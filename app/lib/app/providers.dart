@@ -69,7 +69,8 @@ final focusedDateProvider = FutureProvider<String?>((ref) async {
   return ref.watch(latestDateProvider.future);
 });
 
-/// Demo vs live, for the persistent DemoBadge in the shell. [ui, additive]
+/// Demo vs live, for the data-mode screens (Settings, Data sources) and the
+/// demo-aware wording (PreparingNote). [ui, additive]
 /// Re-read on every revision bump (switching mode is expected to bump it).
 final dataModeProvider = Provider<DataMode>((ref) {
   ref.watch(revisionProvider);

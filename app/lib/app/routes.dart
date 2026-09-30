@@ -86,10 +86,7 @@ class TabPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: P.of(context).bg,
-    appBar: AppBar(
-      toolbarHeight: S.tap,
-      actions: SampleDataChip.action(context),
-    ),
+    appBar: AppBar(toolbarHeight: S.tap),
     body: child,
   );
 }

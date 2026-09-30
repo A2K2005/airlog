@@ -6,8 +6,8 @@
 //
 // Dark only, like the design: [themeMode] is accepted for source
 // compatibility (tests pinned light or dark) and every mode gets the dark
-// theme. The app root also tells every screen whether it is showing sample
-// data (SampleDataScope), so each header carries the "Sample data" chip.
+// theme. The app root also provides the data mode (SampleDataScope) for the
+// data-mode screens (Settings, Data sources), the only ones that label it.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

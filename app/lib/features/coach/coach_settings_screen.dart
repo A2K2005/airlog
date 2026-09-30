@@ -145,10 +145,7 @@ class CoachSettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: p.bg,
-      appBar: AppBar(
-        title: const Text(CoachSettingsCopy.title),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text(CoachSettingsCopy.title)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: [

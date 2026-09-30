@@ -81,6 +81,8 @@ String hcTypeName(String key) => switch (key) {
   'DISTANCE_DELTA' => 'Distance',
   'TOTAL_CALORIES_BURNED' => 'Calories',
   'OXYGEN_SATURATION' => 'SpO₂',
+  // The demo seed's one log line covers every kind of data.
+  'demo' => 'All data',
   _ =>
     key
         .toLowerCase()
@@ -442,7 +444,9 @@ abstract final class CoachCopy {
       'You’ve used today’s limit for your AI provider. It resets tomorrow. '
       'The on-phone coach still answers.';
 
-  /// The tag on coach answers and insight cards in demo mode.
+  /// The old demo-mode tag. No coach answer or insight card shows it now
+  /// (the data mode is labelled only on the data-mode screens); tests check
+  /// that it stays absent.
   static const sampleData = 'Sample data';
 }
 

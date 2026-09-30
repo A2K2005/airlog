@@ -200,12 +200,9 @@ List<String> buildVerdicts(
           : 'Blood oxygen: none in Health Connect → Recovery skips the '
                 'low-oxygen check',
     );
-  } else {
-    v.add(
-      'Demo data: Sample data: a pretend tracker. Connect Health Connect to '
-      'check your real one.',
-    );
   }
+  // Demo mode adds no note of its own: the data mode is labelled only on
+  // the data-mode screens (PRODUCT_PLAN §7, 2026-10-01).
   return v;
 }
 

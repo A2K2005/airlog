@@ -418,13 +418,6 @@ class _Welcome extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Explicit: a fresh install is live, so the scope's
-                        // chip would not show. This tile is always sample.
-                        Semantics(
-                          container: true,
-                          child: const SampleDataChip(),
-                        ),
-                        const SizedBox(height: S.x2),
                         ReadinessTile(
                           title: OnboardingCopy.heroTitle,
                           score: OnboardingCopy.heroScore,
@@ -613,7 +606,7 @@ class _Choose extends StatelessWidget {
                 body: busy
                     ? OnboardingCopy.sampleBusy
                     : OnboardingCopy.sampleBody,
-                // The real chip: the exact label every screen will carry.
+                // The chip Settings and Data sources show in demo mode.
                 marker: const SampleDataChip(),
                 glow: GlowRecipes.m19,
                 onTap: onDemo,

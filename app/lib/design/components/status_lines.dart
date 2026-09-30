@@ -1,11 +1,13 @@
 // The honesty lines that frame every day screen:
 //   FreshnessLine      "Latest data from your tracker 12 min ago · synced 2 min ago"
 //   CalibrationBanner  "Learning your usual · night 9 of 14"
-//   DemoBadge          a persistent "Sample data" pill
-//   PreparingNote      "Preparing 90 days of sample data…" (first launch)
+//   DemoBadge          a "Sample data" pill (gallery only: the data mode is
+//                      labelled only on the data-mode screens)
+//   PreparingNote      "Getting your scores ready…" (first launch)
 
 import 'package:flutter/material.dart';
 
+import '../../domain/models.dart' show SourceKind;
 import '../../domain/repositories.dart' show SyncPhase, SyncStatus;
 import '../../domain/results.dart' show Calibration;
 import '../tokens/tokens.dart';
@@ -62,11 +64,14 @@ class FreshnessLine extends StatelessWidget {
     required DateTime now,
     VoidCallback? onTap,
   }) {
-    if (s.lastDataByApp.isEmpty) {
+    // The demo source has no app line: demo mode reads like one tracker.
+    final apps = s.lastDataByApp.entries
+        .where((e) => e.key != SourceKind.demo.label)
+        .toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    if (apps.isEmpty) {
       return [FreshnessLine.fromStatus(s, now: now, onTap: onTap)];
     }
-    final apps = s.lastDataByApp.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
     return [
       for (final e in apps)
         FreshnessLine(
@@ -76,8 +81,7 @@ class FreshnessLine extends StatelessWidget {
           lastSyncAt: s.lastSyncAt,
           syncing: s.phase == SyncPhase.syncing,
           error: s.phase == SyncPhase.error ? readError : null,
-          // The watermark calls it sample data; so does the line.
-          source: e.key == 'Demo data' ? 'Sample data' : e.key,
+          source: e.key,
           compact: true,
           onTap: onTap,
         ),
@@ -269,7 +273,8 @@ class CalibrationBanner extends StatelessWidget {
   }
 }
 
-/// Persistent pill shown whenever the app is showing synthetic data.
+/// A "Sample data" pill. No screen shows it now (the data mode is labelled
+/// only on the data-mode screens); kept for the gallery.
 class DemoBadge extends StatelessWidget {
   const DemoBadge({super.key, this.label = 'Sample data', this.onTap});
   final String label;
@@ -318,26 +323,27 @@ class PreparingNote extends StatelessWidget {
     this.icon = Icons.hourglass_top_rounded,
   });
 
-  /// [s]'s message when the data layer gave one, else a mode-specific line.
+  /// Live: [s]'s message when the data layer gave one, else [liveTitle].
+  /// Demo: always [demoTitle] (the data layer's seed message names sample
+  /// data, which only the data-mode screens mention).
   factory PreparingNote.fromStatus(
     SyncStatus s, {
     Key? key,
     required bool demo,
   }) => PreparingNote(
     key: key,
-    title: (s.message?.trim().isNotEmpty ?? false)
-        ? s.message!.trim()
-        : demo
+    title: demo
         ? demoTitle
+        : (s.message?.trim().isNotEmpty ?? false)
+        ? s.message!.trim()
         : liveTitle,
-    icon: demo ? Icons.science_outlined : Icons.hourglass_top_rounded,
   );
 
   /// True while [s] is syncing and the screen has nothing to show yet.
   static bool shows(SyncStatus? s, {required bool hasData}) =>
       !hasData && s?.phase == SyncPhase.syncing;
 
-  static const demoTitle = 'Preparing 90 days of sample data…';
+  static const demoTitle = 'Getting your scores ready…';
   static const liveTitle = 'Reading your data from Health Connect…';
   static const defaultBody =
       'This happens once, on first launch, and takes a few seconds. Your '

@@ -203,10 +203,7 @@ class CoachMemoryScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: p.bg,
-      appBar: AppBar(
-        title: const Text('What Coach knows'),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text('What Coach knows')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: body,

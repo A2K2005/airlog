@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 
 import '../tokens/tokens.dart';
-import 'sample_data.dart';
 import 'surfaces.dart';
 
 /// The large title at the top of a tab ("Today") with trailing actions
@@ -47,10 +46,6 @@ class ScreenHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              if (SampleDataScope.of(context)) ...[
-                const SampleDataChip(),
-                const SizedBox(width: S.x1),
-              ],
               ...actions,
             ],
           ),

@@ -10,8 +10,8 @@
 // (a screen test without coach overrides), when "Coach messages" is Off, and
 // when the "Show coach" master switch is off. No spinner, no error card.
 //
-// InsightCard is one note: the kind chip ("Sample data" in demo mode, and
-// "AI summary" on an AI-reworded note, which v1 never makes), the headline,
+// InsightCard is one note: the kind chip (and "AI summary" on an AI-reworded
+// note, which v1 never makes; no data-mode tag), the headline,
 // body, labelled bullets and metric chips, "Discuss" (opens the chat seeded
 // with the card; nothing is sent until the user asks), and ⋮ (Hide this
 // card, Why am I seeing this?, Coach messages settings). A note that used a memory says so, and the chip
@@ -230,8 +230,8 @@ Future<void> _open(
   await Navigator.of(context).pushNamed(route);
 }
 
-/// True in demo mode: the numbers are synthetic, so coach answers and cards
-/// carry a "Sample data" tag. False when the data layer is not wired.
+/// True in demo mode. Cards carry no data-mode tag (only the data-mode
+/// screens label it). False when the data layer is not wired.
 bool isSampleData(WidgetRef ref) {
   try {
     return ref.watch(dataModeProvider) == DataMode.demo;
@@ -345,7 +345,6 @@ class _InsightCardState extends ConsumerState<InsightCard> {
     }
     final p = P.of(context);
     final i = _i;
-    final demo = isSampleData(ref);
     final accent = insightColor(i.kind);
     final facts = i.usedMemoryIds.isEmpty
         ? const <MemoryFact>[]
@@ -409,11 +408,6 @@ class _InsightCardState extends ConsumerState<InsightCard> {
                         color: accent,
                         icon: insightIcon(i.kind),
                       ),
-                      if (demo)
-                        const DemoBadge(
-                          key: ValueKey('insight-sample'),
-                          label: CoachCopy.sampleData,
-                        ),
                       if (i.source == InsightSource.llm)
                         const StatePill(
                           key: ValueKey('insight-ai-label'),

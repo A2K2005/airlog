@@ -60,7 +60,6 @@ class RecoveryScreen extends ConsumerWidget {
           s?.result?.withoutHrv == true ? 'Recovery · without HRV' : 'Recovery',
         ),
         actions: [
-          ...SampleDataChip.action(context),
           AppIconButton(
             icon: Icons.info_outline_rounded,
             semanticLabel: 'How Recovery works',

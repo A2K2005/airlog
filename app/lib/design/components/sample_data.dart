@@ -1,7 +1,8 @@
-// "Sample data": the watermark every screen carries while the app runs on
-// the demo generator (PRODUCT_PLAN §7, "Demo data"). The app root provides
-// the mode through [SampleDataScope]; components read it without touching a
-// provider, and [ScreenHeader] and [SampleDataChip.action] place the chip.
+// "Sample data": the chip for the data-mode screens only (the onboarding
+// choice, Settings, Data sources; PRODUCT_PLAN §7, 2026-10-01). Every other
+// screen renders demo mode exactly like connected mode. The app root
+// provides the mode through [SampleDataScope]; [SampleDataChip.action]
+// places the chip in those screens' AppBars.
 
 import 'package:flutter/material.dart';
 

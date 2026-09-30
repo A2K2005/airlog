@@ -90,7 +90,7 @@ class ProvenanceChip extends StatelessWidget {
     SourceKind.ble => Icons.bluetooth_rounded,
     SourceKind.takeout => Icons.archive_outlined,
     SourceKind.context => Icons.apps_rounded,
-    SourceKind.demo => Icons.science_outlined,
+    SourceKind.demo => Icons.sensors_rounded,
   };
 
   @override

@@ -51,7 +51,7 @@ Each widget is one fixed-aspect tile, as in the design (tiles never stretch). Th
 | Fresh | Values as above |
 | Stale (the day shown isn't today) | The values stay, labelled with the day ("From 29 Sep") in the caption or eyebrow. The plan widget shows its planner-built "Waiting for today's data" state (the planner is itself stale-aware) |
 | Empty (no data at all) | `--` in every dot slot, and a caption of "No data yet"; the plan widget shows "Open Airlog to get started" |
-| Sample data (demo mode) | A **"Sample data"** chip on every widget, drawn like `SampleDataChip` (amber wash, 10 sp, weight 600). The Today widget's plates keep their numbers. The chip is never hidden in demo mode |
+| Sample data (demo mode) | Drawn exactly like connected mode: no chip, no "Sample data" in the content description, and "No data yet" when empty. Demo mode is labelled only on the app's data-mode screens (PRODUCT_PLAN §7, 2026-10-01; the chip that used to sit here was removed then) |
 
 The only widget-specific copy is "Open Airlog for the latest plan", "Open Airlog to get started", "No data yet" and "From <d MMM>". It lives in one Kotlin object (`WidgetCopy`), next to the renderer.
 

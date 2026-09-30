@@ -75,10 +75,7 @@ class LiveScreen extends ConsumerWidget {
         if (leave == true && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(title),
-          actions: SampleDataChip.action(context),
-        ),
+        appBar: AppBar(title: Text(title)),
         body: SafeArea(top: false, child: body),
       ),
     );
@@ -140,28 +137,21 @@ class _Intro extends StatelessWidget {
         const SizedBox(height: S.x6),
         const OverLabel('Before you start'),
         const SizedBox(height: S.x3),
-        SettingsTile(
+        const SettingsTile(
           children: [
-            const SettingsRow(
+            SettingsRow(
               icon: Icons.looks_one_outlined,
               accent: DomainColors.strain,
               title: 'Turn on “Share heart rate”',
               subtitle: 'In your tracker’s app. Turn it off after.',
               trailing: _ShareInfo(),
             ),
-            const SettingsRow(
+            SettingsRow(
               icon: Icons.looks_two_outlined,
               accent: DomainColors.strain,
               title: 'Wear your tracker snug',
               subtitle: 'Keep your phone close.',
             ),
-            if (state.demo)
-              const SettingsRow(
-                icon: Icons.science_outlined,
-                accent: C.amber,
-                title: 'Sample data',
-                subtitle: 'A pretend tracker stands in for yours.',
-              ),
           ],
         ),
         const SizedBox(height: S.x6),

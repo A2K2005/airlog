@@ -49,7 +49,7 @@ class DemoLiveHrService implements LiveHrService {
 
   static const BleDevice device = BleDevice(
     'demo-fitbit-air',
-    'Fitbit Air (demo)',
+    'Fitbit Air',
     -58,
   );
 

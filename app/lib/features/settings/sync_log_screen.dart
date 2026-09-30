@@ -112,15 +112,13 @@ class SyncLogScreen extends ConsumerWidget {
         ),
       ];
     } else if (v != null) {
-      body = [
+      body = const [
         EmptyState(
           icon: Icons.receipt_long_outlined,
           title: 'Nothing synced yet',
-          body: v.mode == DataMode.demo
-              ? 'Sample data is made on this phone, so there’s nothing to '
-                    'sync. Connect Health Connect to see each sync here.'
-              : 'Each sync lists every kind of data it read, with a count, '
-                    'so anything missing is easy to spot.',
+          body:
+              'Each sync lists every kind of data it read, with a count, '
+              'so anything missing is easy to spot.',
         ),
       ];
     } else if (async.hasError) {
@@ -136,10 +134,7 @@ class SyncLogScreen extends ConsumerWidget {
     }
     return Scaffold(
       backgroundColor: p.bg,
-      appBar: AppBar(
-        title: const Text('Sync log'),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text('Sync log')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: body,

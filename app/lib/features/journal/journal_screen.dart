@@ -47,10 +47,7 @@ class JournalScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: p.bg,
-      appBar: AppBar(
-        title: const Text('Journal'),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text('Journal')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x1, S.gutter, S.x12),
         children: body,

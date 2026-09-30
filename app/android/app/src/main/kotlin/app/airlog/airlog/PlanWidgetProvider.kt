@@ -22,7 +22,7 @@ class PlanWidgetProvider : AirlogTileProvider() {
         tile.glow(WidgetStyle.recipe(context, planState = state))
         val left = 20f
         val width = 308f
-        val headerLeft = headerRight(context, tile, snap, right = 328f, chipTop = 16f, baseline = 30f, notes = false)
+        val headerLeft = headerRight(context, tile, snap, right = 328f, baseline = 30f, notes = false)
 
         val eyebrow = listOf(
             if (snap.stale) WidgetCopy.from(snap.date) else "",
@@ -60,7 +60,6 @@ class PlanWidgetProvider : AirlogTileProvider() {
 
         return listOfNotNull(
             "Airlog plan",
-            if (snap.demo) WidgetCopy.SAMPLE else null,
             eyebrow.ifEmpty { null },
             headline,
             action,

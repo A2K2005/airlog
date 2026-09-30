@@ -53,20 +53,12 @@ class RecoveryWidgetProvider : AirlogTileProvider() {
             snap.recBasis,
         ).filter { it.isNotEmpty() }.joinToString(" · ")
         val micro = tile.paint(WidgetStyle.type(context, "tileMicro"), WidgetStyle.ink(context, "tertiary"))
-        if (snap.demo) {
-            // The caption moves up to make room for the "Sample data" chip.
-            tile.textCentered(caption, 82f, 186f, micro, maxWidth = 136f)
-            val w = tile.sampleChipWidth()
-            tile.sampleChip(82f - w / 2, 192f)
-        } else {
-            tile.textCentered(caption, 82f, 194.75f, micro, maxWidth = 136f)
-        }
+        tile.textCentered(caption, 82f, 194.75f, micro, maxWidth = 136f)
 
         return listOfNotNull(
             "Airlog Recovery",
             snap.recovery?.let { "$it percent" },
             caption.ifEmpty { null },
-            if (snap.demo) WidgetCopy.SAMPLE else null,
         ).joinToString(". ")
     }
 }

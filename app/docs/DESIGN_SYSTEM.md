@@ -60,10 +60,10 @@ Also:
 | `FreshnessLine` | `({required now, lastDataAt, lastSyncAt, syncing, error, source = 'your tracker', staleAfterHours = 6, onTap})` |
 | `FreshnessLine.fromStatus` | `(SyncStatus, {required now, onTap})`; helper `ago(t, now)`. A tappable line is a full 48 dp target. A read error says "Couldn’t read your data. Pull to retry." |
 | `FreshnessLine.perApp` | `(SyncStatus, {required now, onTap})`: one compact line per source app (Today's header) |
-| `PreparingNote` | `({required title, body, icon})`; `PreparingNote.fromStatus(SyncStatus, {required demo})` uses the data layer's message, else "Preparing 90 days of sample data…" / "Reading your data from Health Connect…"; `PreparingNote.shows(sync, {required hasData})`. Static, a polite live region |
+| `PreparingNote` | `({required title, body, icon})`; `PreparingNote.fromStatus(SyncStatus, {required demo})`: in demo mode always "Getting your scores ready…" (hourglass, no data-mode wording); live uses the data layer's message, else "Reading your data from Health Connect…"; `PreparingNote.shows(sync, {required hasData})`. Static, a polite live region |
 | `CalibrationBanner` | `({required have, need = 14, body, onTap})` |
 | `CalibrationBanner.of` | `(Calibration)`; also `CalibrationBanner.shouldShow(c)` |
-| `DemoBadge` | `({label = 'Demo data', onTap})`: a card-level marker (insight cards). Coach chat messages carry no data-mode label (sample data is shown app-wide). Screens use `SampleDataChip`, except the coach chat and its history |
+| `DemoBadge` | `({label = 'Sample data', onTap})`: gallery only. No screen, insight card or coach message carries a data-mode label: demo mode is labelled only on the data-mode screens (onboarding choice, Settings, Data sources; PRODUCT_PLAN §7, 2026-10-01) |
 | `ScreenHeader` | `({required title, subtitle, actions = [], below})` |
 | `SectionHeader` | `({required title, subtitle, actionLabel, onAction, trailing})` |
 | `SegmentedRange` | `({required days, required onChanged, options = [7, 30, 90]})` |
@@ -196,7 +196,7 @@ At large text settings, `GlowTile` provides a readable, reflowing alternative ba
 | `BentoGrid` | `({required children, spacing = S.tileGap})`: the 348 grid, scaled uniformly below 360 dp |
 | `GlowPanel` | `({required child, glow = GlowRecipes.m8, padding, onTap, semanticLabel, width = S.tileWideW})`: a glow surface of any height (the plan) |
 | `TileSkeleton` | `({required size, height})`: a tile's footprint while loading |
-| `SampleDataScope` / `SampleDataChip` | The "Sample data" chip. `SampleDataChip.action(context)` returns the chip for an AppBar in sample-data mode, and nothing otherwise. Every Scaffold shows it |
+| `SampleDataScope` / `SampleDataChip` | The "Sample data" chip. `SampleDataChip.action(context)` returns the chip for an AppBar in sample-data mode, and nothing otherwise. Only the data-mode screens show it: the onboarding choice tile, Settings and Data sources (PRODUCT_PLAN §7, 2026-10-01). Every other screen, and the home-screen widgets, render demo mode exactly like connected mode |
 | `PlanTile` | `({required plan (TodayPlan), required onOpen(route)})`. Renders the plan as given: headline, summary, evidence chips, 0–3 actions, and the provisional, stale, evening, basis and re-learning variants |
 
 **Tile → PNG → metric map**

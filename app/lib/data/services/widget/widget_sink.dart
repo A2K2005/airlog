@@ -157,8 +157,9 @@ class WidgetSnapshot {
   static const noData = 'No score';
 
   /// README screenshots only: `--dart-define=AIRLOG_README_SHOTS=true`
-  /// writes [demo] as false so the widgets draw sample values without the
-  /// "Sample data" chip. Off by default; release builds never set it.
+  /// writes [demo] as false. Since 2026-10-01 the widgets draw no data-mode
+  /// label, so this changes nothing on screen. Off by default; release
+  /// builds never set it.
   static const readmeShots = bool.fromEnvironment('AIRLOG_README_SHOTS');
 
   /// What a dot-matrix slot shows without a number. The dot face has no en

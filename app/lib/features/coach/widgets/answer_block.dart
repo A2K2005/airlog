@@ -10,7 +10,7 @@
 //   footer       ⋯ (engine, data, "Checked against your data", what was
 //                shared, report) and a glyph when another engine answered
 //
-// No data-mode label goes on a message: sample data is shown app-wide.
+// No data-mode label goes on a message: only the data-mode screens label it.
 //
 // Principle 6: every number on a card is a cited ref, one of the answer's
 // visuals, or a plan action's own words. Dumb widgets: values and callbacks

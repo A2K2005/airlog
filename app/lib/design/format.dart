@@ -98,9 +98,12 @@ String signed(double v, int decimals, {bool plus = true}) {
 
 /// A source's name as the app shows it. The optional cloud source is
 /// "Enhanced mode" everywhere in the UI (never a provider's API name);
-/// SourceKind.label stays as the data layer's and the coach's name.
+/// SourceKind.label stays as the data layer's and the coach's name. The
+/// demo source reads as a tracker: the data mode is labelled only on the
+/// data-mode screens (PRODUCT_PLAN §7, 2026-10-01).
 String sourceName(SourceKind k) => switch (k) {
   SourceKind.googleHealthApi => 'Enhanced mode',
   SourceKind.ble => 'Bluetooth',
+  SourceKind.demo => 'Your tracker',
   _ => k.label,
 };

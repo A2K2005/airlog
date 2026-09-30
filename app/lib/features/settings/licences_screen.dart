@@ -25,10 +25,7 @@ class LicencesScreen extends ConsumerWidget {
       onTap: () => open(Uri.parse(url)),
     );
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Licences and credits'),
-        actions: SampleDataChip.action(context),
-      ),
+      appBar: AppBar(title: const Text('Licences and credits')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: [
