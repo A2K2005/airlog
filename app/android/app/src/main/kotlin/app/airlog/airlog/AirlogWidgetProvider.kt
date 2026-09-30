@@ -48,8 +48,8 @@ class AirlogWidgetProvider : AirlogTileProvider() {
             if (snap.demo) WidgetCopy.SAMPLE else null,
             if (snap.stale) WidgetCopy.from(snap.date) else null,
             "Recovery " + (snap.recovery?.let { "$it percent, ${snap.recStatus}" } ?: snap.recStatus),
-            "Strain " + snap.dots("strain").let { if (it == WidgetCopy.MISSING) "no score" else "$it of 21" },
-            "Sleep " + snap.dots("sleep").let { if (it == WidgetCopy.MISSING) "no data" else "$it percent ${snap.sleepText}".trim() },
+            "Strain " + snap.dots("strain").let { if (it == WidgetCopy.MISSING) "no score" else "$it out of 21" },
+            "Sleep " + snap.dots("sleep").let { if (it == WidgetCopy.MISSING) "no sleep data" else "$it percent of your goal ${snap.sleepText}".trim() },
         ).joinToString(". ")
     }
 

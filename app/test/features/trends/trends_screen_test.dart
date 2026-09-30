@@ -34,12 +34,16 @@ void main() {
         400,
         scrollable: find.byType(Scrollable).first,
       );
+      // The arrows footnote, in plain words (the test's name lives in the
+      // explain sheet).
+      final footnote = find.textContaining('clear change yet');
       await t.scrollUntilVisible(
-        find.textContaining('Mann–Kendall'),
+        footnote,
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.textContaining('Mann–Kendall'), findsOneWidget);
+      expect(footnote, findsOneWidget);
+      expect(find.textContaining('Mann–Kendall'), findsNothing);
     },
   );
 

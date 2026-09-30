@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../domain/models.dart' show SleepStage, StageSpan;
+import '../format.dart' show clockTextOf, durationWords;
 import '../tokens/tokens.dart';
 import 'axis.dart';
 import 'frame.dart';
@@ -40,16 +41,24 @@ class HypnogramChart extends StatelessWidget {
     return m;
   }
 
-  String _spoken((DateTime, DateTime)? w, Map<SleepStage, double> mins) {
+  String _spoken(
+    (DateTime, DateTime)? w,
+    Map<SleepStage, double> mins,
+    bool h24,
+  ) {
     if (semanticsLabel != null) return semanticsLabel!;
     if (w == null) return '$title. $emptyMessage';
-    return '$title from ${clockOf(w.$1)} to ${clockOf(w.$2)}. '
-        '${[for (final s in Hypnogram.lanes) '${Hypnogram.label(s)} ${axisHm(mins[s] ?? 0)}'].join(', ')}.';
+    return '$title from ${clockTextOf(w.$1, use24h: h24)} to '
+        '${clockTextOf(w.$2, use24h: h24)}. '
+        '${[for (final s in Hypnogram.lanes) '${Hypnogram.label(s)} ${durationWords(mins[s] ?? 0)}'].join(', ')}.';
   }
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
+    // Clock times follow the phone's 12/24-hour setting.
+    final h24 = MediaQuery.alwaysUse24HourFormatOf(context);
+    String tickAt(DateTime t) => axisClockOf(t, use24h: h24);
     final w = Hypnogram.window(stages, start: start, end: end);
     final mins = minutesByStage(stages);
     final cols = Hypnogram.cols(p);
@@ -78,7 +87,8 @@ class HypnogramChart extends StatelessWidget {
         ),
         if (w != null)
           Text(
-            '${clockOf(w.$1)} – ${clockOf(w.$2)}',
+            '${clockTextOf(w.$1, use24h: h24)} – '
+            '${clockTextOf(w.$2, use24h: h24)}',
             style: F.tab(F.cap).copyWith(color: p.ink3),
           ),
       ],
@@ -86,7 +96,7 @@ class HypnogramChart extends StatelessWidget {
 
     return Semantics(
       container: true,
-      label: _spoken(w, mins),
+      label: _spoken(w, mins, h24),
       child: ExcludeSemantics(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -152,11 +162,11 @@ class HypnogramChart extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(clockOf(w.$1), style: tick, maxLines: 1),
+                      child: Text(tickAt(w.$1), style: tick, maxLines: 1),
                     ),
                     Expanded(
                       child: Text(
-                        clockOf(w.$1.add(w.$2.difference(w.$1) * .5)),
+                        tickAt(w.$1.add(w.$2.difference(w.$1) * .5)),
                         style: tick,
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -164,7 +174,7 @@ class HypnogramChart extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        clockOf(w.$2),
+                        tickAt(w.$2),
                         style: tick,
                         textAlign: TextAlign.end,
                         maxLines: 1,
@@ -180,7 +190,8 @@ class HypnogramChart extends StatelessWidget {
                 children: [
                   for (final s in Hypnogram.lanes)
                     LegendSwatch(
-                      label: '${Hypnogram.label(s)} ${axisHm(mins[s] ?? 0)}',
+                      label:
+                          '${Hypnogram.label(s)} ${durationWords(mins[s] ?? 0)}',
                       color: cols[s]!,
                     ),
                 ],

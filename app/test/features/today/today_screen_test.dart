@@ -66,7 +66,7 @@ void main() {
   testWidgets('empty store: explains what to do', (t) async {
     await _pump(t, repo: FakeRepo());
     expect(find.text('No data yet'), findsOneWidget);
-    expect(find.text('Check sources'), findsOneWidget);
+    expect(find.text('Check data sources'), findsOneWidget);
     expect(find.byType(ReadinessTile), findsNothing);
     expect(t.takeException(), isNull);
   });
@@ -141,7 +141,7 @@ void main() {
     expect(rec.score, DotMatrixNumber.missing);
     expect(rec.status, 'Learning');
     final prog = t.widget<ProgressTile>(find.byType(ProgressTile));
-    expect(prog.title, 'Learning your normal');
+    expect(prog.title, 'Learning your usual');
     expect(prog.unit, 'of 14 nights');
   });
 
@@ -152,7 +152,8 @@ void main() {
     await _pump(t, repo: repo);
     expect(_recovery(t).score, isNot(DotMatrixNumber.missing));
     expect(_recovery(t).valueA, '--');
-    expect(find.textContaining('Data notes'), findsOneWidget);
+    expect(_recovery(t).title, 'Recovery · without HRV');
+    expect(find.textContaining('About today’s data'), findsOneWidget);
   });
 
   testWidgets('no HRV and no resting HR: no score, said plainly', (t) async {
@@ -160,8 +161,8 @@ void main() {
     await _pump(t, repo: repo);
     final rec = _recovery(t);
     expect(rec.score, DotMatrixNumber.missing);
-    expect(rec.status, 'No data');
-    expect(find.textContaining('Data notes'), findsOneWidget);
+    expect(rec.status, 'No score');
+    expect(find.textContaining('About today’s data'), findsOneWidget);
   });
 
   testWidgets('planted illness: the alert tile names the metrics', (t) async {

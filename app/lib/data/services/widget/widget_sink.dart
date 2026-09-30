@@ -59,21 +59,21 @@ class WidgetPlan {
   /// (lib/design/tiles/plan_tile.dart; test/data/widget_sink_test.dart
   /// checks they match; data/ may not import design/).
   static List<String> basis(TodayPlan p) => [
+    if (p.relearningSource != null && !p.summaryNamesRelearning)
+      'Learning your ${p.relearningSource} data',
     if (p.phase == PlanPhase.tonight) 'Tonight',
-    if (p.stale) 'Data may be behind',
-    if (p.provisional) 'Provisional',
+    if (p.stale) 'Your data may be out of date',
+    if (p.provisional) 'Early estimate',
     for (final g in p.missingInputs) gapLabel(g),
-    if (p.relearningSource != null && !p.summary.startsWith('Re-learning'))
-      'New source: re-learning your normal (${p.relearningSource})',
   ];
 
   static String gapLabel(InputGap g) => switch (g) {
     InputGap.hrv => 'without HRV',
     InputGap.heartRate => 'without heart rate',
-    InputGap.sleep => 'without sleep',
-    InputGap.respiratoryRate => 'without respiratory rate',
+    InputGap.sleep => 'without sleep data',
+    InputGap.respiratoryRate => 'without breathing rate',
     InputGap.skinTemp => 'without skin temperature',
-    InputGap.spo2 => 'without SpO₂',
+    InputGap.spo2 => 'without blood oxygen',
   };
 
   /// The first planner phase boundary after [now]: 05:00
@@ -136,11 +136,11 @@ class WidgetSnapshot {
   final bool stale;
 
   /// Today's Recovery tile status word: Good / Fair / Low, Learning,
-  /// No data (features/today/today_screen.dart _recoveryTile).
+  /// No score (features/today/today_screen.dart _recoveryTile).
   final String recoveryStatus;
 
-  /// "without HRV", "provisional", "re-learning": the score's basis, as
-  /// Today's Recovery title writes it.
+  /// "without HRV", "early estimate" or "learning" (one at most): the
+  /// score's basis, as Today's Recovery title writes it.
   final List<String> recoveryBasis;
 
   /// StrainResult.targetStrain and whether the score is an estimate
@@ -154,7 +154,7 @@ class WidgetSnapshot {
   /// The plan for the plan widget (null without a day).
   final WidgetPlan? plan;
 
-  static const noData = 'No data';
+  static const noData = 'No score';
 
   /// What a dot-matrix slot shows without a number. The dot face has no en
   /// dash (DotMatrixNumber.missing).
@@ -208,13 +208,16 @@ class WidgetSnapshot {
               RecoveryZone.yellow => 'Fair',
               RecoveryZone.red => 'Low',
             },
+      // One tag at most, by priority, as Today's Recovery tile.
       recoveryBasis: [
-        if (recovery?.withoutHrv == true) 'without HRV',
-        if (recovery != null &&
+        if (recovery?.withoutHrv == true)
+          'without HRV'
+        else if (recovery != null &&
             ((!calibrating && !r.calibration.established) ||
                 recovery.confidence == RecoveryConfidence.low))
-          'provisional',
-        if (plan?.relearningSource != null) 're-learning',
+          'early estimate'
+        else if (plan?.relearningSource != null)
+          'learning',
       ],
       strainTarget: scored ? strain.targetStrain : null,
       strainEstimated: scored && strain.method == StrainMethod.fallback,
@@ -235,7 +238,7 @@ class WidgetSnapshot {
       'strain': strain?.toStringAsFixed(1) ?? '–',
       'sleep': minutes == null || minutes <= 0
           ? '–'
-          : '${minutes ~/ 60}h ${(minutes % 60).toString().padLeft(2, '0')}m',
+          : PlanFormat.hm(minutes.toDouble()),
       'demo': demo,
       'stale': stale,
       'quality': quality.join(' · '),

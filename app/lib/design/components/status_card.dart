@@ -68,10 +68,10 @@ class StatusCard extends StatelessWidget {
       child: Semantics(
         container: true,
         label: [
-          tone == StatusTone.warning ? 'Warning' : 'Note',
+          tone == StatusTone.warning ? 'Heads-up' : 'Note',
           title,
           body,
-          if (fix != null) 'To fix: $fix',
+          if (fix != null) 'How to fix: $fix',
         ].join('. '),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

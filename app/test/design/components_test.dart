@@ -164,10 +164,10 @@ void main() {
         ),
       );
       expect(
-        find.bySemanticsLabel('Recovery 58 percent, provisional'),
+        find.bySemanticsLabel('Recovery 58 percent, early estimate'),
         findsOneWidget,
       );
-      expect(find.text('Provisional'), findsOneWidget);
+      expect(find.text('Early estimate'), findsOneWidget);
     });
 
     testWidgets('no data never shows a number', (t) async {
@@ -343,7 +343,7 @@ void main() {
       expect(find.byIcon(Icons.south_east_rounded), findsOneWidget);
       expect(
         find.bySemanticsLabel(
-          RegExp('Resting HR falling, a significant change'),
+          RegExp('Resting HR falling, a clear change'),
         ),
         findsOneWidget,
       );
@@ -384,7 +384,7 @@ void main() {
       );
       expect(
         fresh.text,
-        'Last data from your tracker 12 min ago · synced 2 min ago',
+        'Latest data from your tracker 12 min ago · synced 2 min ago',
       );
       expect(fresh.stale, isFalse);
       final none = FreshnessLine(now: now);
@@ -395,7 +395,7 @@ void main() {
         lastDataAt: now.subtract(const Duration(hours: 7)),
         syncing: true,
       );
-      expect(syncing.text, 'Last data from your tracker 7 h ago · syncing…');
+      expect(syncing.text, 'Latest data from your tracker 7h ago · syncing…');
       expect(syncing.stale, isTrue);
       await t.pumpWidget(_host(fresh));
       expect(find.bySemanticsLabel(fresh.text), findsOneWidget);
@@ -426,7 +426,10 @@ void main() {
       await t.pumpWidget(
         _host(CalibrationBanner.of(const Calibration(haveNights: 9))),
       );
-      expect(find.text('Baseline night 9 of 14'), findsOneWidget);
+      expect(
+        find.text('Learning your usual · night 9 of 14'),
+        findsOneWidget,
+      );
       expect(
         CalibrationBanner.shouldShow(const Calibration(haveNights: 14)),
         isFalse,
@@ -439,7 +442,11 @@ void main() {
 
     testWidgets('DemoBadge says what it means', (t) async {
       await t.pumpWidget(_host(const DemoBadge()));
-      expect(find.bySemanticsLabel(RegExp('synthetic')), findsOneWidget);
+      expect(find.text('Sample data'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('made-up numbers, not from your tracker')),
+        findsOneWidget,
+      );
     });
   });
 
@@ -465,7 +472,7 @@ void main() {
         ),
       );
       expect(find.text('59'), findsOneWidget);
-      expect(find.text('Above your range'), findsOneWidget);
+      expect(find.text('Above your usual range'), findsOneWidget);
       expect(find.text('+12 vs usual 47'), findsOneWidget);
       expect(find.text('Deep-sleep RMSSD · Enhanced mode'), findsOneWidget);
     });

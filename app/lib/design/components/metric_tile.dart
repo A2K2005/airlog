@@ -63,11 +63,11 @@ class MetricTile extends StatelessWidget {
     final mean = s.baseline?.mean;
     return MetricTile(
       key: key,
-      label: s.kind.label,
+      label: s.kind.title,
       value: v == null || !v.isFinite
           ? null
           : valueText(s.kind, v, decimals: d),
-      unit: s.kind.unit,
+      unit: s.kind.displayUnit,
       delta: s.state == BandState.calibrating
           ? null
           : deltaText(s.kind, v, mean, decimals: d),
@@ -106,7 +106,7 @@ class MetricTile extends StatelessWidget {
     return isSigned(k) ? signed(v, d) : signed(v, d, plus: false);
   }
 
-  /// "+4 vs usual 48", "−0.2 °C vs usual +0.1", "Same as usual"; null
+  /// "+4 vs usual 48", "−0.2 °C vs usual +0.1", "About usual"; null
   /// without a value or a baseline.
   static String? deltaText(
     HealthMetricKind k,
@@ -123,7 +123,7 @@ class MetricTile extends StatelessWidget {
     double r(double x) => double.parse(x.toStringAsFixed(d));
     final dv = signed(r(v) - r(mean), d);
     final usual = valueText(k, mean, decimals: d);
-    if (!dv.startsWith('+') && !dv.startsWith('−')) return 'Same as usual';
+    if (!dv.startsWith('+') && !dv.startsWith('−')) return 'About usual';
     return isSigned(k)
         ? '$dv ${k.unit} vs usual $usual'
         : '$dv vs usual $usual';
@@ -154,10 +154,10 @@ class MetricTile extends StatelessWidget {
   final String? semanticsLabel;
 
   static String bandLabel(BandStatus b) => switch (b) {
-    BandStatus.inBand => 'In your range',
-    BandStatus.above => 'Above your range',
-    BandStatus.below => 'Below your range',
-    BandStatus.calibrating => 'Calibrating',
+    BandStatus.inBand => 'In your usual range',
+    BandStatus.above => 'Above your usual range',
+    BandStatus.below => 'Below your usual range',
+    BandStatus.calibrating => 'Learning',
     BandStatus.noData => 'No data',
     BandStatus.none => '',
   };

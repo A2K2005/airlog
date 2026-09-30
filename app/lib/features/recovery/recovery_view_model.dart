@@ -18,6 +18,7 @@ import '../../design/components/score_ring.dart' show RingState;
 import '../../domain/day_key.dart';
 import '../../domain/engine/notes.dart';
 import '../../domain/engine/recovery.dart';
+import '../../domain/engine/strain.dart' show StrainEngine;
 import '../../domain/models.dart';
 import '../../domain/repositories.dart';
 import '../../domain/results.dart';
@@ -60,14 +61,13 @@ class InputVm {
 
   String fmt(double v) => v.toStringAsFixed(decimals);
 
-  /// "Last night 54 ms · usual 47 ± 8 ms".
+  /// "Last night 54 ms · usual 47 ms" (the spread lives in the ⓘ sheet).
   String get line {
     final t = today == null
         ? 'No reading last night'
         : 'Last night ${fmt(today!)} $unit';
     if (mean == null) return t;
-    final spread = sd == null ? '' : ' ± ${sd!.toStringAsFixed(decimals)}';
-    return '$t · usual ${fmt(mean!)}$spread $unit';
+    return '$t · usual ${fmt(mean!)} $unit';
   }
 }
 
@@ -93,8 +93,8 @@ class ReadinessVm {
 
   String get headline => switch (state) {
     SwcState.within => 'Steady',
-    SwcState.above => 'Above your usual band',
-    SwcState.below => 'Below your usual band',
+    SwcState.above => 'Above your usual range',
+    SwcState.below => 'Below your usual range',
   };
 
   String get body {
@@ -102,15 +102,13 @@ class ReadinessVm {
     final band = '${lowerMs.round()}–${upperMs.round()}\u00A0ms';
     return switch (state) {
       SwcState.within =>
-        'Your 7-night HRV average ($avg) is inside the band of normal '
-            'variation around your baseline ($band).',
+        'Your HRV this week ($avg) is in your usual range ($band).',
       SwcState.below =>
-        'Your 7-night HRV average ($avg) is below the band of normal '
-            'variation around your baseline ($band). A week-long dip is a '
-            'better reason to ease off than any single night.',
+        'Your HRV this week ($avg) is below your usual range ($band). A '
+            'whole week lower is a better reason to ease off than one low '
+            'night.',
       SwcState.above =>
-        'Your 7-night HRV average ($avg) is above the band of normal '
-            'variation around your baseline ($band).',
+        'Your HRV this week ($avg) is above your usual range ($band).',
     };
   }
 }
@@ -146,10 +144,10 @@ class RecoveryState {
   final RingState ringState;
   final String? ringCaption;
 
-  /// "Green · 67 and above".
+  /// "Good · 67–99".
   final String? headline;
 
-  /// What the score means today, with the target strain.
+  /// What the zone means, with the day's effort goal as a range.
   final String? meaning;
   final List<Contribution> contributions;
 
@@ -213,17 +211,19 @@ class RecoveryViewModel extends AsyncNotifier<RecoveryState> {
 
 abstract final class RecoveryMapper {
   static const labels = {
-    'hrv': 'Heart rate variability',
+    'hrv': 'Heart rate variability (HRV)',
     'rhr': 'Resting heart rate',
-    'sleep': 'Sleep performance',
-    'resp': 'Respiratory rate',
+    'sleep': 'Sleep',
+    'resp': 'Breathing rate',
+    RecoveryEngine.sleepingHrKey: 'Sleeping heart rate',
   };
 
   static const _short = {
     'hrv': 'HRV',
-    'rhr': 'resting HR',
+    'rhr': 'resting heart rate',
     'sleep': 'sleep',
-    'resp': 'respiratory rate',
+    'resp': 'breathing rate',
+    RecoveryEngine.sleepingHrKey: 'sleeping heart rate',
   };
 
   static RecoveryState map({
@@ -275,8 +275,8 @@ abstract final class RecoveryMapper {
       inputs: inputs(bundle, keys, byDate),
       readiness: readiness(r.readiness),
       readinessMissing: r.readiness == null
-          ? 'Needs 7 nights of HRV for a baseline and at least 3 of the last '
-                '7 nights.'
+          ? 'Shows up after 7 nights of HRV, with at least 3 in the last '
+                'week.'
           : null,
       history: history,
       historyZones: zones,
@@ -287,18 +287,18 @@ abstract final class RecoveryMapper {
 
   static (RingState, String?) _ring(DayResult r) {
     final rec = r.recovery;
-    if (rec == null) return (RingState.noData, 'No HRV or resting HR');
+    if (rec == null) return (RingState.noData, 'No heart data');
     if (rec.calibrating) {
       return (
         RingState.calibrating,
-        'Baseline night ${r.calibration.haveNights.clamp(0, r.calibration.needNights)} '
+        'Learning · night ${r.calibration.haveNights.clamp(0, r.calibration.needNights)} '
             'of ${r.calibration.needNights}',
       );
     }
     if (!r.calibration.established) {
       return (
         RingState.provisional,
-        'Provisional · baseline night ${r.calibration.haveNights} of '
+        'Early estimate · night ${r.calibration.haveNights} of '
             '${r.calibration.needNights}',
       );
     }
@@ -306,37 +306,44 @@ abstract final class RecoveryMapper {
   }
 
   static String zoneHeadline(RecoveryZone z) => switch (z) {
-    RecoveryZone.green => 'Green · ${RecoveryEngine.greenFrom} and above',
+    RecoveryZone.green => 'Good · ${RecoveryEngine.greenFrom}–99',
     RecoveryZone.yellow =>
-      'Yellow · ${RecoveryEngine.yellowFrom} to ${RecoveryEngine.greenFrom - 1}',
-    RecoveryZone.red => 'Red · below ${RecoveryEngine.yellowFrom}',
+      'Fair · ${RecoveryEngine.yellowFrom}–${RecoveryEngine.greenFrom - 1}',
+    RecoveryZone.red => 'Low · 1–${RecoveryEngine.yellowFrom - 1}',
   };
 
+  /// What the zone means, and the day's effort goal as a range. It describes
+  /// the zone only (a score of 67 doesn't mean every signal was at or above
+  /// your usual) and gives no advice: TodayPlan is the day's only narrator.
   static String meaning(
     RecoveryResult rec,
     StrainResult? strain, {
     required bool isToday,
   }) {
+    final zone = switch (rec.zone) {
+      RecoveryZone.green =>
+        isToday ? 'You’ve recovered well.' : 'You had recovered well that day.',
+      RecoveryZone.yellow =>
+        isToday
+            ? 'You’ve partly recovered.'
+            : 'You had partly recovered that day.',
+      RecoveryZone.red =>
+        isToday
+            ? 'You haven’t fully recovered.'
+            : 'You hadn’t fully recovered that day.',
+    };
     final t = strain?.targetStrain;
-    final target = t == null
-        ? ''
-        : ' Target strain ${isToday ? '' : 'was '}${t.toStringAsFixed(1)}.';
-    return switch (rec.zone) {
-          RecoveryZone.green =>
-            'Last night\'s signals were at or better than your usual. A good '
-                'day for a harder session.',
-          RecoveryZone.yellow =>
-            'Some signals were below your usual. A moderate day fits.',
-          RecoveryZone.red =>
-            'Several signals were well below your usual. A lighter day fits.',
-        } +
-        target;
+    if (t == null) return zone;
+    final (lo, hi) = StrainEngine.targetRange(t);
+    return isToday
+        ? '$zone Effort goal today: $lo–$hi.'
+        : '$zone Effort goal was $lo–$hi.';
   }
 
   static String _unit(String key) => switch (key) {
     'hrv' => 'ms',
-    'rhr' => 'bpm',
-    'resp' => '/min',
+    'rhr' || RecoveryEngine.sleepingHrKey => 'bpm',
+    'resp' => 'breaths/min',
     _ => '%',
   };
 
@@ -357,15 +364,15 @@ abstract final class RecoveryMapper {
           detail: switch (c.key) {
             'sleep' =>
               sleep != null && sleep.hasData
-                  ? '${c.value?.round() ?? 0} % of need · '
+                  ? '${c.value?.round() ?? 0}% of your sleep goal · '
                         '${_hm(sleep.sleptMinutes)} of ${_hm(sleep.needMinutes)}'
-                  : '${c.value?.round() ?? 0} % of need',
+                  : '${c.value?.round() ?? 0}% of your sleep goal',
             _ =>
               c.value == null
                   ? c.detail
                   : c.baseline == null
-                  ? '${fmt(c.key, c.value!)} ${_unit(c.key)} · no baseline yet, '
-                        'scored neutral'
+                  ? '${fmt(c.key, c.value!)} ${_unit(c.key)} · still learning '
+                        'your usual, so half points for now'
                   : '${fmt(c.key, c.value!)} ${_unit(c.key)} · usual '
                         '${fmt(c.key, c.baseline!.mean)} ${_unit(c.key)}',
           },
@@ -380,8 +387,8 @@ abstract final class RecoveryMapper {
     ];
   }
 
-  /// "No respiratory rate last night: its 10 points were shared out across
-  /// the other inputs."
+  /// "No breathing rate last night, so its 10 points went to your other
+  /// signals."
   static String? reweightNote(RecoveryResult rec) {
     final present = {for (final c in rec.components) c.key};
     final missing = [
@@ -397,21 +404,20 @@ abstract final class RecoveryMapper {
     final list = names.length == 1
         ? names.single
         : '${names.sublist(0, names.length - 1).join(', ')} or ${names.last}';
-    return 'No $list last night: ${names.length == 1 ? 'its' : 'their'} '
-        '${pts.round()} points were shared out across the other inputs in '
-        'proportion to their weights.';
+    return 'No $list last night, so ${names.length == 1 ? 'its' : 'their'} '
+        '${pts.round()} points went to your other signals.';
   }
 
   static String? neutralNote(RecoveryResult rec) {
     final neutral = [
       for (final c in rec.components)
-        if (c.key != 'sleep' && c.baseline == null) _short[c.key]!,
+        if (c.key != 'sleep' && c.baseline == null)
+          _short[c.key] ?? c.label,
     ];
     if (neutral.isEmpty) return null;
-    return 'No baseline yet for ${neutral.join(' and ')}, so '
-        '${neutral.length == 1 ? 'it scores' : 'they score'} a neutral half '
-        'of ${neutral.length == 1 ? 'its' : 'their'} points until there are '
-        'nights to compare with.';
+    return 'Airlog is still learning your usual ${neutral.join(' and ')}, '
+        'so ${neutral.length == 1 ? 'it gets' : 'they get'} half points for '
+        'now.';
   }
 
   static HealthMetricStatus? _status(DayResult? r, HealthMetricKind k) {
@@ -436,7 +442,7 @@ abstract final class RecoveryMapper {
       return InputVm(
         key: key,
         label: labels[key]!,
-        unit: kind.unit,
+        unit: kind.displayUnit,
         decimals: _decimals(key),
         values: [for (final k in keys) _status(byDate[k]?.result, kind)?.value],
         today: s?.value,
@@ -469,8 +475,8 @@ abstract final class RecoveryMapper {
             : null,
         provenance: bundle.record.provenance[Metric.sleep],
         footnote:
-            'No personal band: performance is hours slept against the '
-            'night\'s sleep target (100 % = target met).',
+            'No usual range here. This is how much of your sleep goal you got '
+            '(100% means you met it).',
       ),
       banded('resp', HealthMetricKind.respiratoryRate, Metric.respiratoryRate),
     ];
@@ -489,8 +495,6 @@ abstract final class RecoveryMapper {
     );
   }
 
-  static final _calibratingTitle = Notes.recoveryCalibrating(0, '').title;
-
   /// Notes about Recovery's own inputs; setup and strain notes live elsewhere.
   static List<StatusNote> notes(DayResult r) => [
     for (final n in r.notes)
@@ -503,13 +507,13 @@ abstract final class RecoveryMapper {
             'spo2',
             'skin_temp',
           }.contains(n.metric) &&
-          n.title != _calibratingTitle)
+          !Notes.isCalibrating(n))
         n,
   ];
 
   static String _hm(double minutes) {
     final t = minutes.round(), h = t ~/ 60, m = t % 60;
-    if (h == 0) return '${m}m';
+    if (h == 0) return '$m min';
     return m == 0 ? '${h}h' : '${h}h ${m}m';
   }
 }

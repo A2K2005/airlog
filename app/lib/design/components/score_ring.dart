@@ -156,8 +156,8 @@ class _ScoreRingState extends State<ScoreRing> {
     if (widget.caption != null) return widget.caption!;
     return switch (widget.state) {
       RingState.measured => '',
-      RingState.provisional => 'Provisional',
-      RingState.calibrating => 'Calibrating',
+      RingState.provisional => 'Early estimate',
+      RingState.calibrating => 'Learning',
       RingState.loading => '',
       RingState.noData => '',
     };
@@ -169,9 +169,9 @@ class _ScoreRingState extends State<ScoreRing> {
     final unit = widget.unit == '%' ? ' percent' : (widget.unit ?? '');
     return switch (widget.state) {
       RingState.measured => '${widget.label} $n$unit',
-      RingState.provisional => '${widget.label} $n$unit, provisional',
+      RingState.provisional => '${widget.label} $n$unit, early estimate',
       RingState.calibrating =>
-        '${widget.label} calibrating${_caption.isEmpty || _caption == 'Calibrating' ? '' : ', $_caption'}',
+        '${widget.label} learning${_caption.isEmpty || _caption == 'Learning' ? '' : ', $_caption'}',
       RingState.loading => '${widget.label} loading',
       RingState.noData => '${widget.label}: no data',
     };

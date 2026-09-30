@@ -317,9 +317,8 @@ class HealthConnectPluginSource implements HealthConnectSource {
       }
       if (raw.isEmpty) return recs;
       if (recs.isEmpty) {
-        throw StateError(
-          'Provider returned records but the plugin decoded none',
-        );
+        // The provider returned records but the plugin decoded none.
+        throw StateError('Couldn’t read these records.');
       }
       final meta = <String, HcRecordMeta>{
         for (final m in raw)
@@ -348,7 +347,8 @@ class HealthConnectPluginSource implements HealthConnectSource {
         throw SourceException(
           SourceKind.healthConnect,
           type.key,
-          'An empty background read cannot be verified; retry when Airlog opens',
+          // An empty background read can't be verified.
+          'Will try again when you open Airlog.',
           status: 'skipped',
         );
       }

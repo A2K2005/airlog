@@ -40,11 +40,17 @@ class BedtimeVm {
     required this.debtMinutes,
     required this.debtShareMinutes,
     required this.strainMinutes,
+    this.bedMinutes,
+    this.wakeMinutes,
   });
 
-  /// "21:45" / "06:51".
+  /// "21:45" / "06:51" (24-hour; the card formats [bedMinutes] and
+  /// [wakeMinutes] the way the phone is set).
   final String bedtime, wake;
   final double needMinutes, debtMinutes, debtShareMinutes, strainMinutes;
+
+  /// Minutes since midnight (any range), for 12/24-hour display.
+  final double? bedMinutes, wakeMinutes;
 }
 
 class SleepState {
@@ -270,6 +276,8 @@ abstract final class SleepMapper {
     return BedtimeVm(
       bedtime: clock(bed),
       wake: clock(wake),
+      bedMinutes: bed,
+      wakeMinutes: wake,
       needMinutes: b.projectedNeedMinutes,
       debtMinutes: b.debtMinutes,
       debtShareMinutes: parts.debtMinutes,
@@ -285,10 +293,10 @@ abstract final class SleepMapper {
   }
 }
 
-/// "7h 2m" / "45m".
+/// "7h 2m" / "45 min".
 String sleepHm(double minutes) {
   if (!minutes.isFinite) return '';
   final t = minutes.round(), h = t ~/ 60, m = t % 60;
-  if (h == 0) return '${m}m';
+  if (h == 0) return '$m min';
   return m == 0 ? '${h}h' : '${h}h ${m}m';
 }

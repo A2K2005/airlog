@@ -90,21 +90,23 @@ List<String> buildVerdicts(
   final hr = stats['HEART_RATE'];
   if (hr == null || records('HEART_RATE') == 0) {
     v.add(
-      '${prefix}No heart rate from any app → no Strain score (Airlog '
-      'scores strain only from measured heart rate)',
+      '${prefix}No heart rate from any app → no Strain score (Airlog only '
+      'scores Strain from measured heart rate)',
     );
   } else {
     final s = hr.medianSpacingSec;
     if (s == null) {
-      v.add('${prefix}HR present (${hr.records} samples) but spacing unknown');
-    } else if (s <= 70) {
       v.add(
-        '${prefix}HR density: 1 sample / ${_fmtSpacing(s)} → full zone-based strain',
+        '${prefix}Heart rate: ${_count(hr.records, 'reading')}, spacing '
+        'unknown',
       );
+    } else if (s <= 70) {
+      v.add('${prefix}Heart rate every ${_fmtSpacing(s)} → full Strain');
     } else {
+      // "sparse" is the Diagnostics screen's concern keyword.
       v.add(
-        '${prefix}HR density: 1 sample / ${_fmtSpacing(s)} → sparse; strain '
-        'is scored from the samples there are and flagged partial',
+        '${prefix}Heart rate only every ${_fmtSpacing(s)} → sparse, so '
+        'Strain uses the readings there are and is marked partial',
       );
     }
   }
@@ -112,28 +114,29 @@ List<String> buildVerdicts(
   final hrv = stats['HEART_RATE_VARIABILITY_RMSSD'];
   if (hrv == null || records('HEART_RATE_VARIABILITY_RMSSD') == 0) {
     v.add(
-      '${prefix}No HRV from any app → Recovery is scored without HRV '
-      '(never estimated)',
+      '${prefix}No HRV from any app → Recovery works without HRV (never '
+      'guessed)',
     );
   } else {
     final s = hrv.medianSpacingSec;
     v.add(
-      '${prefix}HRV: ${hrv.records} RMSSD samples'
-      '${s == null ? '' : ', ~1 / ${_fmtSpacing(s)}'} → nightly HRV = mean inside main sleep',
+      '${prefix}HRV: ${_count(hrv.records, 'reading')}'
+      '${s == null ? '' : ', about every ${_fmtSpacing(s)}'} → nightly HRV '
+      'from your main sleep',
     );
   }
 
   for (final (key, label) in [
-    ('RESTING_HEART_RATE', 'Resting HR'),
-    ('RESPIRATORY_RATE', 'Respiratory rate'),
+    ('RESTING_HEART_RATE', 'Resting heart rate'),
+    ('RESPIRATORY_RATE', 'Breathing rate'),
     ('SKIN_TEMPERATURE', 'Skin temperature'),
     ('SLEEP_SESSION', 'Sleep sessions'),
   ]) {
     final n = records(key);
     v.add(
       n > 0
-          ? '$prefix$label: $n record(s)'
-          : '$prefix$label: none from any app → Recovery re-weights without it',
+          ? '$prefix$label: ${_count(n, 'record')}'
+          : '$prefix$label: none from any app → Recovery works without it',
     );
   }
 
@@ -163,39 +166,48 @@ List<String> buildVerdicts(
               .map((e) => '${name(e.key)} (${e.value})')
               .join(', ');
       v.add(
-        'Several apps write ${s.dataType}: $list → Airlog uses one app per '
-        'metric (Settings → Sources), never a mix',
+        'Several apps share ${s.dataType}: $list → Airlog uses one app per '
+        'measurement (Settings → Data sources), never a mix',
       );
     }
     if (perms != null) {
       v.add(
         perms.historyGranted
-            ? 'History permission granted: backfill reads up to 90 days'
-            : 'No history permission: Health Connect exposes only ~30 days before the first grant',
+            ? 'History allowed: Airlog reads up to 90 days back'
+            : 'No history permission: Health Connect only shares about 30 '
+                  'days before you first allowed it',
       );
       if (!perms.backgroundGranted) {
+        // "not granted" is the Diagnostics screen's concern keyword.
         v.add(
-          'Background reads not granted: sync runs only while the app is open',
+          'Background reads not granted: Airlog syncs only while it’s open',
         );
       }
     }
     if (futureDated > 0) {
       v.add(
-        '$futureDated future-dated record(s) found (e.g. calorie projections) — dropped at ingest',
+        '${_count(futureDated, 'record')} dated in the future (like calorie '
+        'forecasts), ignored',
       );
     }
     final spo2 = records('BLOOD_OXYGEN');
     v.add(
       spo2 > 0
-          ? 'SpO₂: $spo2 record(s) → nightly SpO₂ from the samples inside sleep'
+          ? 'Blood oxygen: ${_count(spo2, 'record')} → nightly value from '
+                'your sleep'
           : googleConfigured
-          ? 'SpO₂: none in Health Connect → comes from the Google Health API'
-          : 'SpO₂: none in Health Connect → Recovery skips the low-oxygen check',
+          ? 'Blood oxygen: none in Health Connect → comes from Enhanced mode'
+          : 'Blood oxygen: none in Health Connect → Recovery skips the '
+                'low-oxygen check',
     );
   } else {
     v.add(
-      'Demo data: synthetic tracker — connect Health Connect for the real probe',
+      'Demo data: Sample data: a pretend tracker. Connect Health Connect to '
+      'check your real one.',
     );
   }
   return v;
 }
+
+/// "1 record", "12 records".
+String _count(int n, String noun) => '$n ${n == 1 ? noun : '${noun}s'}';

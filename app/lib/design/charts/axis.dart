@@ -247,6 +247,22 @@ String clockHm(double minutesOfDay) {
 /// `HH:mm` of a DateTime (local).
 String clockOf(DateTime t) => clockHm((t.hour * 60 + t.minute).toDouble());
 
+/// An axis tick the way the phone is set: `23:00` (24-hour), or `11 pm`
+/// (12-hour, minutes only when they aren't :00) so five ticks still fit.
+String axisClock(double minutesOfDay, {required bool use24h}) {
+  if (use24h) return clockHm(minutesOfDay);
+  if (!minutesOfDay.isFinite) return '';
+  final t = (minutesOfDay.round() % 1440 + 1440) % 1440;
+  final h = t ~/ 60, m = t % 60;
+  final h12 = h % 12 == 0 ? 12 : h % 12;
+  final mm = m == 0 ? '' : ':${m.toString().padLeft(2, '0')}';
+  return '$h12$mm ${h < 12 ? 'am' : 'pm'}';
+}
+
+/// [axisClock] of a DateTime (local).
+String axisClockOf(DateTime t, {required bool use24h}) =>
+    axisClock((t.hour * 60 + t.minute).toDouble(), use24h: use24h);
+
 /// The axis-less fallback extent, shared by every painter that has one.
 ({double min, double range})? autoExtent(List<double?> d) {
   double? mn, mx;

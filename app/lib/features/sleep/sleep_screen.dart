@@ -40,7 +40,7 @@ class SleepScreen extends ConsumerWidget {
       actions: [
         AppIconButton(
           icon: Icons.info_outline_rounded,
-          semanticLabel: 'How the sleep target works',
+          semanticLabel: 'How your sleep goal works',
           onTap: () => showSleepNeedExplain(context, s?.analysis),
         ),
       ],
@@ -84,8 +84,8 @@ class SleepScreen extends ConsumerWidget {
       body = [
         EmptyState(
           icon: Icons.error_outline_rounded,
-          title: 'Could not load this night',
-          body: 'The stored data could not be read. Nothing was changed.',
+          title: 'Couldn’t load this night',
+          body: 'Airlog couldn’t open your saved data. Nothing was changed.',
           actionLabel: 'Try again',
           onAction: () => ref.invalidate(sleepViewModelProvider),
         ),
@@ -139,9 +139,9 @@ class SleepScreen extends ConsumerWidget {
             icon: Icons.bedtime_outlined,
             title: 'No sleep yet',
             body:
-                'Wear your tracker to bed. The night appears here in the '
-                'morning, once its app has written it to Health Connect.',
-            actionLabel: 'Check sources',
+                'Wear your tracker to bed. Your night shows up here in the '
+                'morning, after its app syncs.',
+            actionLabel: 'Check data sources',
             onAction: sources,
           ),
         ];
@@ -150,7 +150,7 @@ class SleepScreen extends ConsumerWidget {
           EmptyState(
             icon: Icons.event_busy_outlined,
             title: 'Nothing recorded',
-            body: 'No data arrived for ${longDay(s.date!)}.',
+            body: 'No data came in for ${longDay(s.date!)}.',
           ),
           ..._consistency(context, s, vm),
         ];
@@ -159,14 +159,14 @@ class SleepScreen extends ConsumerWidget {
           for (final n in s.notes)
             StatusCard.fromNote(
               n,
-              actionLabel: 'Check sources',
+              actionLabel: 'Check data sources',
               onAction: sources,
             ),
           if (s.notes.isEmpty)
             const EmptyState(
               icon: Icons.bedtime_outlined,
               title: 'No sleep recorded',
-              body: 'No sleep session arrived for this night.',
+              body: 'No sleep was recorded for this night.',
             ),
           if (s.analysis != null) _DebtLine(debt: s.analysis!.debtAfterMinutes),
           if (s.bedtime != null)
@@ -192,6 +192,7 @@ class SleepScreen extends ConsumerWidget {
           s,
           a,
           onTap: () => showSleepNeedExplain(context, a),
+          use24h: MediaQuery.alwaysUse24HourFormatOf(context),
         ),
       ),
       SleepHero(
@@ -248,7 +249,7 @@ class SleepScreen extends ConsumerWidget {
           title: 'Consistency',
           subtitle: c == null
               ? 'Bed and wake times, last $n nights'
-              : '${c.round()} % against your previous 4 nights',
+              : '${c.round()}% · compared with your last 4 nights',
           trailing: SizedBox(
             width: 116,
             child: SegmentedRange(
@@ -283,24 +284,25 @@ class _DebtLine extends StatelessWidget {
     return AppCard(
       tone: CardTone.inset,
       child: Text(
-        'Sleep debt carried forward unchanged: ${sleepHm(debt)}.',
+        'No sleep data for this night, so your missed sleep stays at '
+        '${sleepHm(debt)}.',
         style: F.tab(F.bodySm).copyWith(color: p.ink2),
       ),
     );
   }
 }
 
-/// Large/1 filled from the night: time asleep, performance and the sleep
-/// target; the stages on the plate; minutes per stage.
+/// Large/1 filled from the night: time asleep, % of the sleep goal and the
+/// goal; the stages on the plate; minutes per stage. [use24h]: the phone's
+/// clock setting for the plate's start and end times.
 SleepSummaryTile sleepSummaryTile(
   SleepState s,
   SleepAnalysis a, {
   VoidCallback? onTap,
+  bool use24h = true,
 }) {
-  String hmm(double m) {
-    final t = m.round();
-    return '${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}';
-  }
+  // Durations never use clock format ("7:01" reads as a time of day).
+  String hmm(double m) => sleepHm(m);
 
   final start = s.start, end = s.end;
   final span = start == null || end == null
@@ -320,15 +322,20 @@ SleepSummaryTile sleepSummaryTile(
     return ['${m ~/ 60}', 'h', ' ${m % 60}', 'min'];
   }
 
-  String clock(DateTime? t) => t == null
-      ? '--:--'
-      : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  // The plate's labels sit between fixed icons (moon at the start, sun at
+  // the end), so the 12-hour form drops "am"/"pm": "11:10", "6:35".
+  String clock(DateTime? t) {
+    if (t == null) return '--:--';
+    if (use24h) return clockTextOf(t, use24h: true);
+    final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    return '$h:${t.minute.toString().padLeft(2, '0')}';
+  }
   return SleepSummaryTile(
     title: 'Sleep',
     stats: [
-      (hmm(a.sleptMinutes), 'Time asleep'),
-      ('${a.performance.round()}%', 'Performance'),
-      (hmm(a.needMinutes), 'Sleep target'),
+      (hmm(a.sleptMinutes), 'Asleep'),
+      ('${a.performance.round()}%', 'Of your goal'),
+      (hmm(a.needMinutes), 'Sleep goal'),
     ],
     deltaColor: TileInk.primary,
     blocks: [
@@ -346,15 +353,15 @@ SleepSummaryTile sleepSummaryTile(
     totals: [
       SleepStageTotal('Awake', parts(a.stageMinutes[SleepStage.awake])),
       SleepStageTotal('REM', parts(a.stageMinutes[SleepStage.rem])),
-      SleepStageTotal('Core', parts(a.stageMinutes[SleepStage.light])),
+      SleepStageTotal('Light', parts(a.stageMinutes[SleepStage.light])),
       SleepStageTotal('Deep', parts(a.stageMinutes[SleepStage.deep])),
     ],
     onTap: onTap,
     semanticLabel:
-        'Sleep ${durationWords(a.sleptMinutes)}, performance '
-        '${a.performance.round()} percent of a '
-        '${durationWords(a.needMinutes)} target. '
-        '${a.hasStageData ? '' : 'Sleep stages unavailable. '}'
-        'Opens how the target works.',
+        'Asleep ${durationWords(a.sleptMinutes)}, '
+        '${a.performance.round()} percent of your '
+        '${durationWords(a.needMinutes)} sleep goal. '
+        '${a.hasStageData ? '' : 'No sleep stages for this night. '}'
+        'Tap for how the goal works.',
   );
 }

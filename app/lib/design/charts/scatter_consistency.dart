@@ -9,6 +9,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../format.dart' show clockText;
 import '../tokens/tokens.dart';
 import 'axis.dart';
 import 'frame.dart';
@@ -28,7 +29,7 @@ class ScatterConsistency extends StatelessWidget {
     this.xLabels = const [],
     this.height = 170,
     this.semanticsLabel,
-    this.emptyMessage = 'No nights recorded in this range',
+    this.emptyMessage = 'No nights recorded in this period',
   });
 
   /// DENSE, oldest first, one slot per night; null = no sleep recorded.
@@ -54,8 +55,10 @@ class ScatterConsistency extends StatelessWidget {
 
   /// Plotted value: negative minutes-since-noon (so later is lower).
   static String _fmt(double v) => clockHm(720 - v);
+  static String _fmt12(double v) => axisClock(720 - v, use24h: false);
 
-  static AxisSpec? axisFor(List<double> plotted) {
+  /// [use24h]: the phone's clock setting; 12-hour ticks read "11 pm".
+  static AxisSpec? axisFor(List<double> plotted, {bool use24h = true}) {
     final v = finiteOnly(plotted);
     if (v.isEmpty) return null;
     var lo = (v.reduce(min) / 60).floorToDouble() * 60;
@@ -72,19 +75,29 @@ class ScatterConsistency extends StatelessWidget {
     }
     final k = (spanH / step).ceil();
     hi = lo + k * step * 60;
-    return AxisSpec(min: lo, max: hi, ticks: k + 1, format: _fmt);
+    return AxisSpec(
+      min: lo,
+      max: hi,
+      ticks: k + 1,
+      format: use24h ? _fmt : _fmt12,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
+    final h24 = MediaQuery.alwaysUse24HourFormatOf(context);
+    String clock(double m) => clockText(m, use24h: h24);
     final real = [
       for (final n in nights)
         if (n != null && n.wake.isAfter(n.bed)) n,
     ];
     final beds = [for (final n in real) sinceNoon(n.bed)];
     final wakes = [for (final n in real) sinceNoon(n.wake)];
-    final a = axisFor([for (final b in beds) -b, for (final w in wakes) -w]);
+    final a = axisFor([
+      for (final b in beds) -b,
+      for (final w in wakes) -w,
+    ], use24h: h24);
     final empty = real.isEmpty || a == null;
     final mb = _median(beds), mw = _median(wakes);
     final bedInk = p.mark(DomainColors.sleep);
@@ -95,15 +108,15 @@ class ScatterConsistency extends StatelessWidget {
       final bLo = beds.reduce(min), bHi = beds.reduce(max);
       final wLo = wakes.reduce(min), wHi = wakes.reduce(max);
       return '$title across ${real.length} nights. '
-          'Bedtime from ${clockHm(bLo + 720)} to ${clockHm(bHi + 720)}, '
-          'median ${clockHm(mb! + 720)}. '
-          'Wake from ${clockHm(wLo + 720)} to ${clockHm(wHi + 720)}, '
-          'median ${clockHm(mw! + 720)}.';
+          'Bedtime from ${clock(bLo + 720)} to ${clock(bHi + 720)}, '
+          'typically ${clock(mb! + 720)}. '
+          'Wake from ${clock(wLo + 720)} to ${clock(wHi + 720)}, '
+          'typically ${clock(mw! + 720)}.';
     }
 
     return ChartFrame(
       title: title,
-      unit: 'clock time',
+      unit: '',
       height: height,
       yAxis: empty ? null : a,
       xLabels: xLabels,
@@ -111,8 +124,8 @@ class ScatterConsistency extends StatelessWidget {
       legend: empty ? const [] : [('Bedtime', bedInk), ('Wake', wakeInk)],
       footnote: empty
           ? null
-          : 'Dashed: median bedtime ${clockHm(mb! + 720)} · '
-                'median wake ${clockHm(mw! + 720)}',
+          : 'Dashed lines: your typical bedtime ${clock(mb! + 720)} and wake '
+                'time ${clock(mw! + 720)}',
       empty: empty ? NoData(message: emptyMessage) : null,
       child: empty
           ? const SizedBox.shrink()

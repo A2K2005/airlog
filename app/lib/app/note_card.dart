@@ -12,10 +12,11 @@ import 'route_names.dart';
 
 Widget noteCard(BuildContext context, StatusNote n) {
   final fix = n.fix ?? '';
+  // Fixes name "Settings → Data sources" (older stored notes: "→ Sources").
   final (String? label, String? route) = fix.contains('Profile')
       ? ('Open profile', Routes.profile)
-      : fix.contains('Sources')
-      ? ('Open sources', Routes.sources)
+      : fix.contains('Data sources') || fix.contains('Sources')
+      ? ('Open data sources', Routes.sources)
       : (null, null);
   return StatusCard.fromNote(
     n,

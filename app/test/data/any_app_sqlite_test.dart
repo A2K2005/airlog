@@ -93,7 +93,10 @@ void main() {
     final sw = (await repo.day(DayKey.add(today, -5)))!;
     expect(sw.record.provenance[Metric.hrv]!.origin, SourceApps.oura);
     expect(sw.result.sourceChange?.metric, 'hrv');
-    expect(sw.result.notes.any((n) => n.title == 'New HRV baseline'), isTrue);
+    expect(
+      sw.result.notes.any((n) => n.title == 'Learning your HRV again'),
+      isTrue,
+    );
 
     // A pin, then a full recompute with it: identical.
     await repo.setSourceChoice(Metric.steps, SourceApps.oura);

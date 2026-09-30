@@ -16,6 +16,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart' show DatabaseException;
@@ -295,7 +296,8 @@ class HealthRepositoryImpl implements HealthRepository {
             phase: SyncPhase.error,
             lastSyncAt: _lastSync,
             lastDataAt: _status.lastDataAt,
-            message: 'Could not prepare demo data: $e',
+            // The error itself is rethrown below; the UI gets plain words.
+            message: 'Couldn’t make sample data.',
           ),
         );
       }
@@ -346,6 +348,27 @@ class HealthRepositoryImpl implements HealthRepository {
 
   int _widgetRequest = 0;
 
+  /// The phone's 12/24-hour setting for the plan widget's times. A headless
+  /// background engine has no view, and Android sends user settings only
+  /// when one attaches, so the value read in the foreground is kept and
+  /// reused there (24-hour until the app has been opened once).
+  Future<bool> _use24h() async {
+    const key = 'ui.use24h';
+    final d = PlatformDispatcher.instance;
+    if (d.views.isNotEmpty) {
+      final v = d.alwaysUse24HourFormat;
+      try {
+        await app.setSetting(key, '$v');
+      } catch (_) {}
+      return v;
+    }
+    try {
+      return (await app.getSetting(key) ?? 'true') == 'true';
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _pushWidget() async {
     final request = ++_widgetRequest;
     final mode = _mode;
@@ -369,6 +392,7 @@ class HealthRepositoryImpl implements HealthRepository {
             (await app.bundles(mode, evening, evening)).firstOrNull ??
             planDay;
       }
+      final use24h = await _use24h();
       final plan = planDay == null
           ? null
           : Engine.planToday(
@@ -376,6 +400,7 @@ class HealthRepositoryImpl implements HealthRepository {
               sync: _status,
               now: now,
               appNames: SourceApps.known,
+              use24h: use24h,
             );
       if (request != _widgetRequest || mode != _mode || _disposed) return;
       await widgets.push(
@@ -511,11 +536,13 @@ class HealthRepositoryImpl implements HealthRepository {
       if (background) rethrow;
     } catch (e) {
       if (background) rethrow;
-      _setStatus(
-        _st(SyncPhase.error, message: 'Sync failed: ${e.runtimeType}'),
-      );
+      // Never a class name in the UI (it was "Sync failed: SocketException").
+      _setStatus(_st(SyncPhase.error, message: _syncFailed));
     }
   }
+
+  static const _syncFailed =
+      'Sync failed. Check your connection and try again.';
 
   Future<void> _syncOwned({required bool background}) async {
     _autoSynced =
@@ -556,7 +583,8 @@ class HealthRepositoryImpl implements HealthRepository {
           lastDataAt: await _lastDataAt(),
           message: errors.isEmpty
               ? null
-              : '${errors.length} data type(s) failed: ${errors.map((e) => e.dataType).join(', ')}',
+              : '${errors.length == 1 ? 'One kind of data' : '${errors.length} kinds of data'} '
+                    'didn’t sync: ${errors.map((e) => e.dataType).join(', ')}',
         ),
       );
       _bump();
@@ -570,9 +598,7 @@ class HealthRepositoryImpl implements HealthRepository {
       _setStatus(
         _st(
           SyncPhase.error,
-          message: t is DataUnavailableException
-              ? t.userMessage
-              : 'Sync failed: ${e.runtimeType}',
+          message: t is DataUnavailableException ? t.userMessage : _syncFailed,
         ),
       );
       if (background) rethrow;
@@ -608,9 +634,7 @@ class HealthRepositoryImpl implements HealthRepository {
         available: true,
         enabled: _mode == DataMode.demo,
         connected: true,
-        detail:
-            'Sample data: ${demo.days} synthetic days, seed ${demo.seed}, '
-            'with a planted illness and journal patterns',
+        detail: 'Sample data: ${demo.days} made-up days',
         lastSyncAt: _mode == DataMode.demo ? _lastSync : null,
       ),
       SourceStatus(
@@ -627,7 +651,7 @@ class HealthRepositoryImpl implements HealthRepository {
           HcAvailability.notInstalled => 'Health Connect is not installed',
           HcAvailability.updateRequired => 'Update Health Connect to continue',
           HcAvailability.unsupported =>
-            'Health Connect is not available on this device',
+            'Health Connect isn’t available on this phone',
           HcAvailability.checkFailed => 'Airlog couldn’t check Health Connect',
         },
         lastSyncAt: _mode == DataMode.live ? _lastSync : null,
@@ -637,12 +661,14 @@ class HealthRepositoryImpl implements HealthRepository {
         available: ghConfigured,
         enabled: enabled.contains(SourceKind.googleHealthApi),
         connected: ghSigned,
+        // Never a build flag in the UI: without an OAuth client ID
+        // (GOOGLE_OAUTH_CLIENT_ID) this version simply has no Enhanced mode.
         detail: !ghConfigured
-            ? 'Not configured: add a Google Cloud OAuth client ID '
-                  '(--dart-define=GOOGLE_OAUTH_CLIENT_ID=…)'
+            ? 'Not available in this version'
             : ghSigned
-            ? 'Signed in: SpO₂, deep-sleep HRV, respiratory rate, skin temperature'
-            : 'Sign in to add SpO₂ and deep-sleep HRV',
+            ? 'Signed in: blood oxygen, deep-sleep HRV, breathing rate, skin '
+                  'temperature'
+            : 'Sign in to add blood oxygen and deep-sleep HRV',
         lastSyncAt: ghLast == null ? null : fromMs(ghLast),
         beta: true,
       ),
@@ -653,23 +679,18 @@ class HealthRepositoryImpl implements HealthRepository {
         enabled: enabled.contains(SourceKind.ble),
         connected: bleConnected?.call() ?? false,
         detail: _mode == DataMode.demo
-            ? 'Simulated live heart rate (demo)'
-            : 'Live heart rate while the band shares it over Bluetooth',
+            ? 'Pretend live heart rate (sample data)'
+            : 'Live heart rate while your tracker shares it over Bluetooth',
       ),
       SourceStatus(
         kind: SourceKind.context,
         available: hcAvail == HcAvailability.available,
         enabled: enabled.contains(SourceKind.context),
         connected: granted > 0,
-        detail: 'Weight from any app in Health Connect (shown, never scored)',
+        detail:
+            'Weight from any app in Health Connect (shown, not used in scores)',
       ),
-      const SourceStatus(
-        kind: SourceKind.takeout,
-        available: false,
-        enabled: false,
-        connected: false,
-        detail: 'Coming later: import a Google Takeout export',
-      ),
+      // No Takeout row: the import was cut (PRODUCT_PLAN §7).
     ];
   });
 

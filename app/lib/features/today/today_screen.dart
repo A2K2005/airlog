@@ -88,7 +88,7 @@ class TodayScreen extends ConsumerWidget {
           EmptyState(
             icon: Icons.error_outline_rounded,
             title: 'Couldn’t load today',
-            body: 'The stored data could not be read. Nothing was changed.',
+            body: 'Airlog couldn’t open your saved data. Nothing was changed.',
             actionLabel: 'Try again',
             onAction: () => ref.invalidate(todayViewModelProvider),
           ),
@@ -152,10 +152,9 @@ class TodayScreen extends ConsumerWidget {
               icon: Icons.wb_twilight_rounded,
               title: 'No data yet',
               body:
-                  'Recovery, Strain and Sleep appear once your tracker’s data '
-                  'reaches Health Connect. Wear it tonight and open Airlog in '
-                  'the morning.',
-              actionLabel: 'Check sources',
+                  'Wear your tracker to bed tonight. Your scores show up here '
+                  'in the morning.',
+              actionLabel: 'Check data sources',
               onAction: () => open(Routes.sources),
             ),
           ),
@@ -164,12 +163,10 @@ class TodayScreen extends ConsumerWidget {
         return [
           if (plan != null) PlanTile(plan: plan, onOpen: open),
           _wide(
-            EmptyState(
+            const EmptyState(
               icon: Icons.event_busy_outlined,
-              title: 'Nothing recorded yet today',
-              body:
-                  'No data has arrived for ${longDay(s.date!)} yet. It will '
-                  'appear after your tracker syncs.',
+              title: 'Nothing yet for today',
+              body: 'Today’s data shows up after your tracker’s app syncs.',
             ),
           ),
         ];
@@ -187,13 +184,13 @@ class TodayScreen extends ConsumerWidget {
       if (s.alert != null) _alertTile(context, s),
       if (s.calibration != null && r != null)
         ProgressTile(
-          title: 'Learning your normal',
+          title: 'Learning your usual',
           value: '${s.calibration!.haveNights}',
           unit: 'of ${s.calibration!.needNights} nights',
           progress: s.calibration!.progress,
           onTap: () => open(Routes.recovery),
           semanticLabel:
-              'Learning your normal: ${s.calibration!.haveNights} of '
+              'Learning your usual: ${s.calibration!.haveNights} of '
               '${s.calibration!.needNights} nights. ${s.calibrationBody ?? ''}',
         ),
       if (notes.isNotEmpty)
@@ -201,7 +198,7 @@ class TodayScreen extends ConsumerWidget {
           MoreNotes(
             key: ValueKey('notes-${s.date}'),
             notes: notes,
-            title: 'Data notes',
+            title: 'About today’s data',
           ),
         ),
     ];
@@ -215,24 +212,23 @@ class TodayScreen extends ConsumerWidget {
     final rec = s.recovery;
     final result = s.bundle?.result.recovery;
     // The basis of the score, from the engine (RecoveryResult.withoutHrv and
-    // confidence) and the plan's re-learning state.
-    final basis = [
-      if (result?.withoutHrv == true) 'without HRV',
-      if (rec.state == RingState.provisional ||
-          result?.confidence == RecoveryConfidence.low)
-        'provisional',
-      if (plan?.relearningSource != null) 're-learning',
-    ];
-    final title = basis.isEmpty
-        ? 'Recovery'
-        : 'Recovery · ${basis.join(' · ')}';
-    final score = switch (rec.state) {
-      RingState.measured || RingState.provisional => '${rec.value!.round()}',
-      _ => DotMatrixNumber.missing,
-    };
+    // confidence) and the plan's re-learning state. One tag at most, by
+    // priority: the tile is fixed-width and single-line.
+    final tag = result?.withoutHrv == true
+        ? 'without HRV'
+        : rec.state == RingState.provisional ||
+              result?.confidence == RecoveryConfidence.low
+        ? 'early estimate'
+        : plan?.relearningSource != null
+        ? 'learning'
+        : null;
+    final title = tag == null ? 'Recovery' : 'Recovery · $tag';
+    final scored =
+        rec.state == RingState.measured || rec.state == RingState.provisional;
+    final score = scored ? '${rec.value!.round()}' : DotMatrixNumber.missing;
     final status = switch (rec.state) {
       RingState.calibrating => 'Learning',
-      RingState.noData || RingState.loading => 'No data',
+      RingState.noData || RingState.loading => 'No score',
       _ => switch (rec.zone) {
         RecoveryZone.green => 'Good',
         RecoveryZone.yellow => 'Fair',
@@ -240,6 +236,9 @@ class TodayScreen extends ConsumerWidget {
         null => '',
       },
     };
+    final rhrName = s.rhrLabel.startsWith('Sleeping')
+        ? 'Sleeping heart rate'
+        : 'Resting heart rate';
     return ReadinessTile(
       title: title,
       score: score,
@@ -251,10 +250,14 @@ class TodayScreen extends ConsumerWidget {
       steps: s.steps,
       usual: s.usualRecovery,
       onTap: onTap,
-      semanticLabel:
-          '$title, $score percent, $status. HRV vs usual ${s.hrvVsUsual ?? 'no data'}. '
-          '${s.rhrLabel} ${s.rhrVsUsual ?? 'no data'}. '
-          'Opens the breakdown.',
+      semanticLabel: scored
+          ? 'Recovery $score%, $status${tag == null ? '' : ', $tag'}. '
+                'HRV ${TodayMapper.spokenVsUsual(s.hrvVsUsual)}. '
+                '$rhrName ${TodayMapper.spokenVsUsual(s.rhrVsUsual)}. '
+                'Tap for details.'
+          : rec.state == RingState.calibrating
+          ? 'Recovery: still learning your usual. Tap for details.'
+          : 'Recovery: no score today. Tap for details.',
     );
   }
 
@@ -264,7 +267,7 @@ class TodayScreen extends ConsumerWidget {
         st.state == RingState.measured || st.state == RingState.provisional;
     final value = measured ? st.valueText ?? '--' : DotMatrixNumber.missing;
     final unit = measured
-        ? (st.caption?.isNotEmpty == true ? st.caption! : 'of 21')
+        ? (st.caption?.isNotEmpty == true ? st.caption! : 'out of 21')
         : (s.strainFacts ?? 'No heart rate yet');
     return ArcScoreTile(
       title: 'Strain',
@@ -274,8 +277,8 @@ class TodayScreen extends ConsumerWidget {
       color: C.limeSoft,
       onTap: onTap,
       semanticLabel: measured
-          ? 'Strain $value of 21. $unit. Opens Strain.'
-          : 'Strain: no score without heart rate. $unit. Opens Strain.',
+          ? 'Strain $value out of 21. $unit. Tap for details.'
+          : 'No Strain score yet: no heart rate. $unit. Tap for details.',
     );
   }
 
@@ -290,8 +293,8 @@ class TodayScreen extends ConsumerWidget {
       progress: has ? (sl.value! / 100).clamp(0.0, 1.0) : null,
       onTap: onTap,
       semanticLabel: has
-          ? 'Sleep performance $pct percent, ${sl.caption}. Opens Sleep.'
-          : 'Sleep: no sleep recorded. Opens Sleep.',
+          ? 'Sleep $pct% of your goal, ${sl.caption} asleep. Tap for details.'
+          : 'Sleep: no sleep recorded. Tap for details.',
     );
   }
 
@@ -311,7 +314,25 @@ class TodayScreen extends ConsumerWidget {
     BandState.above => ('Above usual', C.amber),
     BandState.below => ('Below usual', C.amber),
     BandState.calibrating => ('Learning', TileInk.secondary),
-    BandState.noData => ('No data last night', TileInk.secondary),
+    BandState.noData => ('No reading', TileInk.secondary),
+  };
+
+  /// The vital tiles' short titles (they must fit a 164 px tile).
+  static String tileName(HealthMetricKind k) => switch (k) {
+    HealthMetricKind.hrv => 'HRV',
+    HealthMetricKind.restingHr => 'Resting HR',
+    HealthMetricKind.respiratoryRate => 'Breathing',
+    HealthMetricKind.spo2 => 'Blood oxygen',
+    HealthMetricKind.skinTemp => 'Skin temp',
+  };
+
+  /// The spoken state of a vital: "in your usual range" and friends.
+  static String spokenState(BandState b) => switch (b) {
+    BandState.inRange => 'in your usual range',
+    BandState.above => 'above your usual range',
+    BandState.below => 'below your usual range',
+    BandState.calibrating => 'still learning',
+    BandState.noData => 'no reading',
   };
 
   static Widget _vitalTile(BuildContext context, HealthTileVm t, String date) {
@@ -321,8 +342,15 @@ class TodayScreen extends ConsumerWidget {
         : MetricTile.valueText(st.kind, st.value!);
     final (word, color) = statusOf(st.state);
     final pos = st.state == BandState.noData ? null : bandPosition(st);
+    final unit = st.kind.displayUnit;
+    final reading = st.value == null
+        ? ''
+        : unit == '%'
+        ? ' $value%'
+        : ' $value $unit';
     final label =
-        '${st.kind.label}, $value ${st.kind.unit}, $word. Opens its 30 nights.';
+        '${st.kind.title}$reading, ${spokenState(st.state)}. Tap to see 30 '
+        'nights.';
     void onTap() => showMetricSheet(context, t, date);
     return switch (st.kind) {
       HealthMetricKind.hrv => LineBaselineTile(
@@ -355,7 +383,7 @@ class TodayScreen extends ConsumerWidget {
         semanticLabel: label,
       ),
       _ => BandBaselineTile(
-        title: st.kind == HealthMetricKind.spo2 ? 'SpO₂' : 'Respiration',
+        title: tileName(st.kind),
         value: value,
         unit: st.kind.unit,
         status: word,
@@ -389,11 +417,12 @@ class TodayScreen extends ConsumerWidget {
         for (final m in out.take(3))
           AlertReading(
             MetricTile.valueText(m.kind, m.value!),
-            '${m.kind.label} · ${m.state == BandState.above ? 'above' : 'below'}',
+            '${tileName(m.kind)} · '
+            '${m.state == BandState.above ? 'higher' : 'lower'}',
           ),
       ],
-      lowLabel: '${out.length} outside your usual',
-      highLabel: '${judged - out.length} within',
+      lowLabel: '${out.length} outside your usual range',
+      highLabel: '${judged - out.length} in range',
       segments: [
         AlertSegment(out.length.toDouble(), C.amber),
         AlertSegment((judged - out.length).toDouble(), C.recGreen),

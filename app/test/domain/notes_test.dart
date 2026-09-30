@@ -43,9 +43,10 @@ void main() {
       now: now,
     );
     final n = r.notes.firstWhere((n) => n.metric == 'hrv');
-    expect(n.body, contains('not worn to bed'));
-    expect(n.body, contains('Health Connect permission'));
-    expect(n.body, contains('Google Health'));
+    expect(n.body, contains('wasn’t worn to bed'));
+    expect(n.body, contains('HRV permission is off'));
+    expect(n.body, contains('sharing HRV with Health Connect'));
+    expect(n.body, isNot(contains('Google')), reason: 'no brand names');
     expect(n.fix, isNotNull);
     expect(n.title, 'No HRV yet');
     expect(r.recovery, isNotNull, reason: 'RHR alone still scores');
@@ -98,7 +99,7 @@ void main() {
     final best = peaks.reduce((a, b) => a > b ? a : b);
     expect(r.strain!.maxHrUsed, best);
     final n = r.notes.firstWhere(
-      (n) => n.title == 'Zones use your highest observed heart rate',
+      (n) => n.title == 'Zones use your highest heart rate',
     );
     expect(n.body, contains('${best.toStringAsFixed(0)} bpm'));
     expect(n.fix, contains('birth year'));
@@ -121,7 +122,7 @@ void main() {
     final results = Engine.computeRange(denseRange('2026-08-10', 3), now: now);
     expect(results.last.recovery!.calibrating, isTrue);
     expect(
-      results.last.notes.any((n) => n.title == 'Calibrating your baseline'),
+      results.last.notes.any((n) => n.title == 'Learning your usual'),
       isTrue,
     );
   });
@@ -136,7 +137,7 @@ void main() {
     expect(
       r.notes.any(
         (n) =>
-            n.metric == 'strain' && n.title == 'Strain from partial heart rate',
+            n.metric == 'strain' && n.title == 'Strain from patchy heart rate',
       ),
       isTrue,
     );
@@ -151,7 +152,7 @@ void main() {
     expect(r.strain!.method, StrainMethod.none);
     expect(r.strain!.steps, 9000);
     final n = r.notes.firstWhere((n) => n.title == 'No Strain score');
-    expect(n.body, contains('only from measured heart rate'));
+    expect(n.body, contains('only scores Strain from measured heart rate'));
   });
 
   test('no Recovery, app shares neither: the fix names Samsung Health\'s '
@@ -168,7 +169,7 @@ void main() {
       ),
     );
     final other = Notes.recoveryNotShared('Zepp', origin: SourceApps.zepp);
-    expect(other.fix, startsWith('Turn on continuous heart rate in Zepp.'));
+    expect(other.fix, startsWith('Turn on all-day heart rate in Zepp.'));
     expect(other.fix, isNot(contains('Samsung')));
     expect(other.fix, isNot(contains('Measure continuously')));
     // An unknown package: its display name, still generic.
@@ -179,10 +180,54 @@ void main() {
     expect(
       unknown.fix,
       startsWith(
-        'Turn on continuous heart rate in Acme '
+        'Turn on all-day heart rate in Acme '
         'Band.',
       ),
     );
     expect(unknown.body, startsWith('Acme Band doesn'));
+  });
+
+  test('steps never feed Strain, and the note does not say they do', () {
+    expect(Notes.missingSteps.body, isNot(contains('strain')));
+    expect(Notes.missingSteps.body, isNot(contains('Strain')));
+  });
+
+  test('routing helpers match the new titles and the stored old ones', () {
+    final relearn = Notes.newBaseline(
+      Metric.hrv,
+      const Provenance(
+        SourceKind.healthConnect,
+        'hc_sleep_mean_rmssd',
+        origin: SourceApps.oura,
+      ),
+      const Provenance(
+        SourceKind.healthConnect,
+        'hc_sleep_mean_rmssd',
+        origin: SourceApps.fitbit,
+      ),
+      2,
+    );
+    expect(relearn.title, 'Learning your HRV again');
+    expect(relearn.body, endsWith('It has 2 nights so far.'));
+    expect(Notes.isNewBaseline(relearn), isTrue);
+    expect(
+      Notes.isNewBaseline(
+        const StatusNote(metric: 'hrv', title: 'New HRV baseline', body: ''),
+      ),
+      isTrue,
+    );
+    expect(Notes.isNewBaseline(Notes.missingResp), isFalse);
+    expect(Notes.isCalibrating(Notes.recoveryCalibrating(3, 'HRV')), isTrue);
+    expect(
+      Notes.isCalibrating(
+        const StatusNote(
+          metric: 'recovery',
+          title: 'Calibrating your baseline',
+          body: '',
+        ),
+      ),
+      isTrue,
+    );
+    expect(Notes.isCalibrating(Notes.recoveryUnavailable), isFalse);
   });
 }

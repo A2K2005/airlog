@@ -78,21 +78,22 @@ class HcSync {
         _note(
           'health_connect',
           'denied',
-          message: 'Background reads not granted; syncing when the app opens',
+          message:
+              'Background sync is off, so Airlog syncs when you open it.',
         );
         return dirty;
       }
       final granted = <HcType>[];
       for (final t in HcType.stored) {
         if (!perms.granted.contains(t.key)) {
-          _note(t.key, 'denied', message: 'Permission not granted');
+          _note(t.key, 'denied', message: 'Not allowed');
           continue;
         }
         if (!await hc.supports(t)) {
           _note(
             t.key,
             'skipped',
-            message: 'Not supported by this Health Connect version',
+            message: 'Not supported by your Health Connect version',
           );
           continue;
         }
@@ -161,7 +162,7 @@ class HcSync {
       _note(
         'changes_token',
         'error',
-        message: 'Could not create a changes token; next sync re-reads',
+        message: 'Next sync will read everything again.',
       );
     }
     return dirty;
@@ -340,9 +341,7 @@ class HcSync {
         _note(
           'changes_token',
           resp == null ? 'error' : 'skipped',
-          message: resp == null
-              ? 'Changes call failed; doing a full re-read'
-              : 'Changes token expired; doing a full re-read',
+          message: 'Reading everything again.',
         );
         return _full(granted, history, tokenTypes, reason: 'token expired');
       }

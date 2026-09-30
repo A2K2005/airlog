@@ -31,8 +31,8 @@ class RecoveryScreen extends ConsumerWidget {
       body = [
         EmptyState(
           icon: Icons.error_outline_rounded,
-          title: 'Could not load Recovery',
-          body: 'The stored data could not be read. Nothing was changed.',
+          title: 'Couldn’t load Recovery',
+          body: 'Airlog couldn’t open your saved data. Nothing was changed.',
           actionLabel: 'Try again',
           onAction: () => ref.invalidate(recoveryViewModelProvider),
         ),
@@ -100,8 +100,8 @@ class RecoveryScreen extends ConsumerWidget {
             icon: Icons.favorite_border_rounded,
             title: 'No Recovery yet',
             body:
-                'Recovery needs a night of HRV or resting heart rate from your '
-                'tracker. Wear it to bed and open Airlog in the morning.',
+                'Wear your tracker to bed tonight. Your first Recovery shows '
+                'up in the morning.',
           ),
         ];
       case RecoveryContent.emptyDay:
@@ -169,7 +169,10 @@ class RecoveryScreen extends ConsumerWidget {
         CalibrationBanner.of(s.calibration!),
       ],
       if (rec != null) ...[
-        section('How it was built', 'Points each input earned of its weight'),
+        section(
+          'What made your score',
+          'Points from each signal, out of its share',
+        ),
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -204,7 +207,7 @@ class RecoveryScreen extends ConsumerWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: AppButton(
-                  label: 'The exact formula',
+                  label: 'See the formula',
                   kind: AppButtonKind.quiet,
                   compact: true,
                   icon: Icons.functions_rounded,
@@ -218,15 +221,15 @@ class RecoveryScreen extends ConsumerWidget {
       if (rec == null)
         for (final n in s.notes) ...[gap(), StatusCard.fromNote(n)],
       section(
-        'Inputs against your baseline',
-        'Last ${s.inputs.isEmpty ? 30 : s.inputs.first.values.length} nights · '
-            'shaded band is your usual range',
+        'Your signals vs your usual',
+        'Last ${s.inputs.isEmpty ? 30 : s.inputs.first.values.length} nights. '
+            'The shaded area is your usual range.',
       ),
       for (var i = 0; i < s.inputs.length; i++) ...[
         if (i > 0) gap(S.x3),
         InputCard(input: s.inputs[i], date: s.date!),
       ],
-      section('HRV over the week', 'Plews 7-night rolling average'),
+      section('Your HRV this week', 'Average of the last 7 nights'),
       ReadinessCard(
         readiness: s.readiness,
         missing: s.readinessMissing,

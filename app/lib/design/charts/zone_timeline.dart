@@ -27,8 +27,12 @@ class ZoneTimeline extends StatelessWidget {
     this.height = 150,
     this.axis,
     this.semanticsLabel,
-    this.emptyMessage = 'No heart-rate samples for this window',
+    this.emptyMessage = 'No heart rate for this time',
+    this.use24h = true,
   });
+
+  /// The phone's clock setting for the time axis (12-hour ticks read "2 pm").
+  final bool use24h;
 
   final List<HrSample> samples;
   final DateTime start, end;
@@ -68,8 +72,15 @@ class ZoneTimeline extends StatelessWidget {
   List<String> _xLabels() {
     final total = end.difference(start);
     if (total.inMinutes <= 0) return const [];
-    return [for (var i = 0; i <= 4; i++) clockOf(start.add(total * (i / 4)))];
+    return [
+      for (var i = 0; i <= 4; i++)
+        axisClockOf(start.add(total * (i / 4)), use24h: use24h),
+    ];
   }
+
+  String _clock(DateTime t) => use24h
+      ? clockOf(t)
+      : axisClock((t.hour * 60 + t.minute).toDouble(), use24h: false);
 
   String _spoken(List<HrSample> s) {
     if (semanticsLabel != null) return semanticsLabel!;
@@ -79,9 +90,9 @@ class ZoneTimeline extends StatelessWidget {
       if (x.bpm < lo.bpm) lo = x;
       if (x.bpm > hi.bpm) hi = x;
     }
-    return '$title, beats per minute, ${clockOf(start)} to ${clockOf(end)}. '
-        'Lowest ${lo.bpm.round()}, peak ${hi.bpm.round()} at ${clockOf(hi.t)}, '
-        '${zoneFloors.length == 5 ? 'peak zone ${zoneOf(hi.bpm, zoneFloors)}.' : 'Zones unavailable without valid heart-rate anchors.'}';
+    return '$title, beats per minute, ${_clock(start)} to ${_clock(end)}. '
+        'Lowest ${lo.bpm.round()}, peak ${hi.bpm.round()} at ${_clock(hi.t)}, '
+        '${zoneFloors.length == 5 ? 'peak zone ${zoneOf(hi.bpm, zoneFloors)}.' : 'No zones: your max and resting heart rates aren’t set.'}';
   }
 
   @override
@@ -113,7 +124,8 @@ class ZoneTimeline extends StatelessWidget {
           ? [('Heart rate · zones unavailable', ink[0])]
           : [
               for (var z = 0; z <= 5; z++)
-                if (present.contains(z)) (z == 0 ? 'Rest' : 'Zone $z', ink[z]),
+                if (present.contains(z))
+                  (z == 0 ? 'Resting' : 'Zone $z', ink[z]),
             ],
       empty: empty ? NoData(message: emptyMessage) : null,
       child: empty

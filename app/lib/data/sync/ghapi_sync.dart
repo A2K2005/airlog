@@ -50,7 +50,7 @@ class GhSync {
         );
 
     if (!gh.configured) {
-      note('google_health', 'skipped', message: 'Not configured');
+      note('google_health', 'skipped', message: 'Not set up');
       return dirty;
     }
     if (!await gh.signedIn.timeout(const Duration(seconds: 20))) {
@@ -107,8 +107,9 @@ class GhSync {
           type,
           n > 0 ? 'ok' : (f.rawCount > 0 ? 'error' : 'empty'),
           records: n,
+          // A mapping gap (see ghapi_mapping.dart), said without the file.
           message: n == 0 && f.rawCount > 0
-              ? '${f.rawCount} points received but no value decoded - check ghapi_mapping.dart'
+              ? '${f.rawCount} readings came in, but Airlog couldn’t read them.'
               : null,
         );
       } catch (e) {
@@ -180,7 +181,8 @@ class GhSync {
         final f = await gh.heartRate(DayKey.start(d), end);
         if (f.rawCount > 0 && f.rows.hr.isEmpty) {
           throw StateError(
-            'Heart rate response could not be decoded; stored data retained',
+            'Couldn’t read heart rate from Enhanced mode. Your saved data is '
+            'safe.',
           );
         }
         dirty.addAll(
@@ -195,7 +197,14 @@ class GhSync {
         fetched += f.rows.hr.length;
       } catch (e) {
         failures++;
-        note('heart-rate', 'error', message: '$d: $e');
+        // Plain words, never the exception text.
+        note(
+          'heart-rate',
+          'error',
+          message:
+              '$d: couldn’t read heart rate from Enhanced mode. Your saved '
+              'data is safe.',
+        );
         break;
       }
     }
@@ -205,7 +214,9 @@ class GhSync {
       records: fetched,
       message: covered.isEmpty
           ? null
-          : 'Health Connect covers ${covered.length} day(s); fallback only',
+          : 'Health Connect had ${covered.length} '
+                '${covered.length == 1 ? 'day' : 'days'}; Enhanced mode '
+                'filled the rest',
     );
 
     if (failures == 0) {

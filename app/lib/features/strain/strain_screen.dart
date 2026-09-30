@@ -56,10 +56,10 @@ class StrainScreen extends ConsumerWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: S.gutter),
           child: StatusCard(
-            title: 'Strain could not load',
+            title: 'Couldn’t load Strain',
             body:
-                'The data store did not answer. Pull down on Today to sync, '
-                'or check Settings → Sync log.',
+                'Airlog couldn’t open your saved data. Pull down on Today to '
+                'try again.',
             tone: StatusTone.warning,
           ),
         ),
@@ -68,11 +68,11 @@ class StrainScreen extends ConsumerWidget {
       body = [
         EmptyState(
           icon: Icons.bolt_rounded,
-          title: 'No strain yet',
+          title: 'No Strain yet',
           body:
-              'Strain needs heart-rate measurements and usable heart-rate '
-              'anchors. Workouts and steps alone provide activity context.',
-          actionLabel: 'Open data sources',
+              'Strain needs heart rate from your tracker. Your workouts and '
+              'steps still show below.',
+          actionLabel: 'Check data sources',
           onAction: () => Navigator.of(context).pushNamed(Routes.sources),
         ),
       ];
@@ -94,7 +94,7 @@ class StrainScreen extends ConsumerWidget {
                 actions: [
                   AppIconButton(
                     icon: Icons.info_outline_rounded,
-                    semanticLabel: 'How strain is calculated',
+                    semanticLabel: 'How Strain works',
                     onTap: v == null || !v.hasData
                         ? null
                         : () => showStrainExplain(context, v),
@@ -140,9 +140,7 @@ class StrainScreen extends ConsumerWidget {
         const EmptyState(
           icon: Icons.event_busy_rounded,
           title: 'Nothing recorded this day',
-          body:
-              'Your tracker sent no heart rate, workouts or steps for this '
-              'date. Step to another day.',
+          body: 'No heart rate, workouts or steps came in for this day.',
         ),
       ];
     }
@@ -184,7 +182,8 @@ class StrainScreen extends ConsumerWidget {
               zoneFloors: v.zoneFloors,
               workouts: v.workoutSpans,
               rest: v.sleepSpans,
-              emptyMessage: 'No heart-rate samples for this day',
+              emptyMessage: 'No heart rate for this day',
+              use24h: MediaQuery.alwaysUse24HourFormatOf(context),
             ),
           ),
         ),
@@ -205,7 +204,7 @@ class StrainScreen extends ConsumerWidget {
         child: Align(
           alignment: Alignment.centerLeft,
           child: AppButton(
-            label: 'How strain is calculated',
+            label: 'How Strain works',
             kind: AppButtonKind.quiet,
             icon: Icons.functions_rounded,
             onTap: () => showStrainExplain(context, v),
@@ -254,7 +253,7 @@ ArcStateTile strainStateTile(StrainView v, VoidCallback onTap) {
       : s.zoneMinutes.skip(1).fold<double>(0, (a, m) => a + m);
   final t = v.target;
   final caption = scored
-      ? (t == null ? 'Strain today' : 'Target ${t.toStringAsFixed(1)}')
+      ? (t == null ? 'Strain today' : 'Goal ${t.toStringAsFixed(1)}')
       : v.activityFacts;
   return ArcStateTile(
     title: 'Strain',
@@ -279,10 +278,10 @@ ArcStateTile strainStateTile(StrainView v, VoidCallback onTap) {
     ],
     onTap: onTap,
     semanticLabel: scored
-        ? 'Strain ${v.strainValue.toStringAsFixed(1)} of 21. $caption. '
+        ? 'Strain ${v.strainValue.toStringAsFixed(1)} out of 21. $caption. '
               'Workout calories ${kcal.round()}, active ${active.round()} '
-              'minutes. Opens how strain is calculated.'
-        : 'Strain score unavailable. $caption.',
+              'minutes. Tap for how Strain works.'
+        : 'No Strain score. $caption.',
   );
 }
 

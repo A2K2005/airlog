@@ -176,7 +176,8 @@ class GoogleAuth {
       throw SourceException(
         SourceKind.googleHealthApi,
         'oauth',
-        'Token refresh failed (sign in again): $e',
+        // Shown in the sync log: plain words, not the exception ($e).
+        'Sign-in expired. Turn on Enhanced mode again in Data sources.',
         status: 'denied',
       );
     }

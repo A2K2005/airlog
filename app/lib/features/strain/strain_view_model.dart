@@ -80,7 +80,7 @@ class StrainView {
     return parts.isEmpty
         ? samples.isEmpty
               ? 'No heart rate or activity'
-              : 'Heart rate recorded; score unavailable'
+              : 'Heart rate came in, but there’s no score yet'
         : parts.join(' · ');
   }
 
@@ -98,30 +98,30 @@ class StrainView {
     return d > 0 ? TargetVerdict.under : TargetVerdict.over;
   }
 
-  /// The one-line recommendation under the ring.
+  /// The one-line recommendation under the ring, in words: the ring, the
+  /// goal line and "set by your 74% Recovery" already show the numbers.
   String get recommendation {
     final t = target;
-    if (noInput) return 'Nothing to score for this day yet.';
+    if (noInput) return 'No heart rate for this day yet.';
     if (t == null) {
-      return 'Recovery does not support an effort target for this day.';
+      return isToday
+          ? 'No effort goal today: there’s no Recovery score.'
+          : 'No effort goal that day: there was no Recovery score.';
     }
-    final d = (t - strainValue).abs().toStringAsFixed(1);
-    final tt = t.toStringAsFixed(1);
-    final rec = recovery == null ? '' : ' for a $recovery % recovery';
     if (isToday) {
       return switch (verdict) {
-        TargetVerdict.under => 'Room for about $d more strain today$rec.',
-        TargetVerdict.onTarget => 'On target$rec. Anything more is extra.',
+        TargetVerdict.under => 'You still have room for more effort today.',
+        TargetVerdict.onTarget =>
+          'You’ve hit today’s goal. Anything more is extra.',
         TargetVerdict.over =>
-          '$d over today’s target of $tt. An easy evening leaves room to '
-              'recover.',
+          'You’re past today’s goal. Take it easy this evening.',
         TargetVerdict.none => '',
       };
     }
     return switch (verdict) {
-      TargetVerdict.under => 'Finished $d under the target of $tt.',
-      TargetVerdict.onTarget => 'Finished on target ($tt).',
-      TargetVerdict.over => 'Finished $d over the target of $tt.',
+      TargetVerdict.under => 'You finished below that day’s goal.',
+      TargetVerdict.onTarget => 'You hit that day’s goal.',
+      TargetVerdict.over => 'You went past that day’s goal.',
       TargetVerdict.none => '',
     };
   }

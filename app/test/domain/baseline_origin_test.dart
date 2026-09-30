@@ -9,6 +9,7 @@ import 'package:airlog/domain/engine/baselines.dart';
 import 'package:airlog/domain/engine/engine.dart';
 import 'package:airlog/domain/engine/source_apps.dart';
 import 'package:airlog/domain/models.dart';
+import 'package:airlog/domain/results.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fixtures/builders.dart';
@@ -67,7 +68,7 @@ void main() {
     expect(hrv.baseline!.count, 5);
     expect(hrv.baseline!.mean, greaterThanOrEqualTo(80));
     expect(
-      r.notes.any((n) => n.title == 'New HRV baseline'),
+      r.notes.any((n) => n.title == 'Learning your HRV again'),
       isFalse,
       reason: 'the switch was 5 nights ago, not today',
     );
@@ -83,10 +84,12 @@ void main() {
       history: days.sublist(0, days.length - 1),
       now: now,
     );
-    final note = r.notes.firstWhere((n) => n.title == 'New HRV baseline');
+    final note = r.notes.firstWhere(
+      (n) => n.title == 'Learning your HRV again',
+    );
     expect(note.body, contains('Samsung Health'));
     expect(note.body, contains('Google Health (Fitbit)'));
-    expect(note.body, contains('0 earlier nights'));
+    expect(note.body, contains('It’s starting from tonight.'));
     // No Samsung baseline yet: HRV scores neutral instead of against Fitbit.
     final hrv = r.recovery!.components.firstWhere((c) => c.key == 'hrv');
     expect(hrv.baseline, isNull);
@@ -168,10 +171,12 @@ void main() {
     expect(values, hasLength(5));
     final r = Engine.computeRange(days, now: now);
     final firstWatch = r[12];
-    expect(firstWatch.notes.any((n) => n.title == 'New HRV baseline'), isTrue);
+    bool relearn(DayResult x) =>
+        x.notes.any((n) => n.title == 'Learning your HRV again');
+    expect(relearn(firstWatch), isTrue);
     // An Air night without device metadata did NOT start a segment.
-    expect(r[2].notes.any((n) => n.title == 'New HRV baseline'), isFalse);
-    expect(r[3].notes.any((n) => n.title == 'New HRV baseline'), isFalse);
+    expect(relearn(r[2]), isFalse);
+    expect(relearn(r[3]), isFalse);
   });
 
   test('calibration counts only nights of the current app segment', () {

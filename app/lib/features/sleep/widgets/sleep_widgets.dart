@@ -36,23 +36,26 @@ class SleepHero extends StatelessWidget {
     final change = debtChange;
     final changeText = change == null || change.abs() < 1
         ? null
-        : '${change > 0 ? '+' : '−'}${sleepHm(change.abs())} last night';
+        : '${change > 0 ? 'up' : 'down'} ${sleepHm(change.abs())} last night';
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Target and sleep debt', style: F.head.copyWith(color: p.ink)),
+          Text(
+            'Sleep goal and missed sleep',
+            style: F.head.copyWith(color: p.ink),
+          ),
           const SizedBox(height: S.x2),
           Text(
-            'Debt after the night ${sleepHm(a.debtAfterMinutes)}'
-            '${a.debtAfterMinutes >= _cfg.maxDebtMinutes - .5 ? ' (the cap)' : ''}',
+            'Missed sleep: ${sleepHm(a.debtAfterMinutes)}'
+            '${a.debtAfterMinutes >= _cfg.maxDebtMinutes - .5 ? ' (the most Airlog counts)' : ''}',
             style: F.tab(F.bodySm).copyWith(color: p.ink2),
           ),
           if (changeText != null)
             Text(changeText, style: F.tab(F.cap).copyWith(color: p.ink3)),
           if (a.napMinutes >= 1)
             Text(
-              'Time asleep includes ${sleepHm(a.napMinutes)} of naps.',
+              'Includes ${sleepHm(a.napMinutes)} of naps.',
               style: F.tab(F.cap).copyWith(color: p.ink3),
             ),
           if (b != null) ...[
@@ -63,7 +66,7 @@ class SleepHero extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: AppButton(
-                  label: 'How the target is worked out',
+                  label: 'How your sleep goal is set',
                   kind: AppButtonKind.quiet,
                   compact: true,
                   icon: Icons.functions_rounded,
@@ -92,14 +95,15 @@ class NeedBar extends StatelessWidget {
     final need = b.baselineMinutes + b.debtMinutes + b.strainMinutes;
     final scale = math.max(need, slept);
     final parts = [
-      ('Baseline', b.baselineMinutes, DomainColors.sleep),
-      ('Debt share', b.debtMinutes, C.amber),
-      ('Strain boost', b.strainMinutes, DomainColors.strain),
+      ('Usual need', b.baselineMinutes, DomainColors.sleep),
+      ('Catch-up', b.debtMinutes, C.amber),
+      ('Extra after a hard day', b.strainMinutes, DomainColors.strain),
     ];
     final spoken =
-        'Target ${sleepHm(need)}: baseline ${sleepHm(b.baselineMinutes)}, '
-        'debt share ${sleepHm(b.debtMinutes)}, strain boost '
-        '${sleepHm(b.strainMinutes)}. Slept ${sleepHm(slept)}.';
+        'Sleep goal ${sleepHm(need)}: usual need '
+        '${sleepHm(b.baselineMinutes)}, catch-up ${sleepHm(b.debtMinutes)}, '
+        'extra after a hard day ${sleepHm(b.strainMinutes)}. You slept '
+        '${sleepHm(slept)}.';
     return Semantics(
       label: spoken,
       container: true,
@@ -213,17 +217,17 @@ class StageStats extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         stat(
-          'Restorative',
-          a.hasStageData ? sleepHm(a.restorativeMinutes) : 'Unavailable',
+          'Deep + REM',
+          a.hasStageData ? sleepHm(a.restorativeMinutes) : 'No stage data',
           restorativePct == null
-              ? 'deep + REM'
-              : 'deep + REM · ${restorativePct!.round()} %',
+              ? 'of your sleep'
+              : '${restorativePct!.round()}% of your sleep',
         ),
         const SizedBox(width: S.x3),
         stat(
-          'Efficiency',
-          a.efficiency == null ? '–' : '${a.efficiency!.round()} %',
-          'asleep of in bed',
+          'Asleep in bed',
+          a.efficiency == null ? '–' : '${a.efficiency!.round()}%',
+          'of your time in bed',
         ),
         const SizedBox(width: S.x3),
         stat('In bed', inBed == null ? '–' : sleepHm(inBed), null),
@@ -239,6 +243,7 @@ class NapsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
+    final h24 = MediaQuery.alwaysUse24HourFormatOf(context);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -255,7 +260,8 @@ class NapsCard extends StatelessWidget {
                 const SizedBox(width: S.x3),
                 Expanded(
                   child: Text(
-                    '${clockOf(n.start)}–${clockOf(n.end)}',
+                    '${clockTextOf(n.start, use24h: h24)}–'
+                    '${clockTextOf(n.end, use24h: h24)}',
                     style: F.tab(F.bodySm).copyWith(color: p.ink),
                   ),
                 ),
@@ -268,7 +274,7 @@ class NapsCard extends StatelessWidget {
           ],
           const SizedBox(height: S.x3),
           Text(
-            'Naps count toward the night\'s total and its performance.',
+            'Naps count toward your sleep goal.',
             style: F.cap.copyWith(color: p.ink3),
           ),
         ],
@@ -277,7 +283,7 @@ class NapsCard extends StatelessWidget {
   }
 }
 
-/// "Aim to be asleep by 21:45…" for the coming night.
+/// "Try to be asleep by 11:35 pm…" for the coming night.
 class BedtimeCard extends StatelessWidget {
   const BedtimeCard({super.key, required this.bedtime, this.onExplain});
   final BedtimeVm bedtime;
@@ -288,18 +294,24 @@ class BedtimeCard extends StatelessWidget {
     final p = P.of(context);
     final b = bedtime;
     final ink = p.on(DomainColors.sleep);
-    final debt = b.debtShareMinutes >= 1
-        ? ', including ${sleepHm(b.debtShareMinutes)} toward your '
-              '${sleepHm(b.debtMinutes)} of debt'
+    final h24 = MediaQuery.alwaysUse24HourFormatOf(context);
+    final bed = b.bedMinutes == null
+        ? b.bedtime
+        : clockText(b.bedMinutes!, use24h: h24);
+    final wake = b.wakeMinutes == null
+        ? b.wake
+        : clockText(b.wakeMinutes!, use24h: h24);
+    final catchUp = b.debtShareMinutes >= 1
+        ? ', with ${sleepHm(b.debtShareMinutes)} extra to catch up'
         : '';
     final body =
-        'Tonight’s target is ${sleepHm(b.needMinutes)}$debt, and you usually '
-        'wake at ${b.wake}.';
+        'That gives you ${sleepHm(b.needMinutes)} of sleep before you usually '
+        'wake up at $wake$catchUp.';
     return AppCard(
       tone: CardTone.tinted,
       accent: DomainColors.sleep,
       onTap: onExplain,
-      semanticLabel: 'Tonight: aim to be asleep by ${b.bedtime}. $body',
+      semanticLabel: 'Tonight: try to be asleep by $bed. $body',
       child: ExcludeSemantics(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,9 +333,9 @@ class BedtimeCard extends StatelessWidget {
                   Text.rich(
                     TextSpan(
                       children: [
-                        const TextSpan(text: 'Aim to be asleep by '),
+                        const TextSpan(text: 'Try to be asleep by '),
                         TextSpan(
-                          text: b.bedtime,
+                          text: bed,
                           style: F.n24.copyWith(color: p.ink),
                         ),
                       ],
@@ -361,62 +373,63 @@ Future<void> showSleepNeedExplain(BuildContext context, SleepAnalysis? a) {
   final span = numText(SleepEngine.strainBoostSpan);
   return showExplainSheet<void>(
     context,
-    title: 'Sleep target',
+    title: 'Sleep goal',
     lede:
-        'How much sleep a night asks for: a fixed baseline, plus part of any '
-        'debt, plus a little more after a hard day.',
+        'How much sleep suits tonight: your usual need, plus some catch-up '
+        'for missed sleep, plus a little extra after a hard day.',
     children: [
       if (a != null && b != null)
         ExplainSection(
           title: 'This night',
           formula:
-              'baseline ${sleepHm(b.baselineMinutes)}\n'
-              '+ debt share ${sleepHm(b.debtMinutes)}\n'
-              '+ strain boost ${sleepHm(b.strainMinutes)}\n'
-              '= target ${sleepHm(a.needMinutes)} · slept '
-              '${sleepHm(a.sleptMinutes)} → ${a.performance.round()} %',
+              'usual need ${sleepHm(b.baselineMinutes)}\n'
+              '+ catch-up ${sleepHm(b.debtMinutes)}\n'
+              '+ extra after a hard day ${sleepHm(b.strainMinutes)}\n'
+              '= goal ${sleepHm(a.needMinutes)} · slept '
+              '${sleepHm(a.sleptMinutes)} → ${a.performance.round()}%',
         ),
       ExplainSection(
-        title: 'Need',
+        title: 'Sleep goal',
         body:
-            'Baseline $base. Add $repay % of the debt carried into the night, '
-            'and up to $boost when the previous day\'s strain was above $from '
-            '(the full $boost at '
+            'Your usual need is $base. Add $repay% of your missed sleep, and '
+            'up to $boost extra when yesterday’s Strain was above $from (the '
+            'full $boost at '
             '${numText(SleepEngine.strainBoostFrom + SleepEngine.strainBoostSpan)}). '
-            'The total stays between $lo and $hi.',
+            'The goal always stays between $lo and $hi.',
         formula:
             'target = clamp($base + $repay % × debt + boost, $lo, $hi)\n'
             'boost = clamp((strain − $from) / $span, 0, 1) × $boost',
       ),
       ExplainSection(
-        title: 'Debt',
+        title: 'Missed sleep',
         body:
-            'Each night adds (baseline + strain boost − slept) to the running '
-            'debt, or pays it down when you sleep longer. It is capped at '
-            '$maxDebt and can grow by at most $perNight in one night. A night '
-            'without data leaves it unchanged.',
+            'Each night, any sleep you missed is added. Sleeping longer than '
+            'your goal pays it back. It never goes above $maxDebt, and it '
+            'grows by at most $perNight in one night. A night with no data '
+            'leaves it as it was.',
       ),
       ExplainSection(
-        title: 'Performance and consistency',
+        title: 'Sleep % and consistency',
         body:
-            'Performance is sleep (naps included) against the target, capped at '
-            '100 %. Consistency compares tonight\'s bed and wake times with '
-            'your previous ${SleepEngine.consistencyWindow} main sleeps: 100 % '
-            'is the same times, and it reaches 0 % at an average shift of '
-            '${numText(SleepEngine.consistencyZeroMinutes)} minutes.',
+            'Your sleep % is how much of your goal you slept, naps included, '
+            'up to 100%. Consistency compares your bed and wake times with '
+            'your last ${SleepEngine.consistencyWindow} nights: 100% means '
+            'the same times, and it reaches 0% when they’re '
+            '${numText(SleepEngine.consistencyZeroMinutes)} minutes off on '
+            'average.',
       ),
       const ExplainSection(
-        title: 'Tonight\'s bedtime',
+        title: 'Tonight’s bedtime',
         body:
-            'Your average wake time over the last '
-            '${SleepEngine.bedtimeWakeDays} days minus tonight\'s projected '
-            'target. It is when to be asleep, so allow time to fall asleep.',
+            'Your usual wake-up time over the last '
+            '${SleepEngine.bedtimeWakeDays} days, minus tonight’s sleep goal. '
+            'It’s when to be asleep, so get into bed a little earlier.',
       ),
       const ExplainSection(
         title: 'Sources',
         body:
-            'Ported from Pulse (Luraxx/pulse, Apache-2.0) SleepEngine. Stages '
-            'are the band\'s own classification via Health Connect.',
+            'Ported from Pulse (Luraxx/pulse, Apache-2.0) SleepEngine. Sleep '
+            'stages come from your tracker, through Health Connect.',
       ),
     ],
   );

@@ -156,7 +156,7 @@ void main() {
       });
       final p = planJson(s);
       expect(p['state'], DayState.ready.name);
-      expect(p['headline'], 'Ready to push');
+      expect(p['headline'], 'Your body is ready');
       expect(p['stale'], isFalse);
       expect(p['phase'], PlanPhase.today.name);
       expect(p['action'], isNotNull);
@@ -327,7 +327,7 @@ void main() {
       const base = TodayPlan(
         date: today,
         state: DayState.steady,
-        headline: 'A normal day',
+        headline: 'Good for a normal day',
         summary: 'x',
       );
       final plans = [
@@ -347,8 +347,10 @@ void main() {
           date: today,
           state: DayState.calibrating,
           headline: 'h',
-          summary: 'Re-learning your normal with Oura: 2 of 14 nights.',
+          summary:
+              'You switched to Oura, so Airlog is learning your usual again.',
           relearningSource: 'Oura',
+          summaryNamesRelearning: true,
         ),
       ];
       for (final p in plans) {

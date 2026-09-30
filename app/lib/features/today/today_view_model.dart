@@ -1,11 +1,13 @@
-// Today view-model: one day's three scores, the Health Monitor, the honesty
-// notes and a deterministic one-line summary, mapped from the engine's
+// Today view-model: one day's three scores, the Health Monitor and the
+// honesty notes (the day's story is TodayPlan's), mapped from the engine's
 // DayResult. No Flutter widgets here; the screen only renders [TodayState].
 //
 // Reloads on every repository revision (sync, journal save) and whenever the
 // focused day changes. Every sentence the screen shows is built here from the
 // engine's numbers, so it can be unit-tested and never says more than the
 // data does.
+
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -73,16 +75,6 @@ class AlertVm {
   final String fix;
 }
 
-/// The plain-English line: [why] (the signals behind the score) then
-/// [verdict] (the score and what it suggests). Non-breaking spaces keep each
-/// number with its unit.
-class SummaryVm {
-  const SummaryVm(this.why, this.verdict);
-  final String why;
-  final String verdict;
-  String get text => why.isEmpty ? verdict : '$why $verdict';
-}
-
 enum TodayContent {
   /// The store is empty (first run, live mode before any sync).
   noData,
@@ -105,7 +97,6 @@ class TodayState {
     this.recovery = RingVm.loading,
     this.strain = RingVm.loading,
     this.sleep = RingVm.loading,
-    this.summary,
     this.alert,
     this.calibration,
     this.calibrationBody,
@@ -168,7 +159,6 @@ class TodayState {
   final String? earliest;
 
   final RingVm recovery, strain, sleep;
-  final SummaryVm? summary;
   final AlertVm? alert;
 
   /// Non-null while the baseline is not established (banner shown).
@@ -182,7 +172,7 @@ class TodayState {
   /// Informational notes, collapsed behind one row.
   final List<StatusNote> infoNotes;
 
-  /// Birth year missing: zones use an assumed max HR.
+  /// A setup note (Pulse Age) asks for the profile.
   final bool profileIncomplete;
 
   /// The evening the journal card logs ([eveningKeyOf] the clock), null =
@@ -293,7 +283,6 @@ abstract final class TodayMapper {
       );
     }
     final r = bundle.result;
-    final isToday = date == today;
     final notes = sortNotes(r);
     final cal = r.calibration;
     return TodayState(
@@ -306,7 +295,6 @@ abstract final class TodayMapper {
       recovery: recoveryRing(r),
       strain: strainRing(r.strain),
       sleep: sleepRing(r.sleep),
-      summary: summary(r, isToday: isToday),
       alert: alert(r, window, date),
       calibration: cal.established ? null : cal,
       calibrationBody: cal.established ? null : notes.calibrationBody,
@@ -384,10 +372,20 @@ abstract final class TodayMapper {
     if (v == null || m == null || m == 0) return null;
     if (key == 'hrv') {
       final pct = ((v / m - 1) * 100).round();
-      return pct == 0 ? 'Same as usual' : '${pct > 0 ? '+' : '−'}${pct.abs()}%';
+      return pct == 0 ? 'About usual' : '${pct > 0 ? '+' : '−'}${pct.abs()}%';
     }
     final d = (v.round() - m.round());
-    return d == 0 ? 'Same as usual' : '${d > 0 ? '+' : '−'}${d.abs()} bpm';
+    return d == 0 ? 'About usual' : '${d > 0 ? '+' : '−'}${d.abs()} bpm';
+  }
+
+  /// [vsUsual] read aloud: "+13%" → "13% above your usual", "−3 bpm" →
+  /// "3 bpm below your usual", "About usual" → "about the same as your
+  /// usual"; null → "no reading".
+  static String spokenVsUsual(String? v) {
+    if (v == null) return 'no reading';
+    if (v == 'About usual') return 'about the same as your usual';
+    final up = v.startsWith('+');
+    return '${v.substring(1)} ${up ? 'above' : 'below'} your usual';
   }
 
   /// Strain without heart rate shows what was measured instead of a number.
@@ -421,7 +419,7 @@ abstract final class TodayMapper {
   static RingVm recoveryRing(DayResult r) {
     final rec = r.recovery;
     if (rec == null) {
-      return const RingVm(state: RingState.noData, caption: 'No HRV or RHR');
+      return const RingVm(state: RingState.noData, caption: 'No heart data');
     }
     if (rec.calibrating) {
       final left = nightsToReliable(rec, r.calibration);
@@ -436,7 +434,7 @@ abstract final class TodayMapper {
     return RingVm(
       state: provisional ? RingState.provisional : RingState.measured,
       value: rec.score.toDouble(),
-      caption: provisional ? 'Provisional' : zoneName(rec.zone),
+      caption: provisional ? 'Early estimate' : zoneName(rec.zone),
       zone: rec.zone,
     );
   }
@@ -460,14 +458,14 @@ abstract final class TodayMapper {
   }
 
   static String zoneName(RecoveryZone z) => switch (z) {
-    RecoveryZone.green => 'Green zone',
-    RecoveryZone.yellow => 'Yellow zone',
-    RecoveryZone.red => 'Red zone',
+    RecoveryZone.green => 'Good',
+    RecoveryZone.yellow => 'Fair',
+    RecoveryZone.red => 'Low',
   };
 
   static RingVm strainRing(StrainResult? s) {
     if (s == null || s.method == StrainMethod.none) {
-      return const RingVm(state: RingState.noData, caption: 'No HR data');
+      return const RingVm(state: RingState.noData, caption: 'No heart rate');
     }
     final target = s.targetStrain;
     final estimated = s.method == StrainMethod.fallback;
@@ -476,141 +474,21 @@ abstract final class TodayMapper {
       value: s.strain,
       valueText: s.strain.toStringAsFixed(1),
       caption: [
-        if (estimated) 'Estimated',
-        if (target != null) 'Target ${target.toStringAsFixed(1)}',
+        if (estimated) 'Estimate',
+        if (target != null) 'Goal ${target.toStringAsFixed(1)}',
       ].join(' · '),
     );
   }
 
   static RingVm sleepRing(SleepAnalysis? s) {
     if (s == null || !s.hasData) {
-      return const RingVm(state: RingState.noData, caption: 'No sleep');
+      return const RingVm(state: RingState.noData, caption: 'No sleep data');
     }
     return RingVm(
       state: RingState.measured,
       value: s.performance,
       caption: hm(s.sleptMinutes),
     );
-  }
-
-  // ── summary ────────────────────────────────────────────────────────────
-
-  static const _nb = '\u00A0';
-
-  /// One or two sentences, every clause backed by a number the engine gave.
-  static SummaryVm summary(DayResult r, {required bool isToday}) {
-    final rec = r.recovery;
-    final sleep = r.sleep;
-    if (rec == null) {
-      final slept = sleep != null && sleep.hasData
-          ? ' You slept ${hm(sleep.sleptMinutes)} of the '
-                '${hm(sleep.needMinutes)} you needed.'
-          : '';
-      return SummaryVm(
-        '',
-        'No Recovery score: neither HRV nor resting heart rate arrived '
-            'for ${isToday ? 'last night' : 'that night'}.$slept',
-      );
-    }
-    final hrv = component(rec, 'hrv');
-    final rhr = component(rec, 'rhr');
-    if (rec.calibrating) {
-      final left = nightsToReliable(rec, r.calibration);
-      final measured = [
-        if (hrv?.value != null) 'HRV ${hrv!.value!.round()}${_nb}ms',
-        if (rhr?.value != null) 'resting HR ${rhr!.value!.round()}${_nb}bpm',
-      ];
-      return SummaryVm(
-        measured.isEmpty ? '' : 'Last night: ${measured.join(', ')}.',
-        'Still learning your baseline: $left more '
-        '${left == 1 ? 'night' : 'nights'} before Recovery means much.',
-      );
-    }
-    final why = signals(hrv, rhr, sleep);
-    final score =
-        'Recovery ${rec.score}$_nb%'
-        '${r.calibration.established ? '' : ' (provisional)'}';
-    final target = r.strain?.targetStrain;
-    String advice;
-    if (isToday) {
-      final t = target == null
-          ? ''
-          : ' (target strain ${target.toStringAsFixed(1)})';
-      advice = switch (rec.zone) {
-        RecoveryZone.green => ' — a good day for a harder session$t.',
-        RecoveryZone.yellow => ' — a moderate session suits today$t.',
-        RecoveryZone.red => ' — a day to keep it light$t.',
-      };
-    } else {
-      final s = r.strain;
-      final reached = s == null || s.method == StrainMethod.none
-          ? ''
-          : '; strain reached ${s.strain.toStringAsFixed(1)}';
-      advice = target == null
-          ? '$reached.'
-          : ' — target strain was ${target.toStringAsFixed(1)}$reached.';
-    }
-    return SummaryVm(why, '$score$advice');
-  }
-
-  /// "HRV is 14 % above your usual and resting HR 3 bpm below."
-  static String signals(
-    RecoveryComponent? hrv,
-    RecoveryComponent? rhr,
-    SleepAnalysis? sleep,
-  ) {
-    final hv = hrv?.value, hb = hrv?.baseline?.mean;
-    final rv = rhr?.value, rb = rhr?.baseline?.mean;
-    String? h, rh;
-    var hUsual = false, rUsual = false;
-    if (hv != null && hb != null && hb > 0) {
-      final pct = (hv / hb - 1) * 100;
-      if (pct.abs() < 5) {
-        hUsual = true;
-      } else {
-        h = '${pct.abs().round()}$_nb% ${pct > 0 ? 'above' : 'below'}';
-      }
-    }
-    if (rv != null && rb != null) {
-      final d = rv - rb;
-      if (d.abs() < 1.5) {
-        rUsual = true;
-      } else {
-        rh = '${d.abs().round()}${_nb}bpm ${d > 0 ? 'above' : 'below'}';
-      }
-    }
-    final String first;
-    if (hv == null && rv == null) {
-      first = 'No HRV or resting heart rate last night.';
-    } else if (hv == null) {
-      first = rUsual
-          ? 'No HRV last night; resting HR is normal for you.'
-          : rh == null
-          ? 'No HRV last night.'
-          : 'No HRV last night; resting HR is $rh your usual.';
-    } else if (rv == null) {
-      first = hUsual
-          ? 'HRV is normal for you; no resting HR last night.'
-          : h == null
-          ? 'No resting HR last night.'
-          : 'HRV is $h your usual; no resting HR last night.';
-    } else if (h != null && rh != null) {
-      first = 'HRV is $h your usual and resting HR $rh.';
-    } else if (h != null) {
-      first = 'HRV is $h your usual; resting HR is normal.';
-    } else if (rh != null) {
-      first = 'HRV is normal; resting HR is $rh your usual.';
-    } else if (hUsual && rUsual) {
-      first = 'HRV and resting HR are both normal for you.';
-    } else {
-      first = 'Baselines for HRV and resting HR are still short.';
-    }
-    final perf = sleep != null && sleep.hasData ? sleep.performance : null;
-    if (perf != null && perf < 70) {
-      return '${first.substring(0, first.length - 1)}, and sleep covered '
-          '${perf.round()}$_nb% of your need.';
-    }
-    return first;
   }
 
   static RecoveryComponent? component(RecoveryResult r, String key) {
@@ -675,8 +553,8 @@ abstract final class TodayMapper {
           if (HealthMonitor.isConcerning(s)) s,
     ];
     const fix =
-        'An easier day and an early night are a sensible response. This is '
-        'a pattern in your numbers, not a diagnosis.';
+        'An easier day and an early night can help. This is a pattern in '
+        'your numbers, not a diagnosis.';
     if (concerning.isEmpty) {
       return AlertVm(
         title: 'Signals outside your usual range',
@@ -698,10 +576,11 @@ abstract final class TodayMapper {
     final s = concerning.single;
     final days = streak(s.kind, window, date);
     final dir = HealthMonitor.directionWord(s.kind) == 'low' ? 'low' : 'high';
+    final name = _cap(s.kind.plainName);
     return AlertVm(
       title: days >= 2
-          ? '${s.kind.label} $dir for $days days'
-          : '${s.kind.label} outside your usual range',
+          ? '$name $dir for $days days'
+          : '$name outside your usual range',
       body: '${_cap(_compare(s))}.',
       fix: fix,
     );
@@ -725,20 +604,18 @@ abstract final class TodayMapper {
     return n;
   }
 
-  /// "resting HR higher (60 vs usual 54 bpm)".
+  /// "your resting heart rate is higher (60 vs your usual 54 bpm)".
   static String _compare(HealthMetricStatus s) {
     final v = s.value, m = s.baseline?.mean;
     final word = s.state == BandState.above ? 'higher' : 'lower';
-    final name = switch (s.kind) {
-      HealthMetricKind.hrv => 'HRV',
-      HealthMetricKind.restingHr => 'resting HR',
-      HealthMetricKind.respiratoryRate => 'respiratory rate',
-      HealthMetricKind.spo2 => 'SpO₂',
-      HealthMetricKind.skinTemp => 'skin temperature',
-    };
-    if (v == null || m == null) return '$name $word than usual';
-    return '$name $word (${metricValue(s.kind, v)} vs usual '
-        '${metricValue(s.kind, m)} ${s.kind.unit})';
+    final name = s.kind.plainName;
+    if (v == null || m == null) return 'your $name is $word than usual';
+    final unit = s.kind.displayUnit;
+    final usual = unit == '%'
+        ? '${metricValue(s.kind, m)}%'
+        : '${metricValue(s.kind, m)} $unit';
+    return 'your $name is $word (${metricValue(s.kind, v)} vs your usual '
+        '$usual)';
   }
 
   static String _count(int n) => switch (n) {
@@ -758,9 +635,6 @@ abstract final class TodayMapper {
       MetricTile.valueText(k, v);
 
   // ── notes ──────────────────────────────────────────────────────────────
-
-  static final _calibratingTitle = Notes.recoveryCalibrating(0, '').title;
-  static final _assumedMaxTitle = Notes.assumedMaxHr(0).title;
 
   /// Sorts the day's notes for Today:
   ///  * the calibrating note becomes the banner's body (no duplicate card);
@@ -782,17 +656,16 @@ abstract final class TodayMapper {
     String? calibrationBody;
     final noRecovery = r.recovery == null;
     for (final n in r.notes) {
-      if (n.metric == 'recovery' && n.title == _calibratingTitle) {
+      if (Notes.isCalibrating(n)) {
         calibrationBody = n.body;
         continue;
       }
-      if (n.metric == 'pulse_age' || n.title == _assumedMaxTitle) {
+      if (n.metric == 'pulse_age') {
         profile = true;
         continue;
       }
       if (n.metric == 'vo2max') continue;
-      final switched =
-          n.title.startsWith('New ') && n.title.endsWith('baseline');
+      final switched = Notes.isNewBaseline(n);
       final covered =
           noRecovery &&
           (n.metric == Metric.hrv.code || n.metric == Metric.restingHr.code);
@@ -815,7 +688,7 @@ abstract final class TodayMapper {
 String hm(double minutes) {
   if (!minutes.isFinite) return '';
   final t = minutes.round(), h = t ~/ 60, m = t % 60;
-  if (h == 0) return '${m}m';
+  if (h == 0) return '$m min';
   return m == 0 ? '${h}h' : '${h}h ${m}m';
 }
 
@@ -832,6 +705,8 @@ final todayPlanProvider = Provider.autoDispose<TodayPlan?>((ref) {
     sync: sync,
     now: ref.watch(currentTimeProvider),
     appNames: s!.appNames,
+    // The phone's 12/24-hour setting for bedtimes (no BuildContext here).
+    use24h: PlatformDispatcher.instance.alwaysUse24HourFormat,
   );
 });
 
@@ -847,7 +722,6 @@ extension on TodayState {
         recovery: recovery,
         strain: strain,
         sleep: sleep,
-        summary: summary,
         alert: alert,
         calibration: calibration,
         calibrationBody: calibrationBody,

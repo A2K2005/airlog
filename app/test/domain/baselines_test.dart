@@ -5,6 +5,7 @@ import 'package:airlog/domain/day_key.dart';
 import 'package:airlog/domain/engine/baselines.dart';
 import 'package:airlog/domain/engine/engine.dart';
 import 'package:airlog/domain/engine/health_monitor.dart';
+import 'package:airlog/domain/engine/notes.dart';
 import 'package:airlog/domain/engine/recovery.dart';
 import 'package:airlog/domain/models.dart';
 import 'package:airlog/domain/results.dart';
@@ -80,7 +81,7 @@ void main() {
       List<StatusNote> hrvNotes(String d) => results
           .firstWhere((r) => r.date == d)
           .notes
-          .where((n) => n.metric == 'hrv' && n.title.startsWith('New'))
+          .where((n) => n.metric == 'hrv' && Notes.isNewBaseline(n))
           .toList();
       expect(hrvNotes('2026-08-21'), hasLength(1));
       expect(hrvNotes('2026-08-22'), isEmpty);
@@ -91,7 +92,7 @@ void main() {
       final day2 = results.firstWhere((r) => r.date == '2026-08-22');
       expect(day2.recovery!.calibrating, isTrue);
       final cal = day2.notes.firstWhere(
-        (n) => n.title == 'Calibrating your baseline',
+        (n) => n.title == 'Learning your usual',
       );
       expect(cal.body, contains('5 nights of HRV (1 so far)'));
       expect(day2.calibration.haveNights, 21);

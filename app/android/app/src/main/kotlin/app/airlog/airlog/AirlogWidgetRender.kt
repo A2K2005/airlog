@@ -76,7 +76,7 @@ class WidgetSnapshot(private val j: JSONObject) {
     val stale: Boolean get() = date.isNotEmpty() && date != LocalDate.now().toString()
 
     val recovery: Int? = if (j.isNull("recovery")) null else j.optInt("recovery", -1).takeIf { it >= 0 }
-    val recStatus: String = j.optString("recStatus", "").ifEmpty { if (recovery == null) "No data" else "" }
+    val recStatus: String = j.optString("recStatus", "").ifEmpty { if (recovery == null) "No score" else "" }
     val recBasis: String = j.optString("recBasis", "")
     val sleepText: String = j.optString("sleep", "").takeIf { it != "–" } ?: ""
 

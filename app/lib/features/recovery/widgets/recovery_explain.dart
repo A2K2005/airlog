@@ -1,7 +1,8 @@
 // The Recovery and readiness explain sheets: the exact formulas, the
 // constants read from the engine (never retyped), and the sources. When an
-// input comes from WHOOP or Oura, a line says this is not that app's own
-// score and links to Methodology ("Other apps' scores").
+// input comes from an app with its own recovery or readiness score, a line
+// says this is not that app's score (without naming it) and links to
+// Methodology ("Other apps' scores").
 
 import 'package:flutter/material.dart';
 
@@ -21,17 +22,17 @@ const _cfg = EngineConfig();
 String _w(String key) =>
     ((RecoveryEngine.weights[key] ?? 0) * 100).round().toString();
 
-/// "This differs from WHOOP’s own Recovery; here’s why." (and Oura’s
-/// Readiness), once for each of those apps that supplied a Recovery input.
+/// "This isn’t your tracker app’s own score. Here’s why." once, when an app
+/// with its own recovery or readiness score supplied a Recovery input. The
+/// app isn't named (no brand names in the UI).
 List<String> vendorScoreLines(RecoveryState? s) {
   final origins = {
     for (final i in s?.inputs ?? const <InputVm>[]) i.provenance?.origin,
   };
   return [
-    if (origins.contains(SourceApps.whoop))
-      'This differs from WHOOP’s own Recovery; here’s why.',
-    if (origins.contains(SourceApps.oura))
-      'This differs from Oura’s Readiness; here’s why.',
+    if (origins.contains(SourceApps.whoop) ||
+        origins.contains(SourceApps.oura))
+      'This isn’t your tracker app’s own score. Here’s why.',
   ];
 }
 
@@ -44,11 +45,11 @@ Future<void> showRecoveryExplain(BuildContext context, {RecoveryState? state}) {
     title: score == null ? 'How Recovery works' : 'Recovery $score',
     lede:
         'Recovery compares last night with your own recent nights, not with '
-        'anyone else. Every number below is computed on this phone.',
+        'anyone else’s. Everything below is worked out on this phone.',
     children: [
       if (vendor.isNotEmpty)
         ExplainSection(
-          title: 'Not the app’s own score',
+          title: 'Not your app’s own score',
           body: vendor.join(' '),
           child: Align(
             alignment: Alignment.centerLeft,
@@ -63,7 +64,7 @@ Future<void> showRecoveryExplain(BuildContext context, {RecoveryState? state}) {
         ),
       if (s != null && s.contributions.isNotEmpty)
         ExplainSection(
-          title: 'This night\'s inputs',
+          title: 'This night’s signals',
           child: ContributionBars(
             items: s.contributions,
             color: DomainColors.recoveryZone(s.result!.zone),
@@ -74,18 +75,18 @@ Future<void> showRecoveryExplain(BuildContext context, {RecoveryState? state}) {
       ExplainSection(
         title: 'Weights',
         body:
-            'HRV ${_w('hrv')} · resting HR ${_w('rhr')} · sleep performance '
-            '${_w('sleep')} · respiratory rate ${_w('resp')}. An input that '
-            'did not arrive is left out and the others are scaled up so the '
-            'weights still sum to 100: no number is guessed.',
+            'HRV ${_w('hrv')} · resting heart rate ${_w('rhr')} · sleep '
+            '${_w('sleep')} · breathing rate ${_w('resp')}. If a signal is '
+            'missing, the others count for more, so the total is still 100. '
+            'Nothing is guessed.',
       ),
       ExplainSection(
-        title: 'Each input, scored 0 to 1',
+        title: 'Each signal, scored 0 to 1',
         body:
-            'Each input is compared with your baseline: the last '
-            '${_cfg.baselineWindowDays} nights measured the same way (a '
-            'change of source starts a new baseline). z is how many standard '
-            'deviations tonight sits from your mean.',
+            'Each signal is compared with your usual: your last '
+            '${_cfg.baselineWindowDays} nights, measured the same way. (z is '
+            'how far last night was from your usual, in standard '
+            'deviations.)',
         formula:
             'HRV:  z = (ln RMSSD − mean ln) / max(SD ln, ${numText(RE.hrvMinSd)})\n'
             '      score = 1 / (1 + e^(−${numText(RE.hrvLogisticSlope)}·z))\n'
@@ -102,36 +103,36 @@ Future<void> showRecoveryExplain(BuildContext context, {RecoveryState? state}) {
       ExplainSection(
         title: 'Penalties',
         body:
-            'Two warning signs subtract after weighting: overnight SpO₂ '
-            'minimum below ${numText(RE.spo2PenaltyBelow)} % '
+            'Two warning signs subtract after weighting: overnight blood '
+            'oxygen (SpO₂) below ${numText(RE.spo2PenaltyBelow)}% '
             '(−${numText(RE.spo2Penalty)}), and skin temperature more than '
             '${numText(RE.skinTempPenaltyZ)} standard deviations above your '
-            'baseline (−${numText(RE.skinTempPenalty)}). Respiratory rate only '
-            'costs points when it is raised, never when it is low.',
+            'usual (−${numText(RE.skinTempPenalty)}). Breathing rate only '
+            'costs points when it’s raised, never when it’s low.',
       ),
       ExplainSection(
-        title: 'Score and zones',
+        title: 'Score and levels',
         formula:
             'recovery = clamp(100 × Σ weight × score − penalties, '
             '${numText(RE.minScore)}, ${numText(RE.maxScore)})\n'
-            'green ≥ ${RE.greenFrom} · yellow ${RE.yellowFrom}–'
-            '${RE.greenFrom - 1} · red < ${RE.yellowFrom}',
+            'Good (green) ≥ ${RE.greenFrom} · Fair (yellow) ${RE.yellowFrom}–'
+            '${RE.greenFrom - 1} · Low (red) < ${RE.yellowFrom}',
       ),
       ExplainSection(
-        title: 'Calibration',
+        title: 'Learning',
         body:
-            'Until an input has a baseline it scores a neutral '
-            '${numText(RE.neutralScore)}. Recovery shows Calibrating until HRV '
-            'and resting HR each have ${RE.reliableNights} nights, and '
-            'Provisional until ${_cfg.calibrationNeedNights} nights; the '
-            'banner counts them.',
+            'Until Airlog knows a signal’s usual, it scores a neutral '
+            '${numText(RE.neutralScore)}. Recovery says “Learning” until HRV '
+            'and resting heart rate each have ${RE.reliableNights} nights, '
+            'and “early estimate” until ${_cfg.calibrationNeedNights} '
+            'nights. The banner counts them.',
       ),
       ExplainSection(
         title: 'Sources',
         body:
             'Formula ported from Pulse (Luraxx/pulse, Apache-2.0), an '
-            'open-source take on the HRV-led, baseline-relative approach '
-            'WHOOP describes. ln-transformed RMSSD follows Plews et al. '
+            'open-source take on the HRV-led approach that compares you with '
+            'your own usual. ln-transformed RMSSD follows Plews et al. '
             '(Sports Med 2013) and Buchheit (Front Physiol 2014); RMSSD is '
             'defined by the Task Force of the ESC and NASPE (Circulation '
             '1996).',
@@ -154,11 +155,10 @@ Future<void> showReadinessExplain(BuildContext context, ReadinessVm? r) {
   final factor = Readiness.swcFactor;
   return showExplainSheet<void>(
     context,
-    title: '7-night HRV trend',
+    title: '7-night HRV',
     lede:
-        'One night\'s HRV is noisy. The 7-night average moves only when '
-        'something real has changed, so it is judged against a band of normal '
-        'variation rather than a single cut-off.',
+        'One night of HRV jumps around. A 7-night average moves only when '
+        'something real has changed.',
     children: [
       ExplainSection(
         title: 'Method',
@@ -188,10 +188,10 @@ Future<void> showReadinessExplain(BuildContext context, ReadinessVm? r) {
       const ExplainSection(
         title: 'Reading it',
         body:
-            'Inside the band: your HRV is steady. A week below the band is a '
-            'more reliable reason to ease off than one low night. A rising '
-            'day-to-day variation can flag instability even when the average '
-            'looks normal.',
+            'In your usual range: your HRV is steady. A whole week below it is '
+            'a better reason to ease off than one low night. If the '
+            'night-to-night swing keeps growing, your body may be less '
+            'settled, even when the average looks fine.',
       ),
       const ExplainSection(
         title: 'Sources',

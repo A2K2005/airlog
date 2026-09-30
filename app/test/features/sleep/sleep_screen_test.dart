@@ -59,25 +59,35 @@ void main() {
     // PR #1 dropped the duplicate performance ring: the summary tile carries
     // the score.
     expect(
-      find.bySemanticsLabel(RegExp('performance 89 percent')),
+      find.bySemanticsLabel(RegExp('89 percent of your')),
       findsOneWidget,
     );
-    // The slept / target line lived in the removed ring block; the summary
+    // Durations are "7h 1m", never a clock-like "7:01".
+    expect(find.text('7h 1m'), findsOneWidget);
+    expect(find.text('Of your goal'), findsOneWidget);
+    // The slept / goal line lived in the removed ring block; the summary
     // tile states both (its label above).
-    expect(find.text('Debt after the night 58m'), findsOneWidget);
-    expect(find.text('Baseline 7h 36m'), findsOneWidget);
-    expect(find.text('Debt share 3m'), findsOneWidget);
-    expect(find.text('Strain boost 12m'), findsOneWidget);
+    expect(find.text('Missed sleep: 58 min'), findsOneWidget);
+    expect(find.text('Usual need 7h 36m'), findsOneWidget);
+    expect(find.text('Catch-up 3 min'), findsOneWidget);
+    expect(find.text('Extra after a hard day 12 min'), findsOneWidget);
+    // flutter_test phones use the 12-hour clock.
     expect(
-      find.text('Aim to be asleep by 23:35', findRichText: true),
+      find.text('Try to be asleep by 11:35 pm', findRichText: true),
       findsOneWidget,
     );
-    expect(find.textContaining('you usually wake at 07:28'), findsOneWidget);
+    expect(
+      find.textContaining('before you usually wake up at 7:28 am'),
+      findsOneWidget,
+    );
     expect(find.byType(HypnogramChart), findsOneWidget);
     expect(find.byType(SleepSummaryTile), findsOneWidget);
     expect(find.text('2h 31m'), findsOneWidget);
-    expect(find.text('95 %'), findsOneWidget);
-    expect(find.text('43 % against your previous 4 nights'), findsOneWidget);
+    expect(find.text('95%'), findsOneWidget);
+    expect(
+      find.text('43% · compared with your last 4 nights'),
+      findsOneWidget,
+    );
     expect(find.byType(ScatterConsistency), findsOneWidget);
   });
 
@@ -97,12 +107,12 @@ void main() {
 
   testWidgets('the need explain sheet shows this night\'s sum', (t) async {
     await _pump(t);
-    await t.tap(find.text('How the target is worked out'));
+    await t.tap(find.text('How your sleep goal is set'));
     await t.pumpAndSettle();
-    expect(find.text('Sleep target'), findsWidgets);
-    expect(find.textContaining('= target 7h 51m'), findsOneWidget);
+    expect(find.text('Sleep goal'), findsWidgets);
+    expect(find.textContaining('= goal 7h 51m'), findsOneWidget);
     expect(
-      find.textContaining('clamp((strain − 8) / 13, 0, 1) × 45m'),
+      find.textContaining('clamp((strain − 8) / 13, 0, 1) × 45 min'),
       findsOneWidget,
     );
   });
@@ -111,7 +121,7 @@ void main() {
     final repo = await EditedDemoRepo.create(edit: EditedDemoRepo.noSleep);
     await _pump(t, repo: repo);
     expect(find.text('No sleep recorded'), findsOneWidget);
-    expect(find.textContaining('carried forward unchanged'), findsWidgets);
+    expect(find.textContaining('missed sleep stays'), findsWidgets);
     expect(find.byType(HypnogramChart), findsNothing);
     expect(find.byType(ScatterConsistency), findsOneWidget);
   });
@@ -119,7 +129,7 @@ void main() {
   testWidgets('a past night has no "tonight" card', (t) async {
     await _pump(t, selectedDate: kAlertDay);
     expect(
-      find.textContaining('Aim to be asleep', findRichText: true),
+      find.textContaining('Try to be asleep', findRichText: true),
       findsNothing,
     );
     expect(find.text('Latest'), findsOneWidget);
@@ -129,9 +139,9 @@ void main() {
   testWidgets('a day with a nap lists it and counts it', (t) async {
     await _pump(t, selectedDate: '2026-08-30');
     expect(find.byType(NapsCard), findsOneWidget);
-    expect(find.text('15:28–16:00'), findsOneWidget);
-    expect(find.text('29m asleep'), findsOneWidget);
-    expect(find.textContaining('includes 29m of naps'), findsOneWidget);
+    expect(find.text('3:28 pm–4:00 pm'), findsOneWidget);
+    expect(find.text('29 min asleep'), findsOneWidget);
+    expect(find.textContaining('Includes 29 min of naps'), findsOneWidget);
   });
 
   group('no overflow at 320 px and 1.3× text', () {

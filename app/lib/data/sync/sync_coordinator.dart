@@ -115,7 +115,7 @@ class SyncCoordinator {
           dataType: 'demo',
           status: 'ok',
           records: out.records.length,
-          message: 'Seeded ${demo.days} synthetic days (seed ${demo.seed})',
+          message: 'Made ${demo.days} days of sample data',
         ),
       );
       _engineNote(log, out, SourceKind.demo);
@@ -136,7 +136,8 @@ class SyncCoordinator {
         source: source,
         dataType: 'engine',
         status: 'error',
-        message: 'Scores not computed: ${out.engineError}',
+        // The engine error stays in ComputeOutcome.engineError (logs).
+        message: 'Couldn’t work out scores for this sync.',
       ),
     );
   }

@@ -124,7 +124,7 @@ class ContributionBars extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: S.x4),
                 child: Text(
-                  'No inputs reported for this day.',
+                  'No signals came in for this day.',
                   style: F.cap.copyWith(color: p.ink3),
                 ),
               ),

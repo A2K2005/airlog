@@ -668,8 +668,32 @@ enum HealthMetricKind {
   skinTemp('Skin temp', '°C');
 
   const HealthMetricKind(this.label, this.unit);
+
+  /// The engine's short name. Coach refs and the verifier read it, so the
+  /// UI uses [title] and [plainName] instead (docs/COPY_REVIEW.md §2).
   final String label;
   final String unit;
+
+  /// The name on tiles, chips and sheet titles: "Breathing rate".
+  String get title => switch (this) {
+    restingHr => 'Resting HR',
+    hrv => 'HRV',
+    respiratoryRate => 'Breathing rate',
+    spo2 => 'Blood oxygen',
+    skinTemp => 'Skin temperature',
+  };
+
+  /// The name inside a sentence: "your resting heart rate".
+  String get plainName => switch (this) {
+    restingHr => 'resting heart rate',
+    hrv => 'HRV',
+    respiratoryRate => 'breathing rate',
+    spo2 => 'blood oxygen',
+    skinTemp => 'skin temperature',
+  };
+
+  /// The unit as sentences write it: "breaths/min" for breathing rate.
+  String get displayUnit => this == respiratoryRate ? 'breaths/min' : unit;
 }
 
 class HealthMetricStatus {

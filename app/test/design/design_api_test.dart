@@ -75,15 +75,15 @@ void main() {
       expect(MetricTile.valueText(HealthMetricKind.skinTemp, .3), '+0.3');
     });
 
-    test('a zero delta reads "Same as usual"', () {
+    test('a zero delta reads "About usual"', () {
       expect(
         MetricTile.deltaText(HealthMetricKind.skinTemp, .1, .1),
-        'Same as usual',
+        'About usual',
       );
       // Rounded first: 54.4 vs 53.6 both print 54.
       expect(
         MetricTile.deltaText(HealthMetricKind.restingHr, 54.4, 54.1),
-        'Same as usual',
+        'About usual',
       );
       expect(
         MetricTile.deltaText(HealthMetricKind.hrv, 59, 47),
@@ -152,7 +152,7 @@ void main() {
         ),
       );
       expect(
-        find.text('Band: your usual range at or above 94 %'),
+        find.text('Shaded: your usual range, at or above 94 %'),
         findsOneWidget,
       );
       expect(

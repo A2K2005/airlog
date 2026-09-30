@@ -29,17 +29,20 @@ void main() {
     expect(find.byType(ArcStateTile), findsOneWidget);
     expect(find.byType(ZoneBarTile), findsOneWidget);
     // PR #1 dropped the duplicate strain ring and TARGET block: one primary
-    // score tile, then the target basis.
-    expect(find.text('Target basis'), findsOneWidget);
+    // score tile, then the goal.
+    expect(find.text('Goal'), findsOneWidget);
     expect(find.text('Heart rate by zone'), findsOneWidget);
-    expect(find.textContaining('Finished'), findsOneWidget);
+    expect(find.textContaining('that day’s goal'), findsOneWidget);
+    // The TRIMP cross-check lives in the explain sheet only.
+    expect(find.textContaining('TRIMP'), findsNothing);
     await t.scrollUntilVisible(
       find.text('Workouts'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Run'), findsOneWidget);
-    expect(find.text('TRIMP'), findsOneWidget);
+    expect(find.text('AVG HEART RATE'), findsWidgets);
+    expect(find.text('TRIMP'), findsNothing);
     expect(t.takeException(), isNull);
   });
 
@@ -106,7 +109,7 @@ void main() {
     final repo = ScreensBRepo.demo()..emptyStore = true;
     await pumpB(t, const StrainScreen(), repo: repo, tab: true);
     await t.pumpAndSettle();
-    expect(find.text('No strain yet'), findsOneWidget);
+    expect(find.text('No Strain yet'), findsOneWidget);
     expect(find.text('0.0'), findsNothing);
   });
 
@@ -130,12 +133,10 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.byIcon(Icons.info_outline_rounded).first);
     await t.pumpAndSettle();
-    expect(
-      find.text('Heart-rate zones (Karvonen)'.toUpperCase()),
-      findsOneWidget,
-    );
+    expect(find.text('Heart-rate zones'.toUpperCase()), findsOneWidget);
     expect(find.textContaining('÷ 450'), findsOneWidget);
     expect(find.text('Demanding'), findsOneWidget);
+    expect(find.text('Second opinion (TRIMP)'.toUpperCase()), findsOneWidget);
   });
 
   testWidgets('no overflow at 320 px and text scale 1.3', (t) async {

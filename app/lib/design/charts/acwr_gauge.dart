@@ -23,7 +23,7 @@ class AcwrGauge extends StatelessWidget {
     this.chronic,
     this.title = 'Training load',
     this.semanticsLabel,
-    this.emptyMessage = 'Needs 4 weeks of strain history',
+    this.emptyMessage = 'Needs 4 weeks of Strain history',
   });
 
   factory AcwrGauge.fromLoad(
@@ -63,11 +63,13 @@ class AcwrGauge extends StatelessWidget {
     (1.5, 2.0, LoadState.high),
   ];
 
+  /// The same words as the Trends tile and Methodology (engine names stay
+  /// in code): your last 7 days against your last 4 weeks.
   static String stateLabel(LoadState s) => switch (s) {
-    LoadState.detraining => 'Detraining',
-    LoadState.optimal => 'Optimal',
-    LoadState.elevated => 'Elevated',
-    LoadState.high => 'High',
+    LoadState.detraining => 'Less than usual',
+    LoadState.optimal => 'About usual',
+    LoadState.elevated => 'More than usual',
+    LoadState.high => 'Much more than usual',
   };
 
   static double frac(double v) => ((v - lo) / (hi - lo)).clamp(0.0, 1.0);
@@ -85,11 +87,12 @@ class AcwrGauge extends StatelessWidget {
     if (semanticsLabel != null) return semanticsLabel!;
     if (!_has) return '$_name. $emptyMessage';
     return [
-      '$_name: acute to chronic ratio ${ratio!.toStringAsFixed(2)}',
+      '$_name ${ratio!.toStringAsFixed(2)}',
       if (state != null) stateLabel(state!),
       if (acute != null && chronic != null)
-        '7-day mean strain ${axisFixed(acute!)}, 28-day mean ${axisFixed(chronic!)}',
-      'Optimal range 0.8 to 1.3',
+        'Last 7 days average Strain ${axisFixed(acute!)}, last 4 weeks '
+            '${axisFixed(chronic!)}',
+      'About usual is 0.8 to 1.3',
     ].join('. ');
   }
 
@@ -144,7 +147,8 @@ class AcwrGauge extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 3),
                       child: Text(
-                        '7d ${axisFixed(acute!)} · 28d ${axisFixed(chronic!)}',
+                        '7 days ${axisFixed(acute!)} · 4 weeks '
+                        '${axisFixed(chronic!)}',
                         style: F.tab(F.cap).copyWith(color: p.ink2),
                         textAlign: TextAlign.right,
                         maxLines: 1,

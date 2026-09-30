@@ -268,7 +268,7 @@ abstract final class RecoveryEngine {
       penalties.add(
         RecoveryPenalty(
           'spo2',
-          'Overnight SpO₂ dipped to ${_f0(spo2Min)} %',
+          'Blood oxygen dipped to ${_f0(spo2Min)}% overnight',
           spo2Penalty,
         ),
       );
@@ -280,7 +280,7 @@ abstract final class RecoveryEngine {
       penalties.add(
         const RecoveryPenalty(
           'skin_temp',
-          'Skin temperature well above your baseline',
+          'Skin temperature well above your usual',
           skinTempPenalty,
         ),
       );

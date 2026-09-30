@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 
 import '../../../design/design.dart';
 import '../../../domain/day_key.dart';
-import '../../../domain/engine/recovery.dart' show RecoveryEngine;
 import '../../../domain/results.dart';
 import '../recovery_view_model.dart';
 
@@ -29,18 +28,18 @@ class InputCard extends StatelessWidget {
     final i = input;
     final pill = switch (i.state) {
       BandState.inRange => (
-        'In your range',
+        'In your usual range',
         DomainColors.band(BandState.inRange),
       ),
       BandState.above => (
-        'Above your range',
+        'Above your usual range',
         DomainColors.band(BandState.above),
       ),
       BandState.below => (
-        'Below your range',
+        'Below your usual range',
         DomainColors.band(BandState.below),
       ),
-      BandState.calibrating => ('Calibrating', C.neutral),
+      BandState.calibrating => ('Learning', C.neutral),
       BandState.noData || null => null,
     };
     final fmt = i.decimals == 0 ? axisInt : axisFixed;
@@ -91,8 +90,9 @@ class InputCard extends StatelessWidget {
             footnote:
                 i.footnote ??
                 (i.lower != null && i.upper != null
-                    ? 'Band: your usual range ${i.fmt(i.lower!)}–'
-                          '${i.fmt(i.upper!)} ${i.unit} · dashed: your average'
+                    ? 'Shaded: your usual range, ${i.fmt(i.lower!)}–'
+                          '${i.fmt(i.upper!)} ${i.unit}. Dashed line: your '
+                          'usual.'
                     : null),
           ),
           const SizedBox(height: S.x3),
@@ -139,9 +139,9 @@ class ReadinessCard extends StatelessWidget {
     return AppCard(
       onTap: onExplain,
       semanticLabel: r == null
-          ? '7-night HRV trend. ${missing ?? ''}'
-          : '7-night HRV trend: ${r.headline}. ${r.body} Day-to-day variation '
-                '${r.cv.toStringAsFixed(1)} percent. Opens the method.',
+          ? '7-night HRV. ${missing ?? ''}'
+          : '7-night HRV: ${r.headline}. ${r.body} Night-to-night swing '
+                '${r.cv.toStringAsFixed(1)} percent. Tap for how this works.',
       child: ExcludeSemantics(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -152,7 +152,7 @@ class ReadinessCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  '7-night HRV trend',
+                  '7-night HRV',
                   style: F.bodySm.copyWith(
                     color: p.ink,
                     fontWeight: FontWeight.w700,
@@ -196,14 +196,14 @@ class ReadinessCard extends StatelessWidget {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
-                    'Day-to-day variation ${r.cv.toStringAsFixed(1)} %',
+                    'Night-to-night swing ${r.cv.toStringAsFixed(1)}%',
                     style: F.tab(F.cap).copyWith(color: p.ink3),
                   ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Plews method',
+                        'How this works',
                         style: F.cap.copyWith(
                           color: p.ink2,
                           fontWeight: FontWeight.w700,
@@ -401,18 +401,13 @@ class RecoveryHistory extends StatelessWidget {
       xLabels: windowLabels(date, scores.length),
       series: scores,
       legend: [
-        ('Green ${counts[RecoveryZone.green]}', p.mark(C.recGreen)),
-        ('Yellow ${counts[RecoveryZone.yellow]}', p.mark(C.recYellow)),
-        ('Red ${counts[RecoveryZone.red]}', p.mark(C.recRed)),
+        ('Good ${counts[RecoveryZone.green]}', p.mark(C.recGreen)),
+        ('Fair ${counts[RecoveryZone.yellow]}', p.mark(C.recYellow)),
+        ('Low ${counts[RecoveryZone.red]}', p.mark(C.recRed)),
       ],
-      footnote: avg == null
-          ? null
-          : 'Average ${avg.round()} % · green ${RecoveryEngine.greenFrom} '
-                'and above, yellow ${RecoveryEngine.yellowFrom}–'
-                '${RecoveryEngine.greenFrom - 1}, red below '
-                '${RecoveryEngine.yellowFrom}',
+      footnote: avg == null ? null : 'Average ${avg.round()}%',
       empty: real.isEmpty
-          ? const NoData(message: 'No Recovery scores in these days')
+          ? const NoData(message: 'No Recovery scores in this period')
           : null,
       child: CustomPaint(
         size: Size.infinite,

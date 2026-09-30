@@ -10,22 +10,22 @@
 
 /// The day in plain words. Labels are UI copy (copy.dart owns final wording).
 enum DayState {
-  /// Recovery high and inputs fresh: "Ready to push".
+  /// Recovery high and inputs fresh: "Your body is ready".
   ready,
 
-  /// Around the user's baseline: "A normal day".
+  /// Around the user's baseline: "Good for a normal day".
   steady,
 
-  /// Recovery low or a vital outside its band: "Take it easy".
+  /// Recovery low or a vital outside its band: "Take it easy today".
   easy,
 
-  /// Recovery very low, or several vitals out: "Make it a rest day".
+  /// Recovery very low, or several vitals out: "Make today a rest day".
   rest,
 
-  /// Baseline not established yet: "Still learning your normal".
+  /// Baseline not established yet: "Still getting to know you".
   calibrating,
 
-  /// No usable data for today, or it's stale: "Waiting for today's data".
+  /// No usable data for today, or it's stale: "Waiting for your data".
   noData,
 }
 
@@ -84,12 +84,16 @@ class PlanAction {
   });
   final PlanActionKind kind;
 
-  /// Imperative and concrete, e.g. "Keep effort light: strain 6–9".
+  /// Imperative and concrete, in words, e.g. "A normal workout is fine
+  /// today".
   final String title;
 
-  /// One sentence with its numbers, e.g. "Your HRV is 14% below your usual
-  /// and you slept 5 h 50 m."
+  /// One plain sentence, e.g. "Try a steady run or bike ride, or your usual
+  /// gym session."
   final String why;
+
+  /// The numbers behind the action, shown as small chips under the why,
+  /// e.g. ("Effort goal", "9–12", "3.1 so far").
   final List<PlanEvidence> evidence;
   final String? route;
 }
@@ -108,6 +112,7 @@ class TodayPlan {
     this.missingInputs = const [],
     this.phase = PlanPhase.today,
     this.relearningSource,
+    this.summaryNamesRelearning = false,
   });
 
   final String date;
@@ -116,10 +121,10 @@ class TodayPlan {
   /// The plain-words answer, e.g. "Take it easy today".
   final String headline;
 
-  /// One sentence of why, with numbers. While a new source re-learns and
-  /// the plan would otherwise ask to wear the tracker, a second sentence
-  /// says so instead ("Re-learning your normal with Oura: 2 of 14 nights
-  /// so far.").
+  /// One sentence of why, in words (the numbers are on the chips). While a
+  /// new source re-learns and the plan would otherwise ask to wear the
+  /// tracker, a second sentence says so instead ("Airlog is learning your
+  /// Oura data: 2 of 14 nights so far.").
   final String summary;
 
   /// 1–2 headline numbers behind the state. Actions don't repeat them.
@@ -147,8 +152,12 @@ class TodayPlan {
   final PlanPhase phase;
 
   /// Display name of an app that recently became a key metric's source.
-  /// Set while its baseline re-learns ("New source: re-learning your normal").
+  /// Set while its baseline re-learns ("Learning your Oura data").
   final String? relearningSource;
+
+  /// [additive] The summary already names the re-learning source, so the
+  /// UI doesn't tag it a second time.
+  final bool summaryNamesRelearning;
 
   /// Result fields the plan may cite; the eval checks every number in the
   /// plan's text against them. The PLANNER OWNS THIS LIST: it must cover every

@@ -107,7 +107,11 @@ abstract final class Samples {
     ),
   ];
 
-  static const penalty = RecoveryPenalty('spo2', 'SpO₂ dipped below 90 %', 3);
+  static const penalty = RecoveryPenalty(
+    'spo2',
+    'Blood oxygen dipped below 90% overnight',
+    3,
+  );
 
   static HealthMetricStatus metric(
     HealthMetricKind k,

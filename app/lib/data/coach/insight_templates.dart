@@ -158,21 +158,21 @@ abstract final class InsightTemplates {
       route: rt,
     );
     final perf = x.add(
-      'Sleep performance · $day',
+      'Sleep % of goal · $day',
       sl.performance,
       '%',
       date: d,
       route: rt,
     );
     final need = x.add(
-      'Sleep need · $day',
+      'Sleep goal · $day',
       sl.needMinutes,
       'min',
       date: d,
       route: rt,
     );
     final debt = x.add(
-      'Sleep debt · $day',
+      'Missed sleep · $day',
       sl.debtAfterMinutes,
       'min',
       date: d,
@@ -184,13 +184,13 @@ abstract final class InsightTemplates {
         ? 'A slightly short night'
         : 'A short night';
     final body = StringBuffer(
-      'You slept ${_Facts.t(asleep)}, a sleep performance of '
-      '${_Facts.t(perf)} against a sleep need of ${_Facts.t(need)}.',
+      'You slept ${_Facts.t(asleep)}, ${_Facts.t(perf)} of your '
+      '${_Facts.t(need)} sleep goal.',
     );
     body.write(
       sl.debtAfterMinutes >= 1
-          ? ' Sleep debt is ${_Facts.t(debt)}.'
-          : ' You have no sleep debt.',
+          ? ' You’re short ${_Facts.t(debt)} of sleep from recent nights.'
+          : ' You’re not short on sleep.',
     );
     final bullets = <InsightBullet>[];
     if (sl.bedTime != null && sl.wakeTime != null) {
@@ -211,7 +211,7 @@ abstract final class InsightTemplates {
       bullets.add(
         InsightBullet(
           'Timing',
-          'Bedtime ${_Facts.t(bed)}, wake time ${_Facts.t(wake)}',
+          'Asleep at ${_Facts.t(bed)}, up at ${_Facts.t(wake)}',
         ),
       );
     }
@@ -254,12 +254,15 @@ abstract final class InsightTemplates {
         if (c.value != null) c,
     ];
     if (comps.isEmpty) return null;
-    (String, String, int) meta(RecoveryComponent c) => switch (c.key) {
-      'hrv' => ('HRV', 'ms', 0),
-      'rhr' => ('Resting HR', 'bpm', 0),
-      'sleep' => ('Sleep performance', '%', 0),
-      'resp' => ('Respiratory rate', '/min', 1),
-      _ => (c.label, '', 0),
+    // (label for refs and bullets, name inside a sentence, unit, decimals)
+    (String, String, String, int) meta(RecoveryComponent c) => switch (c.key) {
+      'hrv' => ('HRV', 'HRV', 'ms', 0),
+      'rhr' => ('Resting HR', 'resting heart rate', 'bpm', 0),
+      'sleep' => ('Sleep % of goal', 'sleep', '%', 0),
+      // The ref unit stays the engine's "/min": the verifier and
+      // CoachFormat read it.
+      'resp' => ('Breathing rate', 'breathing rate', '/min', 1),
+      _ => (c.label, c.label, '', 0),
     };
     final withBase = [
       for (final c in comps)
@@ -269,7 +272,7 @@ abstract final class InsightTemplates {
     final metrics = <SourceRef>[];
     final vals = <String, SourceRef>{}, bases = <String, SourceRef>{};
     for (final c in comps) {
-      final (name, unit, dec) = meta(c);
+      final (name, _, unit, dec) = meta(c);
       final v = x.add(
         '$name · $day',
         c.value!,
@@ -286,10 +289,11 @@ abstract final class InsightTemplates {
         date: d,
         route: rt,
       );
-      final parts = ['${_Facts.t(v)} (${_Facts.t(w)} of the score)'];
+      final share = '(${_Facts.t(w)} of the score)';
+      var line = '${_Facts.t(v)} $share';
       if (c.baseline != null) {
         final bl = x.add(
-          '$name baseline · $day',
+          '$name usual · $day',
           c.baseline!.mean,
           unit,
           date: d,
@@ -297,9 +301,9 @@ abstract final class InsightTemplates {
           decimals: dec,
         );
         bases[c.key] = bl;
-        parts.add('baseline ${_Facts.t(bl)}');
+        line = '${_Facts.t(v)}, usual ${_Facts.t(bl)} $share';
       }
-      bullets.add(InsightBullet(name, parts.join(', ')));
+      bullets.add(InsightBullet(name, line));
     }
     for (final p in rec.penalties) {
       final pr = x.add(
@@ -310,27 +314,31 @@ abstract final class InsightTemplates {
         route: rt,
         decimals: 1,
       );
-      bullets.add(InsightBullet('Penalty', '${p.label}: ${_Facts.t(pr)}'));
+      bullets.add(
+        InsightBullet('Penalty', '${p.label}: ${_Facts.t(pr)} off'),
+      );
     }
     String headline;
     final body = StringBuffer();
+    String cap(String s) => s[0].toUpperCase() + s.substring(1);
     if (withBase.isEmpty) {
       final c = comps.first;
-      final (name, _, _) = meta(c);
-      headline = 'Your baseline is still forming';
+      final (_, plain, _, _) = meta(c);
+      headline = 'Still learning your usual';
       body.write(
-        '$name was ${_Facts.t(vals[c.key]!)}. Recovery firms up once '
-        'there are enough nights to compare with.',
+        'Your $plain was ${_Facts.t(vals[c.key]!)}. Your score will settle '
+        'once Airlog has more nights to compare.',
       );
       metrics.add(vals[c.key]!);
     } else {
       final top = withBase.first;
-      final (name, _, _) = meta(top);
+      final (name, plain, _, _) = meta(top);
       final up = top.value! >= top.baseline!.mean;
-      headline = '$name moved your recovery most';
+      headline = '${cap(name == 'Resting HR' ? plain : name)} made the '
+          'biggest difference';
       body.write(
-        '$name was ${_Facts.t(vals[top.key]!)}, '
-        '${up ? 'above' : 'below'} your baseline of '
+        'Your $plain was ${_Facts.t(vals[top.key]!)}, '
+        '${up ? 'above' : 'below'} your usual '
         '${_Facts.t(bases[top.key]!)}.',
       );
       metrics
@@ -338,18 +346,18 @@ abstract final class InsightTemplates {
         ..add(bases[top.key]!);
       if (withBase.length > 1) {
         final second = withBase[1];
-        final (n2, _, _) = meta(second);
+        final (_, p2, _, _) = meta(second);
         body.write(
-          ' $n2 was ${_Facts.t(vals[second.key]!)} against '
-          '${_Facts.t(bases[second.key]!)}.',
+          ' Your $p2 was ${_Facts.t(vals[second.key]!)}, against your '
+          'usual ${_Facts.t(bases[second.key]!)}.',
         );
       }
       if (rec.calibrating) {
         body.clear();
         body.write(
-          '$name was ${_Facts.t(vals[top.key]!)} against a '
-          'baseline of ${_Facts.t(bases[top.key]!)} that is still '
-          'calibrating.',
+          'Your $plain was ${_Facts.t(vals[top.key]!)}, against your usual '
+          'of ${_Facts.t(bases[top.key]!)}, which Airlog is still '
+          'learning.',
         );
       }
     }
@@ -391,7 +399,8 @@ abstract final class InsightTemplates {
     final t = st.targetStrain == null
         ? null
         : x.add(
-            'Strain target · $day',
+            // "Strain" keeps the ref in the verifier's strain family.
+            'Effort goal (Strain) · $day',
             st.targetStrain!,
             'strain',
             date: d,
@@ -401,20 +410,20 @@ abstract final class InsightTemplates {
     String headline;
     final body = StringBuffer();
     if (t == null) {
-      headline = 'Your strain for the day';
+      headline = 'Your Strain for the day';
       body.write(
-        'Strain was ${_Facts.t(s)}. There is no strain target '
-        'without a recovery score.',
+        'Your Strain was ${_Facts.t(s)}. There’s no effort goal without a '
+        'Recovery score.',
       );
     } else {
       final ratio = st.strain / (st.targetStrain! <= 0 ? 1 : st.targetStrain!);
       headline = ratio >= 1
-          ? 'Past your strain target'
+          ? 'Past your effort goal'
           : ratio >= 0.8
-          ? 'Close to your strain target'
+          ? 'Close to your effort goal'
           : 'A lighter day';
       body.write(
-        'Strain was ${_Facts.t(s)} against a target of '
+        'Your Strain was ${_Facts.t(s)}, against a goal of '
         '${_Facts.t(t)}.',
       );
     }
@@ -433,8 +442,8 @@ abstract final class InsightTemplates {
           decimals: 1,
         );
         body.write(
-          ' The most came from the ${name.toLowerCase()}, strain '
-          '${_Facts.t(wsRef)}.',
+          ' Most of it came from your ${name.toLowerCase()} (Strain '
+          '${_Facts.t(wsRef)}).',
         );
         _workoutEvidence(x, w, d);
       }
@@ -458,8 +467,9 @@ abstract final class InsightTemplates {
       );
       bullets.add(
         InsightBullet(
-          'Intensity',
-          '${_Facts.t(mid)} in zones 2–3, ${_Facts.t(hi)} in zones 4–5',
+          'Effort',
+          '${_Facts.t(mid)} light to moderate (zones 2–3), ${_Facts.t(hi)} '
+              'hard (zones 4–5)',
         ),
       );
     }
@@ -480,9 +490,8 @@ abstract final class InsightTemplates {
       );
       bullets.add(
         InsightBullet(
-          'Volume',
-          '${_Facts.t(n)} ${wk.length == 1 ? 'workout' : 'workouts'}, '
-              '${_Facts.t(total)}',
+          'Workouts',
+          '${_Facts.t(n)}, ${_Facts.t(total)} in total',
         ),
       );
     }
@@ -491,7 +500,7 @@ abstract final class InsightTemplates {
       used.add(goals.first.id);
       bullets.add(
         const InsightBullet(
-          'Goal alignment',
+          'Your goal',
           'This training adds to the goal you saved.',
         ),
       );
@@ -570,9 +579,9 @@ abstract final class InsightTemplates {
     final headline = effort == null
         ? '$name recorded'
         : '$name: ${effort == 'easy' ? 'an' : 'a'} $effort session';
-    final body = StringBuffer('Duration ${_Facts.t(dur)}');
+    final body = StringBuffer(_Facts.t(dur));
     if (hr != null) body.write(', average heart rate ${_Facts.t(hr)}');
-    if (s != null) body.write(', strain ${_Facts.t(s)}');
+    if (s != null) body.write(', Strain ${_Facts.t(s)}');
     body.write('.');
     final bullets = <InsightBullet>[];
     final z = ws?.zoneMinutes ?? const <double>[];
@@ -593,8 +602,9 @@ abstract final class InsightTemplates {
       );
       bullets.add(
         InsightBullet(
-          'Intensity',
-          '${_Facts.t(mid)} in zones 2–3, ${_Facts.t(hi)} in zones 4–5',
+          'Effort',
+          '${_Facts.t(mid)} light to moderate (zones 2–3), ${_Facts.t(hi)} '
+              'hard (zones 4–5)',
         ),
       );
     }
@@ -608,7 +618,7 @@ abstract final class InsightTemplates {
         decimals: 1,
       );
       bullets.add(
-        InsightBullet('Volume', '${_Facts.t(km)} in ${_Facts.t(dur)}'),
+        InsightBullet('Distance', '${_Facts.t(km)} in ${_Facts.t(dur)}'),
       );
     }
     final used = <String>[];
@@ -616,7 +626,7 @@ abstract final class InsightTemplates {
       used.add(goals.first.id);
       bullets.add(
         const InsightBullet(
-          'Goal alignment',
+          'Your goal',
           'This session adds to the goal you saved.',
         ),
       );
@@ -693,11 +703,14 @@ abstract final class InsightTemplates {
           decimals: dec,
         );
         lines.add(
-          '$label was ${_Facts.t(v)}, $side your usual range of '
-          '${_Facts.t(lo)} to ${_Facts.t(hi)}',
+          'Your ${m.kind.plainName} was ${_Facts.t(v)}, $side your usual '
+          'range of ${_Facts.t(lo)} to ${_Facts.t(hi)}',
         );
       } else {
-        lines.add('$label was ${_Facts.t(v)}, $side your usual range');
+        lines.add(
+          'Your ${m.kind.plainName} was ${_Facts.t(v)}, $side your usual '
+          'range',
+        );
       }
     }
     final body = lines.isEmpty
@@ -769,7 +782,7 @@ abstract final class InsightTemplates {
     if (sleeps.isNotEmpty) {
       final met = sleeps.where((s) => s.performance >= 99.5).length;
       final m = x.add(
-        'Nights that met your sleep need · $span',
+        'Nights that met your sleep goal · $span',
         met.toDouble(),
         'nights',
         route: rt,
@@ -783,7 +796,7 @@ abstract final class InsightTemplates {
       bullets.add(
         InsightBullet(
           'Consistency',
-          '${_Facts.t(m)} of ${_Facts.t(n)} met your sleep need',
+          '${_Facts.t(m)} of ${_Facts.t(n)} nights met your sleep goal',
         ),
       );
     }
@@ -803,9 +816,8 @@ abstract final class InsightTemplates {
       );
       bullets.add(
         InsightBullet(
-          'Volume',
-          '${_Facts.t(n)} ${wk.length == 1 ? 'workout' : 'workouts'}, '
-              '${_Facts.t(t)}',
+          'Workouts',
+          '${_Facts.t(n)}, ${_Facts.t(t)} in total',
         ),
       );
     }

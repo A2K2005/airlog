@@ -1,16 +1,18 @@
-// The permission rationale shown BEFORE the Health Connect system sheet:
-// every data type Airlog asks for and the one feature it powers. The list is
-// app/copy.dart's hcReadTypes, the same one the privacy policy prints, so
-// onboarding, Sources and the policy can never disagree.
+// The permission rationale Settings → Data sources shows BEFORE the Health
+// Connect system sheet: every data type Airlog asks for and the one feature
+// it powers. The list is app/copy.dart's hcReadTypes, the same one the
+// privacy policy prints, so Data sources and the policy can never disagree.
+// (Onboarding no longer embeds it: "Use my tracker" opens Health Connect's
+// own sheet directly.)
 //
-// Shared kit for features/ (onboarding, settings): imports no feature.
+// Shared kit for features/ (settings): imports no feature.
 
 import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import 'copy.dart';
 
-/// The list itself (onboarding embeds it; Sources shows it in a sheet).
+/// The list itself (Data sources shows it in a sheet).
 class HcRationaleList extends StatelessWidget {
   const HcRationaleList({super.key});
 
@@ -68,9 +70,10 @@ Future<bool> showHcRationale(BuildContext context) async {
                   ),
                   const SizedBox(height: S.x2),
                   Text(
-                    'Health Connect asks you type by type next. Each one powers '
-                    'one feature; anything you leave off shows as missing, '
-                    'never guessed. Read only: Airlog writes nothing back.',
+                    'Next, Health Connect asks about each kind of data. Allow '
+                    'the ones you want. Anything you skip shows as missing, '
+                    'never guessed. Airlog only reads your data. It never '
+                    'changes it.',
                     style: F.body.copyWith(color: p.ink2),
                   ),
                   const SizedBox(height: S.x4),

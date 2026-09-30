@@ -148,7 +148,6 @@ class GoogleHealthClient {
     final variants = _working.containsKey(t.type)
         ? [_working[t.type]!]
         : _Variant.values;
-    Object? last;
     for (final v in variants) {
       try {
         final pts = await _paginate(
@@ -159,17 +158,17 @@ class GoogleHealthClient {
         _working[t.type] = v;
         return pts;
       } on GhHttpException catch (e) {
-        if (e.status == 400 || e.status == 404) {
-          last = e;
-          continue;
-        }
+        // 400/404: this read variant isn't supported; try the next one.
+        if (e.status == 400 || e.status == 404) continue;
         rethrow;
       }
     }
+    // Every variant failed. Shown in the sync log: plain words, never the
+    // HTTP error.
     throw SourceException(
       SourceKind.googleHealthApi,
       t.type,
-      'No read variant worked: $last',
+      'Couldn’t read this from Enhanced mode.',
     );
   }
 
@@ -201,8 +200,9 @@ class GoogleHealthClient {
       pages++;
     } while (page != null && pages < 60);
     if (page != null) {
+      // The response exceeded the pagination limit (60 pages).
       throw StateError(
-        'Google Health response exceeded pagination limit; stored data retained',
+        'Enhanced mode sent too much at once. Your saved data is safe.',
       );
     }
     return out;

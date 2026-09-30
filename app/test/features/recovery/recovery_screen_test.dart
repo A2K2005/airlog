@@ -58,8 +58,14 @@ void main() {
   testWidgets('full demo day: breakdown, bands, readiness, history', (t) async {
     await _pump(t);
     expect(find.bySemanticsLabel('Recovery 78 percent'), findsOneWidget);
-    expect(find.text('Green · 67 and above'), findsOneWidget);
-    expect(find.textContaining('Target strain 15.6'), findsOneWidget);
+    expect(find.text('Good · 67–99'), findsOneWidget);
+    // The zone only, and the goal as a range (never "at or better than your
+    // usual": a green score doesn't mean every signal was).
+    expect(
+      find.text('You’ve recovered well. Effort goal today: 14–17.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('better than your usual'), findsNothing);
     // One "usual" everywhere: 47 ms, the raw mean (the engine's detail
     // string uses the same number now; ln only lives inside the z-score).
     expect(find.text('53 ms · usual 47 ms'), findsOneWidget);
@@ -67,17 +73,17 @@ void main() {
     expect(find.text(' / 40'), findsOneWidget);
     expect(find.byType(BaselineBandChart), findsNWidgets(4));
     expect(
-      find.textContaining('Last night 53 ms · usual 47 ± 8 ms'),
+      find.textContaining('Last night 53 ms · usual 47 ms'),
       findsOneWidget,
     );
     expect(find.text('Sleep mean RMSSD · Demo data'), findsOneWidget);
-    expect(find.textContaining('No personal band'), findsOneWidget);
-    expect(find.text('7-night HRV trend'), findsOneWidget);
-    expect(find.text('Above your usual band'), findsOneWidget);
+    expect(find.textContaining('No usual range here'), findsOneWidget);
+    expect(find.text('7-night HRV'), findsOneWidget);
+    expect(find.text('Above your usual range'), findsWidgets);
     expect(find.text('Recovery history'), findsOneWidget);
-    expect(find.textContaining('Green 15'), findsOneWidget);
+    expect(find.textContaining('Good 15'), findsOneWidget);
     // Nothing missing on a normal demo night.
-    expect(find.textContaining('were shared out'), findsNothing);
+    expect(find.textContaining('went to your other signals'), findsNothing);
   });
 
   testWidgets('the explain sheet has the exact formula and weights', (t) async {
@@ -86,12 +92,14 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Recovery 78'), findsOneWidget);
     expect(
-      find.textContaining('HRV 40 · resting HR 25 · sleep performance 25'),
+      find.textContaining('HRV 40 · resting heart rate 25 · sleep 25'),
       findsOneWidget,
     );
     expect(find.textContaining('e^(−1.1·z)'), findsOneWidget);
     expect(
-      find.textContaining('green ≥ 67 · yellow 34–66 · red < 34'),
+      find.textContaining(
+        'Good (green) ≥ 67 · Fair (yellow) 34–66 · Low (red) < 34',
+      ),
       findsOneWidget,
     );
     expect(find.textContaining('Plews et al.'), findsOneWidget);
@@ -99,7 +107,7 @@ void main() {
 
   testWidgets('the readiness card opens the Plews method', (t) async {
     await _pump(t);
-    await t.tap(find.text('7-night HRV trend'));
+    await t.tap(find.text('7-night HRV'));
     await t.pumpAndSettle();
     expect(find.textContaining('smallest worthwhile change'), findsWidgets);
     expect(
@@ -114,19 +122,26 @@ void main() {
     await _pump(t, repo: demoRepo(days: 3));
     final ring = t.widget<ScoreRing>(find.byType(ScoreRing));
     expect(ring.state, RingState.calibrating);
-    expect(find.text('Baseline night 2 of 14'), findsWidgets);
+    expect(find.text('Learning · night 2 of 14'), findsWidgets);
     expect(
-      find.textContaining('No baseline yet for HRV and resting HR'),
+      find.textContaining(
+        'still learning your usual HRV and resting heart rate',
+      ),
       findsOneWidget,
     );
-    expect(find.textContaining('Needs 7 nights of HRV'), findsOneWidget);
+    expect(
+      find.textContaining('Shows up after 7 nights of HRV'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('missing HRV: the re-weighting is spelled out', (t) async {
     final repo = await EditedDemoRepo.create(edit: EditedDemoRepo.noHrv);
     await _pump(t, repo: repo);
     expect(
-      find.textContaining('No HRV last night: its 40 points were shared out'),
+      find.textContaining(
+        'No HRV last night, so its 40 points went to your other signals',
+      ),
       findsOneWidget,
     );
     expect(find.text('No HRV for this night'), findsOneWidget);
@@ -137,14 +152,14 @@ void main() {
     t,
   ) async {
     await _pump(t, selectedDate: kAlertDay);
-    expect(find.text('Red · below 34'), findsOneWidget);
+    expect(find.text('Low · 1–33'), findsOneWidget);
     expect(
-      find.text('Skin temperature well above your baseline'),
+      find.text('Skin temperature well above your usual'),
       findsOneWidget,
     );
     expect(find.text('−5'), findsOneWidget);
-    expect(find.text('Below your range'), findsOneWidget);
-    expect(find.text('Above your range'), findsWidgets);
+    expect(find.text('Below your usual range'), findsWidgets);
+    expect(find.text('Above your usual range'), findsWidgets);
   });
 
   testWidgets('day switcher steps back without a skeleton', (t) async {

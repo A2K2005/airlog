@@ -73,9 +73,9 @@ void main() {
     );
     final n = rs.last.notes.firstWhere((n) => n.metric == 'hrv');
     expect(n.title, 'Recovery without HRV');
-    expect(n.body, contains("WHOOP doesn't share HRV with Health Connect"));
+    expect(n.body, contains('WHOOP doesn’t share HRV with Health Connect'));
     expect(n.body, contains('without HRV'));
-    expect(n.fix, contains('Settings → Sources'));
+    expect(n.fix, contains('Settings → Data sources'));
     expect(n.severity, NoteSeverity.warning);
   });
 

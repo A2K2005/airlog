@@ -88,7 +88,7 @@ void main() {
       final a = HealthMonitor.alert(records);
       expect(a, isNotNull);
       expect(
-        a!.message.contains('outside your baseline'),
+        a!.message.contains('outside your usual range'),
         isTrue,
         reason: a.message,
       );

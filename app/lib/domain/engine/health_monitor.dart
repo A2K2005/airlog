@@ -188,11 +188,13 @@ abstract final class HealthMonitor {
     // Rule 1: several metrics outside the baseline today.
     if (today.length >= 2) {
       final kinds = today.toList()..sort((a, b) => a.label.compareTo(b.label));
-      final names = kinds.map((k) => k.label).join(', ');
+      final plain = [for (final k in kinds) k.plainName];
+      final names =
+          '${plain.sublist(0, plain.length - 1).join(', ')} and ${plain.last}';
       return HealthAlert(
         kinds,
-        '${kinds.length} values outside your baseline ($names). '
-        'Notice how you feel; this pattern is not a diagnosis.',
+        '${kinds.length} signals are outside your usual range ($names). '
+        'Notice how you feel. This is a pattern, not a diagnosis.',
       );
     }
 
@@ -214,10 +216,12 @@ abstract final class HealthMonitor {
       }
     }
     if (worst != null) {
+      // Pulse's "elevated" reads as "high" in the app's words.
+      final dir = directionWord(worst) == 'low' ? 'low' : 'high';
       return HealthAlert(
         [worst],
-        '${worst.label} has been ${directionWord(worst)} for $worstDays days '
-        '– prioritize recovery.',
+        'Your ${worst.plainName} has been $dir for $worstDays days. '
+        'Take it easy.',
       );
     }
     return null;

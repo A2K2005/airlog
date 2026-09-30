@@ -500,7 +500,7 @@ void main() {
       expect(
         last28.every(
           (r) =>
-              r.notes.any((n) => n.title == 'Strain from partial heart rate'),
+              r.notes.any((n) => n.title == 'Strain from patchy heart rate'),
         ),
         isTrue,
       );

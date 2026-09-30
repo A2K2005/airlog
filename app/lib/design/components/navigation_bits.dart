@@ -230,7 +230,7 @@ class TrendArrow extends StatelessWidget {
     return Semantics(
       label:
           '${metric == null ? '' : '$metric '}${word.toLowerCase()}, '
-          'a significant change over ${t.n} days',
+          'a clear change over ${t.n} days',
       child: ExcludeSemantics(
         child: Row(
           mainAxisSize: MainAxisSize.min,

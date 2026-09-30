@@ -29,8 +29,15 @@ Iterable<String> planTexts(TodayPlan p) sync* {
   if (p.relearningSource != null) yield p.relearningSource!;
 }
 
-/// Number tokens the plan for [b] may print.
-Set<String> allowedNumbers(DayBundle b, {SyncStatus? sync, DateTime? now}) {
+/// Number tokens the plan for [b] may print. [use24h]: the same clock
+/// setting the plan was made with (12-hour times print "12" for noon and
+/// midnight).
+Set<String> allowedNumbers(
+  DayBundle b, {
+  SyncStatus? sync,
+  DateTime? now,
+  bool use24h = true,
+}) {
   final r = b.result;
   final out = <String>{};
   void add(String s) => out.addAll(numbersIn(s));
@@ -73,10 +80,10 @@ Set<String> allowedNumbers(DayBundle b, {SyncStatus? sync, DateTime? now}) {
     add(PlanFormat.hm(bt.projectedNeedMinutes));
     add(PlanFormat.hm(bt.debtMinutes));
     if (bt.recommendedBedtimeMinutes != null) {
-      add(PlanFormat.clock(bt.recommendedBedtimeMinutes!));
+      add(PlanFormat.clock(bt.recommendedBedtimeMinutes!, use24h: use24h));
     }
     if (bt.habitualWakeMinutes != null) {
-      add(PlanFormat.clock(bt.habitualWakeMinutes!));
+      add(PlanFormat.clock(bt.habitualWakeMinutes!, use24h: use24h));
     }
   }
   for (final m in r.health.metrics) {
@@ -87,7 +94,9 @@ Set<String> allowedNumbers(DayBundle b, {SyncStatus? sync, DateTime? now}) {
   add('${r.calibration.haveNights} ${r.calibration.needNights}');
   if (r.sourceChange != null) add('${r.sourceChange!.nights}');
   final last = sync?.lastDataAt ?? b.record.lastDataAt;
-  if (last != null && now != null) add(PlanFormat.when(last, now));
+  if (last != null && now != null) {
+    add(PlanFormat.when(last, now, use24h: use24h));
+  }
   // App names may contain digits (e.g. a package name).
   for (final n in r.notShared.values) {
     add(n);

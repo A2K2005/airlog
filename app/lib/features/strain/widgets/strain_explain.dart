@@ -1,4 +1,4 @@
-// "How strain is calculated" — every constant is read from the engine
+// "How Strain works" — every constant is read from the engine
 // (StrainEngine, EngineConfig), so this sheet cannot drift from the maths.
 
 import 'package:flutter/material.dart';
@@ -32,10 +32,11 @@ Future<void> showStrainExplain(BuildContext context, StrainView v) {
         'maximum count many times more than easy ones.',
     children: [
       ExplainSection(
-        title: 'Heart-rate zones (Karvonen)',
+        title: 'Heart-rate zones',
         body:
-            'Each minute is placed by its share of your heart-rate reserve, '
-            'the span between resting and maximum heart rate. '
+            'Each minute is placed by how close your heart rate was to your '
+            'max, counting up from your resting heart rate (the Karvonen '
+            'method). '
             '${rhr == null || maxHr == null ? '' : 'For this day: resting ${rhr.round()} bpm, max ${maxHr.round()} bpm '}'
             '${override ? '(your own max).' : '(predicted: ${numText(StrainEngine.tanakaIntercept)} − ${numText(StrainEngine.tanakaSlope)} × age, Tanaka 2001).'}',
         formula: rhr == null || maxHr == null
@@ -43,11 +44,11 @@ Future<void> showStrainExplain(BuildContext context, StrainView v) {
             : '%HRR = (HR − ${rhr.round()}) ÷ (${maxHr.round()} − ${rhr.round()})',
       ),
       ExplainSection(
-        title: 'Load weights',
+        title: 'How minutes count',
         body:
-            'Load is minutes × a weight that climbs steeply with effort. '
-            'These six load zones (from Pulse) drive the number; the five '
-            'zones on the chart are the familiar 50–100 % display bands.',
+            'Harder minutes count for much more. Six scoring bands (from '
+            'Pulse) set the number. The five zones on the chart are simpler '
+            'bands for display.',
         child: _LoadTable(minutes: s?.loadZoneMinutes ?? const [], pct: pct),
       ),
       ExplainSection(
@@ -60,35 +61,35 @@ Future<void> showStrainExplain(BuildContext context, StrainView v) {
             : 'strain = $top × (1 − e^(−${s.rawLoad.toStringAsFixed(0)} ÷ ${tau.round()})) = ${strain1(s.strain)}',
       ),
       ExplainSection(
-        title: 'Target',
+        title: 'Effort goal',
         body:
-            'The suggested strain for a day is $factor × that morning’s '
-            'recovery, kept between $tMin and $tMax (Pulse). A low recovery '
-            'lowers it; it is a guide, not a goal.',
+            'Your goal for the day is $factor × that morning’s Recovery, kept '
+            'between $tMin and $tMax (from Pulse). Today shows it as a range: '
+            'the goal ± ${numText(StrainEngine.targetBand)}. Low '
+            'Recovery means a lighter goal. It’s a guide, not a rule.',
         formula: v.recovery == null || v.target == null
             ? 'target = $factor × recovery, $tMin … $tMax'
             : 'target = $factor × ${v.recovery} = ${strain1(v.target!)}',
       ),
       ExplainSection(
-        title: 'Cross-check: Banister TRIMP',
+        title: 'Second opinion (TRIMP)',
         body:
-            'An independent training-impulse score over the same minutes, '
-            'weighted exponentially by %HRR (Banister 1991; Morton et al. '
-            '1990). It never replaces strain; a big disagreement is a sign '
-            'the zones deserve a look.'
-            '${s?.trimp == null ? '' : ' This day: TRIMP ${s!.trimp!.round()}.'}',
+            'A different way to count the same minutes of effort (Banister '
+            '1991; Morton et al. 1990). It never replaces Strain. If the two '
+            'disagree a lot, your zones may need a look.'
+            '${s?.trimp == null ? '' : ' Second opinion (TRIMP) this day: ${s!.trimp!.round()}.'}',
         formula:
             'TRIMP = Σ minutes × x × '
             '${numText(Trimp.maleA)}·e^(${numText(Trimp.maleB)}x)   (x = %HRR)',
       ),
       ExplainSection(
-        title: 'When heart rate is sparse',
+        title: 'When heart rate is patchy',
         body:
             'If fewer than ${pct(StrainDay.minCoverage)} of waking minutes '
             'have heart rate, zones would under-count, so there is no strain '
             'score for the day: the screen lists your workouts and steps '
             'instead. A single workout without heart rate inside it uses its '
-            'own average heart rate and says “Estimated”.',
+            'own average heart rate and says “Estimate”.',
       ),
       const ExplainSection(
         title: 'Sources',
@@ -109,7 +110,7 @@ Future<void> showStrainExplain(BuildContext context, StrainView v) {
             ),
             BulletLine(
               'Zone weights and the 0–21 scale are ported from Pulse '
-              '(Apache-2.0). Not WHOOP’s formula.',
+              '(Apache-2.0). It isn’t any tracker maker’s own formula.',
             ),
           ],
         ),
@@ -200,8 +201,8 @@ class _LoadTable extends StatelessWidget {
 
 /// The strain method in words, for other screens and tests.
 String methodLabel(StrainMethod m) => switch (m) {
-  StrainMethod.hrZones => 'From heart-rate zones',
+  StrainMethod.hrZones => 'From heart rate',
   StrainMethod.fallback =>
-    'Estimated from workouts + steps — heart-rate data was sparse',
+    'Estimate from workouts and steps (not enough heart rate)',
   StrainMethod.none => 'No data',
 };

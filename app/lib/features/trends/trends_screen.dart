@@ -46,10 +46,10 @@ class TrendsScreen extends ConsumerWidget {
         Padding(
           padding: EdgeInsets.symmetric(horizontal: S.gutter),
           child: StatusCard(
-            title: 'Trends could not load',
+            title: 'Couldn’t load Trends',
             body:
-                'The data store did not answer. Try again after the next '
-                'sync, or check Settings → Sync log.',
+                'Airlog couldn’t open your saved data. Try again after your '
+                'next sync.',
             tone: StatusTone.warning,
           ),
         ),
@@ -62,7 +62,7 @@ class TrendsScreen extends ConsumerWidget {
           body:
               'Trends need a few days of data. Wear your tracker day and night; '
               'the first lines appear after two or three days.',
-          actionLabel: 'Open data sources',
+          actionLabel: 'Check data sources',
           onAction: () => Navigator.of(context).pushNamed(Routes.sources),
         ),
       ];
@@ -84,7 +84,7 @@ class TrendsScreen extends ConsumerWidget {
                 actions: [
                   AppIconButton(
                     icon: Icons.info_outline_rounded,
-                    semanticLabel: 'How trends are tested',
+                    semanticLabel: 'How trends work',
                     onTap: () => showTrendsExplain(context),
                   ),
                 ],
@@ -135,7 +135,7 @@ class TrendsScreen extends ConsumerWidget {
           child: AskAboutThis(screen: 'trends'),
         ),
       ),
-      header('Body', 'Each line inside your usual range'),
+      header('Body', 'Shaded areas show your usual range'),
       for (final m in v.metrics)
         pad(MetricTrendCard(metric: m, xLabels: v.xLabels)),
       if (v.vo2 != null) ...[
@@ -177,54 +177,64 @@ WeeklyBarsTile? _week(TrendsView v) {
   int wd(String k) => DayKey.start(k).weekday - 1;
   return WeeklyBarsTile(
     title: 'Last 7 days',
-    leadLabel: 'Most strained day:',
+    leadLabel: 'Hardest day:',
     leadValue: names[wd(keys[hi])],
     totals: [
-      ('Average strain', mean.toStringAsFixed(1), 'OF 21'),
-      ('Highest', top.toStringAsFixed(1), 'STRAIN'),
+      ('Average strain', mean.toStringAsFixed(1), 'OUT OF 21'),
+      ('Hardest', top.toStringAsFixed(1), 'STRAIN'),
     ],
     values: vals,
     days: [for (final k in keys) letters[wd(k)]],
     highlight: hi,
     semanticLabel:
-        'Recorded strain in the last 7 days: average ${mean.toStringAsFixed(1)}, highest '
-        '${top.toStringAsFixed(1)} on ${names[wd(keys[hi])]}.',
+        'Strain in the last 7 days: average ${mean.toStringAsFixed(1)}, '
+        'hardest ${top.toStringAsFixed(1)} on ${names[wd(keys[hi])]}.',
   );
 }
+
+/// The training-load verdict in words (the same words as Methodology and
+/// the coach): your last 7 days against your last 4 weeks.
+String loadVerdict(LoadState s) => switch (s) {
+  LoadState.detraining => 'Less than usual',
+  LoadState.optimal => 'About usual',
+  LoadState.elevated => 'More than usual',
+  LoadState.high => 'Much more than usual',
+};
 
 /// Medium/20 filled with the training load: the acute:chronic ratio on the
 /// engine's four bands.
 SegmentScaleTile _loadTile(TrainingLoad l) {
   final label = switch (l.state) {
-    LoadState.detraining => 'Lower',
-    LoadState.optimal => 'Similar',
-    LoadState.elevated => 'Elevated',
-    LoadState.high => 'High',
+    LoadState.detraining => 'Less',
+    LoadState.optimal => 'About usual',
+    LoadState.elevated => 'More',
+    LoadState.high => 'Much more',
   };
   String n(double x) => numText(x);
   return SegmentScaleTile(
     title: 'Training load',
     value: l.ratio.toStringAsFixed(2),
-    lead: 'vs recent',
+    lead: 'vs usual',
     verdict: label,
     marker: trainingLoadMarker(l.ratio),
     bands: [
-      ScaleBand('Lower', '<${n(TrainingLoadEngine.optimalFrom)}', C.green800),
+      ScaleBand('Less', '<${n(TrainingLoadEngine.optimalFrom)}', C.green800),
       ScaleBand(
-        'Similar',
+        'About usual',
         '${n(TrainingLoadEngine.optimalFrom)}–${n(TrainingLoadEngine.optimalTo)}',
         C.green600,
       ),
       ScaleBand(
-        'Elevated',
+        'More',
         '${n(TrainingLoadEngine.optimalTo)}–${n(TrainingLoadEngine.elevatedTo)}',
         C.green400,
       ),
-      ScaleBand('High', '>${n(TrainingLoadEngine.elevatedTo)}', C.green200),
+      ScaleBand('Much more', '>${n(TrainingLoadEngine.elevatedTo)}', C.green200),
     ],
     semanticLabel:
-        'Training load ${l.ratio.toStringAsFixed(2)}, $label: seven-day load '
-        'against the 28-day average.',
+        'Training load ${l.ratio.toStringAsFixed(2)}: '
+        '${loadVerdict(l.state).toLowerCase()}. Your last 7 days compared '
+        'with your last 4 weeks.',
   );
 }
 

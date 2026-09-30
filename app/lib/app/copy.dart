@@ -19,41 +19,49 @@ import '../domain/coach/insight_contracts.dart';
 
 /// Health Connect data types read, and the feature each one powers. Order
 /// and wording follow the manifest and docs/PLAY_RELEASE.md §2.
+/// The type NAMES match Android's own Health Connect permission screen and
+/// are pinned to the manifest by test/features/privacy_copy_test.dart; only
+/// the descriptions are plain-words copy (docs/COPY_REVIEW.md O27).
 const hcReadTypes = <(String, String)>[
-  ('Heart rate', 'Strain and heart-rate zones across the day.'),
-  ('Heart rate variability (RMSSD)', 'The main input to Recovery.'),
-  ('Resting heart rate', 'Recovery and the Health Monitor.'),
-  ('Respiratory rate', 'Recovery and the Health Monitor.'),
+  ('Heart rate', 'Strain and your heart-rate zones.'),
+  (
+    'Heart rate variability (RMSSD)',
+    'HRV: the biggest part of your Recovery score.',
+  ),
+  ('Resting heart rate', 'Recovery, and the overnight signals on Today.'),
+  (
+    'Respiratory rate',
+    'Your breathing rate. Used for Recovery and the overnight signals on '
+        'Today.',
+  ),
   (
     'Skin temperature',
-    'The Health Monitor compares changes with your usual recorded range. '
-        'A change is not a diagnosis.',
+    'The overnight signals on Today. A change isn’t a diagnosis.',
   ),
   (
     'Sleep sessions and stages',
-    'Sleep performance, debt, consistency, and Recovery.',
+    'Your Sleep score, missed sleep, consistency and Recovery.',
   ),
-  ('Exercise sessions', 'Per-workout strain.'),
+  ('Exercise sessions', 'Strain for each workout.'),
   (
     'Steps',
-    'Activity context alongside your trends. Steps do not produce a strain score.',
+    'Shown next to your trends. Steps don’t count toward Strain.',
   ),
-  ('Weight (optional)', 'Only if you grant it, shown next to your trends.'),
+  ('Weight (optional)', 'Only if you allow it. Shown next to your trends.'),
   ('VO₂ max', 'A cardio-fitness trend, shown as your tracker’s own estimate.'),
   (
     'Blood oxygen (SpO₂)',
-    'Overnight SpO₂ in the Health Monitor, and a Recovery penalty when it '
-        'is below 90 %.',
+    'Overnight blood oxygen. Recovery drops a little if it goes below 90%.',
   ),
-  ('Distance', 'Needed to read your exercise sessions. Shown on each workout.'),
+  ('Distance', 'Needed to read your workouts. Shown on each one.'),
   (
     'Total calories burned',
-    'Needed to read your exercise sessions. Shown on each workout.',
+    'Needed to read your workouts. Shown on each one.',
   ),
   (
     'History and background reads (optional)',
-    'Older data so baselines start on day 1, and background syncing so '
-        'the morning Recovery and the widget are ready.',
+    'Older data, so Airlog knows your usual from day 1, and syncing in the '
+        'background, so your morning Recovery is ready.',
   ),
 ];
 
@@ -448,11 +456,11 @@ abstract final class InsightCopy {
     InsightKind.recovery => 'Recovery',
     InsightKind.strain => 'Strain',
     InsightKind.workout => 'Workout',
-    InsightKind.healthMonitor => 'Health',
+    InsightKind.healthMonitor => 'Overnight signals',
     InsightKind.weekly => 'This week',
   };
 
-  static const discuss = 'Discuss';
+  static const discuss = 'Ask about this';
   static const aiSummary = 'AI summary';
   static const options = 'Card options';
   static const hide = 'Hide this card';

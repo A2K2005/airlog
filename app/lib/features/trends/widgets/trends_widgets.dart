@@ -44,9 +44,9 @@ class RecoveryStrainCard extends StatelessWidget {
           ),
           const SizedBox(height: S.x3),
           Text(
-            'Average recovery ${_avg(v.recovery, axisInt)}'
-            '${_avg(v.recovery, axisInt) == 'no data' ? '' : ' %'}'
-            ' · average strain ${_avg(v.strain, axisFixed)}',
+            'Average Recovery ${_avg(v.recovery, axisInt)}'
+            '${_avg(v.recovery, axisInt) == 'no data' ? '' : '%'}'
+            ' · average Strain ${_avg(v.strain, axisFixed)}',
             style: F.tab(F.cap).copyWith(color: p.ink2),
           ),
           for (final (name, trend, good) in arrows)
@@ -80,18 +80,14 @@ class LoadCard extends StatelessWidget {
     final p = P.of(context);
     final l = load;
     final line = l == null
-        ? 'Needs at least ${TrainingLoadEngine.minDays} days with sufficient HR coverage in the '
-              'last ${TrainingLoadEngine.chronicDays} days, including '
-              '${TrainingLoadEngine.minAcuteDays} in the last week. Today is excluded.'
+        ? 'Shows up after ${TrainingLoadEngine.minDays} days with heart rate '
+              'in the last ${TrainingLoadEngine.chronicDays}, including '
+              '${TrainingLoadEngine.minAcuteDays} in the last week.'
         : switch (l.state) {
-            LoadState.detraining =>
-              'Recorded effort this week is lower than your recent average.',
-            LoadState.optimal =>
-              'Recorded effort this week is close to your recent average.',
-            LoadState.elevated =>
-              'Recorded effort this week is above your recent average.',
-            LoadState.high =>
-              'Recorded effort this week is well above your recent average.',
+            LoadState.detraining => 'This week you did less than usual.',
+            LoadState.optimal => 'This week you did about the same as usual.',
+            LoadState.elevated => 'This week you did more than usual.',
+            LoadState.high => 'This week you did a lot more than usual.',
           };
     return AppCard(
       child: Column(
@@ -102,11 +98,11 @@ class LoadCard extends StatelessWidget {
           Text(line, style: F.bodySm.copyWith(color: p.ink)),
           const SizedBox(height: S.x2),
           Text(
-            'Acute:chronic ratio: mean daily strain over the last '
-            '${TrainingLoadEngine.acuteDays} days ÷ the last '
-            '${TrainingLoadEngine.chronicDays} (Gabbett 2016). '
+            'Your average daily Strain for the last '
+            '${TrainingLoadEngine.acuteDays} days, divided by your last '
+            '${TrainingLoadEngine.chronicDays} days. '
             '${numText(TrainingLoadEngine.optimalFrom)}–'
-            '${numText(TrainingLoadEngine.optimalTo)} is the steady zone.'
+            '${numText(TrainingLoadEngine.optimalTo)} means about usual.'
             '${l == null ? '' : ' Based on ${l.daysOfHistory} days.'}',
             style: F.cap.copyWith(color: p.ink3),
           ),
@@ -133,13 +129,14 @@ class MetricTrendCard extends StatelessWidget {
     final hasBand = m.lower != null && m.upper != null;
     if (foot == null && hasBand && m.hasValues) {
       foot =
-          'Band: your usual range ${m.format(m.lower!)}–${m.format(m.upper!)} ${m.unit}';
+          'Shaded: your usual range, ${m.format(m.lower!)}–'
+          '${m.format(m.upper!)} ${m.unit}';
     }
     if (changes.isNotEmpty) {
       foot =
-          '${foot == null ? '' : '$foot. '}Dotted line: the source changed '
-          'on ${changes.map(dayMonth).join(', ')}, so a new baseline starts '
-          'there.';
+          '${foot == null ? '' : '$foot. '}Dotted line: your data came from '
+          'a different app from ${changes.map(dayMonth).join(', ')}, so '
+          'Airlog learned your usual again.';
     }
     return AppCard(
       child: Column(
@@ -158,7 +155,7 @@ class MetricTrendCard extends StatelessWidget {
             axis: m.axis,
             footnote: foot,
             xMarks: m.sourceChangeMarks,
-            emptyMessage: 'Nothing measured in this range',
+            emptyMessage: 'Nothing recorded in this period',
             // Only a real arrow: an empty trailing slot would still push
             // the unit off the card's edge by its spacer.
             trailing: TrendArrow.visible(m.trend)
@@ -253,10 +250,11 @@ class ArrowsFootnote extends StatelessWidget {
           const SizedBox(width: S.x3),
           Expanded(
             child: Text(
-              '${anyArrow ? 'Arrows mark' : 'No arrows here: nothing in these $days days is'} '
-              'a statistically significant change (Mann–Kendall test, '
-              'p < 0.05, at least ${TrendEngine.minN} days). '
-              '${anyArrow ? 'No arrow means no reliable change yet, not no change.' : 'Day-to-day wobble is not a trend.'}',
+              anyArrow
+                  ? 'An arrow means a real change, not just day-to-day ups '
+                        'and downs. No arrow means no clear change yet.'
+                  : 'No arrows: nothing in these $days days is a clear '
+                        'change yet. Day-to-day ups and downs aren’t a trend.',
               style: F.cap.copyWith(color: p.ink2),
             ),
           ),
@@ -268,10 +266,10 @@ class ArrowsFootnote extends StatelessWidget {
 
 Future<void> showTrendsExplain(BuildContext context) => showExplainSheet<void>(
   context,
-  title: 'How trends are tested',
+  title: 'How trends work',
   lede:
-      'A line that drifts is not a trend until the drift is bigger than '
-      'the day-to-day noise. Airlog only draws an arrow when it is.',
+      'A line that wobbles isn’t a trend. Airlog only draws an arrow when '
+      'the change is bigger than the usual ups and downs.',
   children: [
     ExplainSection(
       title: 'The test',
@@ -292,21 +290,31 @@ Future<void> showTrendsExplain(BuildContext context) => showExplainSheet<void>(
           'slope, so one odd night cannot swing it.',
     ),
     ExplainSection(
-      title: 'Bands',
+      title: 'Usual range',
       body:
-          'The shaded band is your usual range from the Health '
-          'Monitor: your ${const EngineConfig().baselineWindowDays}-night '
-          'baseline ± ${numText(HealthMonitor.bandSd)} SD, with a minimum '
-          'width so a very steady metric is not over-sensitive.',
+          'The shaded area is your usual range: where about 9 in 10 of your '
+          'last ${const EngineConfig().baselineWindowDays} nights fall, with '
+          'a minimum width so a very steady signal isn’t too touchy.',
+      formula:
+          'range = mean ± max(${numText(HealthMonitor.bandSd)} × SD, '
+          'minimum)',
     ),
     const ExplainSection(
-      title: 'New baselines',
+      title: 'Switching apps',
       body:
-          'If a metric starts coming from a different source (say, '
-          'deep-sleep HRV from the Google Health API instead of all-night '
-          'HRV from Health Connect), the old and new values are not '
-          'mixed: a new baseline starts, and the chart marks the day '
-          'with a dotted line.',
+          'If a signal starts coming from a different app, or is measured a '
+          'different way, Airlog doesn’t mix old and new. It learns your '
+          'usual again, and the chart marks that day with a dotted line.',
+    ),
+    ExplainSection(
+      title: 'Training load',
+      body:
+          'Your average daily Strain for the last '
+          '${TrainingLoadEngine.acuteDays} days, divided by your last '
+          '${TrainingLoadEngine.chronicDays} days (the acute:chronic ratio, '
+          'Gabbett 2016). ${numText(TrainingLoadEngine.optimalFrom)}–'
+          '${numText(TrainingLoadEngine.optimalTo)} means about usual. Days '
+          'without data are skipped, not counted as rest.',
     ),
   ],
 );

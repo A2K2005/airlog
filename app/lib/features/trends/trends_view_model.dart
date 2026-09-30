@@ -186,11 +186,11 @@ final trendsViewProvider = Provider<AsyncValue<TrendsView?>>((ref) {
 });
 
 /// VO₂ max is the source app's own estimate, never Airlog's (principle 6):
-/// "VO₂ max (Samsung Health’s estimate)" when the app is known, else
-/// "VO₂ max (your tracker’s estimate)".
+/// "Cardio fitness (VO₂ max, Samsung Health’s estimate)" when the app is
+/// known, else "Cardio fitness (VO₂ max, your tracker’s estimate)".
 String vo2Title(Provenance? p) {
   final app = SourceApps.knownName(p?.origin);
-  return 'VO₂ max (${app ?? 'your tracker'}’s estimate)';
+  return 'Cardio fitness (VO₂ max, ${app ?? 'your tracker'}’s estimate)';
 }
 
 double? _mean(Iterable<double?> xs) {
@@ -395,7 +395,7 @@ TrendsView buildTrendsView(TrendsData d, int days) {
     final st = status(kind);
     return MetricTrend(
       title: title,
-      unit: kind.unit,
+      unit: kind.displayUnit,
       values: v,
       color: color,
       trend: Engine.trend(
@@ -463,8 +463,7 @@ TrendsView buildTrendsView(TrendsData d, int days) {
       mean: need,
       footnote: need == null
           ? null
-          : 'Dashed line: your average sleep target here (${axisHm(need)}). '
-                'Duration has no personal band.',
+          : 'Dashed line: your average sleep goal (${axisHm(need)}).',
       provenance: latestBundle?.record.provenance[Metric.sleep],
       sourceChanges: _dates(
         w,
@@ -476,7 +475,7 @@ TrendsView buildTrendsView(TrendsData d, int days) {
     band(
       HealthMetricKind.respiratoryRate,
       Metric.respiratoryRate,
-      'Respiratory rate',
+      'Breathing rate',
       C.indigo,
       null,
       axisFixed,
@@ -602,8 +601,8 @@ TrendsView buildTrendsView(TrendsData d, int days) {
       ),
     ),
     AverageRow(
-      'Respiratory rate',
-      '/min',
+      'Breathing rate',
+      HealthMetricKind.respiratoryRate.displayUnit,
       avg(
         (b) => b.record.respiratoryRate,
         axisFixed,

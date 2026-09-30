@@ -1,7 +1,7 @@
 // The honesty lines that frame every day screen:
-//   FreshnessLine      "Last data from your tracker 12 min ago · synced 2 min ago"
-//   CalibrationBanner  "Baseline night 9 of 14"
-//   DemoBadge          a persistent "Demo data" pill
+//   FreshnessLine      "Latest data from your tracker 12 min ago · synced 2 min ago"
+//   CalibrationBanner  "Learning your usual · night 9 of 14"
+//   DemoBadge          a persistent "Sample data" pill
 //   PreparingNote      "Preparing 90 days of sample data…" (first launch)
 
 import 'package:flutter/material.dart';
@@ -12,7 +12,7 @@ import '../tokens/tokens.dart';
 import 'pressable.dart';
 import 'surfaces.dart';
 
-/// Relative time in plain words: "just now", "12 min ago", "3 h ago",
+/// Relative time in plain words: "just now", "12 min ago", "3h ago",
 /// "2 days ago". Future timestamps read "just now" (clock skew).
 String ago(DateTime t, DateTime now) {
   final s = now.difference(t).inSeconds;
@@ -20,7 +20,7 @@ String ago(DateTime t, DateTime now) {
   final m = s ~/ 60;
   if (m < 60) return '$m min ago';
   final h = m ~/ 60;
-  if (h < 24) return '$h h ago';
+  if (h < 24) return '${h}h ago';
   final d = h ~/ 24;
   return d == 1 ? '1 day ago' : '$d days ago';
 }
@@ -85,7 +85,7 @@ class FreshnessLine extends StatelessWidget {
   }
 
   /// What a failed read says (never the exception text).
-  static const readError = 'Couldn’t read your data. Pull to retry.';
+  static const readError = 'Couldn’t read your data. Pull down to try again.';
 
   /// Pass the clock in (never read DateTime.now() here) so goldens and tests
   /// are deterministic.
@@ -119,7 +119,7 @@ class FreshnessLine extends StatelessWidget {
     }
     final data = lastDataAt == null
         ? 'No data from $source yet'
-        : 'Last data from $source ${ago(lastDataAt!, now)}';
+        : 'Latest data from $source ${ago(lastDataAt!, now)}';
     final sync = syncing
         ? 'syncing…'
         : error != null
@@ -199,13 +199,15 @@ class CalibrationBanner extends StatelessWidget {
   final String? body;
   final VoidCallback? onTap;
 
-  String get title => 'Baseline night ${have.clamp(0, need)} of $need';
+  String get title =>
+      'Learning your usual · night ${have.clamp(0, need)} of $need';
 
   String get _body =>
       body ??
       (have < 5
-          ? 'Scores are estimates until 5 nights are in. Wear the band to bed.'
-          : 'Scores are provisional until your baseline settles.');
+          ? 'Scores start to mean something after 5 nights. Wear your '
+                'tracker to bed.'
+          : 'Scores may shift until Airlog knows your usual.');
 
   @override
   Widget build(BuildContext context) {
@@ -269,7 +271,7 @@ class CalibrationBanner extends StatelessWidget {
 
 /// Persistent pill shown whenever the app is showing synthetic data.
 class DemoBadge extends StatelessWidget {
-  const DemoBadge({super.key, this.label = 'Demo data', this.onTap});
+  const DemoBadge({super.key, this.label = 'Sample data', this.onTap});
   final String label;
   final VoidCallback? onTap;
 
@@ -296,7 +298,7 @@ class DemoBadge extends StatelessWidget {
       ),
     );
     final labelled = Semantics(
-      label: '$label: these numbers are synthetic, not from your band',
+      label: '$label: made-up numbers, not from your tracker',
       child: ExcludeSemantics(child: pill),
     );
     if (onTap == null) return labelled;

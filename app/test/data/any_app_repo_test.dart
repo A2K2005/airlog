@@ -69,7 +69,7 @@ void main() {
     // The first Oura night started a new HRV baseline.
     final first = (await repo.day(DayKey.add(today, -5)))!;
     expect(
-      first.result.notes.any((n) => n.title == 'New HRV baseline'),
+      first.result.notes.any((n) => n.title == 'Learning your HRV again'),
       isTrue,
     );
     // Nights before Oura existed keep Fitbit (the pin starts at Oura's first

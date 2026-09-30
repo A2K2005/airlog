@@ -5,12 +5,13 @@
 import '../domain/models.dart' show SourceKind;
 import 'charts/axis.dart' show clockOf;
 
-/// "1h 05m", "37 min", "0 min".
+/// "1h 5m", "37 min", "0 min" (one duration style everywhere,
+/// docs/COPY_REVIEW.md X17).
 String durationWords(num minutes) {
   final m = minutes.round();
   if (m < 60) return '$m min';
   final h = m ~/ 60, r = m % 60;
-  return r == 0 ? '${h}h' : '${h}h ${r.toString().padLeft(2, '0')}m';
+  return r == 0 ? '${h}h' : '${h}h ${r}m';
 }
 
 /// "0:42", "12:07", "1:02:33" for an elapsed number of seconds.
@@ -38,6 +39,20 @@ const _mo = [
 
 /// "28 Sep 07:12" for a timestamp.
 String dayTime(DateTime t) => '${t.day} ${_mo[t.month - 1]} ${clockOf(t)}';
+
+/// A clock time the way the phone is set (MediaQuery.alwaysUse24HourFormat):
+/// "23:35" or "11:35 pm", for minutes since local midnight (wraps).
+String clockText(double minutesOfDay, {required bool use24h}) {
+  if (!minutesOfDay.isFinite) return '';
+  final t = (minutesOfDay.round() % 1440 + 1440) % 1440;
+  final h = t ~/ 60, m = (t % 60).toString().padLeft(2, '0');
+  if (use24h) return '${h.toString().padLeft(2, '0')}:$m';
+  return '${h % 12 == 0 ? 12 : h % 12}:$m ${h < 12 ? 'am' : 'pm'}';
+}
+
+/// [clockText] of a DateTime (local).
+String clockTextOf(DateTime t, {required bool use24h}) =>
+    clockText((t.hour * 60 + t.minute).toDouble(), use24h: use24h);
 
 /// "5.21 km" from 1 km up, "820 m" below; null for a missing or
 /// non-positive distance.

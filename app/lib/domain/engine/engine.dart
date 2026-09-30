@@ -275,12 +275,14 @@ abstract final class Engine {
     SyncStatus? sync,
     required DateTime now,
     Map<String, String> appNames = const {},
+    bool use24h = true,
   }) {
     return TodayPlanner.plan(
       today: today,
       sync: sync,
       now: now,
       appNames: appNames,
+      use24h: use24h,
     );
   }
 }

@@ -31,25 +31,26 @@ class PlanTile extends StatelessWidget {
     DayState.noData => GlowRecipes.m8,
   };
 
-  /// "Tonight · Provisional · without HRV · New source: …".
+  /// "Learning your Oura data · Tonight · Early estimate · without HRV".
+  /// Re-learning goes first; the rest keep their order.
   static List<String> basis(TodayPlan p) => [
-    if (p.phase == PlanPhase.tonight) 'Tonight',
-    if (p.stale) 'Data may be behind',
-    if (p.provisional) 'Provisional',
-    for (final g in p.missingInputs) gapLabel(g),
     // The summary may already say it: show re-learning once.
-    if (p.relearningSource != null && !p.summary.startsWith('Re-learning'))
-      'New source: re-learning your normal (${p.relearningSource})',
+    if (p.relearningSource != null && !p.summaryNamesRelearning)
+      'Learning your ${p.relearningSource} data',
+    if (p.phase == PlanPhase.tonight) 'Tonight',
+    if (p.stale) 'Your data may be out of date',
+    if (p.provisional) 'Early estimate',
+    for (final g in p.missingInputs) gapLabel(g),
   ];
 
   /// "without HRV" and friends: the basis of today's scores.
   static String gapLabel(InputGap g) => switch (g) {
     InputGap.hrv => 'without HRV',
     InputGap.heartRate => 'without heart rate',
-    InputGap.sleep => 'without sleep',
-    InputGap.respiratoryRate => 'without respiratory rate',
+    InputGap.sleep => 'without sleep data',
+    InputGap.respiratoryRate => 'without breathing rate',
     InputGap.skinTemp => 'without skin temperature',
-    InputGap.spo2 => 'without SpO₂',
+    InputGap.spo2 => 'without blood oxygen',
   };
 
   static IconData iconFor(PlanActionKind k) => switch (k) {
@@ -118,7 +119,9 @@ class PlanTile extends StatelessWidget {
     );
   }
 
-  Widget _chip(PlanEvidence e) {
+  /// [interactive] = false inside an action row: the row itself opens the
+  /// route, so its chips are plain labels.
+  Widget _chip(PlanEvidence e, {bool interactive = true}) {
     final text = Text.rich(
       TextSpan(
         children: [
@@ -144,6 +147,7 @@ class PlanTile extends StatelessWidget {
       child: text,
     );
     final route = e.route;
+    if (!interactive) return pill;
     if (route == null || onOpen == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -191,6 +195,16 @@ class PlanTile extends StatelessWidget {
                     color: TileInk.secondary,
                   ),
                 ),
+                if (a.evidence.isNotEmpty) ...[
+                  const SizedBox(height: S.x2),
+                  Wrap(
+                    spacing: S.x2,
+                    runSpacing: S.x2,
+                    children: [
+                      for (final e in a.evidence) _chip(e, interactive: false),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

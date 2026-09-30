@@ -1047,6 +1047,8 @@ class OfflineComposer {
         ? 'last night'
         : 'the night before ${CoachFormat.day(d)}';
     if (nights.isEmpty) {
+      // Never a guessed cause (prompts.dart rule 4): the data can't say
+      // why nothing came in.
       return 'I don’t have sleep data for $when: nothing was recorded, so I '
           'can’t score it.';
     }

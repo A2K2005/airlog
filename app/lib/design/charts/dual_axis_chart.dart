@@ -32,7 +32,7 @@ class DualAxisChart extends StatelessWidget {
     this.xLabels = const [],
     this.height = 150,
     this.semanticsLabel,
-    this.emptyMessage = 'Nothing recorded in this range',
+    this.emptyMessage = 'Nothing recorded in this period',
   });
 
   /// Recovery (bars, 0–100 %, coloured by zone) vs Strain (line, 0–21).
@@ -120,8 +120,8 @@ class DualAxisChart extends StatelessWidget {
       legend: empty
           ? const []
           : [
-              ('$barLabel ($barUnit, left)', p.mark(barColor)),
-              ('$lineLabel (right)', lineInk),
+              ('$barLabel $barUnit (left scale)', p.mark(barColor)),
+              ('$lineLabel (right scale)', lineInk),
             ],
       empty: empty ? NoData(message: emptyMessage) : null,
       child: empty

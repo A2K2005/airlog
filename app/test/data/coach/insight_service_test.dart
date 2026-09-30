@@ -45,7 +45,7 @@ void main() {
     final sleep = cards.firstWhere((c) => c.kind == InsightKind.sleep);
     expect(sleep.metrics.first.label, startsWith('Asleep'));
     final rec = cards.firstWhere((c) => c.kind == InsightKind.recovery);
-    expect(rec.headline, contains('moved your recovery most'));
+    expect(rec.headline, contains('made the biggest difference'));
   });
 
   test('"Show coach" off or level off → no cards', () async {
@@ -89,7 +89,7 @@ void main() {
     final cards = await m.insights.cards(day);
     final strain = cards.firstWhere((c) => c.kind == InsightKind.strain);
     expect(strain.usedMemoryIds, [goal.id]);
-    expect(strain.bullets.map((b) => b.label), contains('Goal alignment'));
+    expect(strain.bullets.map((b) => b.label), contains('Your goal'));
   });
 
   test('watchDay emits at once and again after feedback', () async {

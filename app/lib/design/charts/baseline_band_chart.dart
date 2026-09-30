@@ -153,7 +153,7 @@ class BaselineBandChart extends StatelessWidget {
       footnote:
           footnote ??
           (_hasBand && !empty
-              ? 'Band: your usual range ${_range()} $unit'
+              ? 'Shaded: your usual range, ${_range()} $unit'
               : null),
       empty: empty ? NoData(message: emptyMessage) : null,
       child: empty

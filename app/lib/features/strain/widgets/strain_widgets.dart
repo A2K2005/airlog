@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../design/design.dart';
-import '../../../domain/engine/strain.dart' show StrainEngine;
 import '../../../domain/results.dart';
 import '../strain_view_model.dart';
 
@@ -21,30 +20,29 @@ class StrainHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = P.of(context);
     final v = view;
-    final s = v.strain;
     final t = v.target;
     final targetBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          t == null ? 'No effort target' : 'Target basis',
+          t == null ? 'No effort goal' : 'Goal',
           style: F.head.copyWith(color: p.ink),
         ),
         const SizedBox(height: S.x1),
         Text(
           t == null && v.recovery != null
-              ? 'Recovery does not support an effort target for this day'
+              ? 'No effort goal for this day: there’s no Recovery score'
               : v.recovery == null
-              ? 'No recovery this morning'
-              : 'from ${v.recovery} % recovery',
+              ? 'No Recovery this morning'
+              : 'set by your ${v.recovery}% Recovery',
           style: F.tab(F.cap).copyWith(color: p.ink3),
         ),
         const SizedBox(height: S.x3),
         if (!v.noInput)
           StatePill(
             label: switch (v.method) {
-              StrainMethod.fallback => 'Estimated',
+              StrainMethod.fallback => 'Estimate',
               _ => 'From heart rate',
             },
             color: v.method == StrainMethod.fallback ? C.amber : C.health,
@@ -84,18 +82,11 @@ class StrainHeroCard extends StatelessWidget {
                 const SizedBox(width: S.x2),
                 Expanded(
                   child: Text(
-                    'This stored score used an older estimation method.',
+                    'This score was worked out an older way.',
                     style: F.cap.copyWith(color: p.ink2),
                   ),
                 ),
               ],
-            ),
-          ],
-          if (s != null && s.trimp != null && !v.noInput) ...[
-            const SizedBox(height: S.x2),
-            Text(
-              'Cross-check: TRIMP ${s.trimp!.round()} (Banister)',
-              style: F.tab(F.cap).copyWith(color: p.ink3),
             ),
           ],
         ],
@@ -117,9 +108,8 @@ class TargetBar extends StatelessWidget {
     final tick = F.tab(F.over).copyWith(color: p.ink3, letterSpacing: .2);
     return Semantics(
       label: t == null
-          ? 'Strain ${strain1(strain)} on a 0 to 21 scale'
-          : 'Strain ${strain1(strain)} against a target of ${strain1(t)}, '
-                'on a 0 to 21 scale',
+          ? 'Strain ${strain1(strain)} out of 21'
+          : 'Strain ${strain1(strain)} out of 21. Goal ${strain1(t)}.',
       child: ExcludeSemantics(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -142,7 +132,7 @@ class TargetBar extends StatelessWidget {
             LayoutBuilder(
               builder: (context, box) {
                 final w = box.maxWidth.isFinite ? box.maxWidth : 0.0;
-                final label = t == null ? null : 'Target ${strain1(t)}';
+                final label = t == null ? null : 'Goal ${strain1(t)}';
                 return SizedBox(
                   height: 16,
                   child: Stack(
@@ -245,7 +235,8 @@ class ZoneMinutesCard extends StatelessWidget {
   final StrainResult strain;
   final List<double> floors;
 
-  static final pct = zoneRanges(StrainEngine.displayZoneLowerBounds);
+  /// Zone names (docs/COPY_REVIEW.md §2): 1 Very light … 5 Max.
+  static const names = ['Very light', 'Light', 'Moderate', 'Hard', 'Max'];
 
   @override
   Widget build(BuildContext context) {
@@ -270,10 +261,10 @@ class ZoneMinutesCard extends StatelessWidget {
             height: 22,
             series: z,
             semanticsLabel: total <= 0
-                ? 'Time in zones: no minutes above zone 1'
-                : 'Time in zones. ${[for (var i = 0; i < z.length && i < 5; i++) 'Zone ${i + 1} ${z[i].round()} minutes'].join(', ')}',
+                ? 'Time in zones: none above resting'
+                : 'Time in zones. ${[for (var i = 0; i < z.length && i < 5; i++) 'Zone ${i + 1}, ${names[i]}, ${z[i].round()} minutes'].join('. ')}',
             empty: total <= 0
-                ? const NoData(message: 'No recorded minutes in zones 1–5')
+                ? const NoData(message: 'No time in any zone')
                 : null,
             child: CustomPaint(
               size: Size.infinite,
@@ -298,22 +289,24 @@ class ZoneMinutesCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: S.x3),
-                    SizedBox(
-                      width: 56,
-                      child: Text(
-                        'Zone ${i + 1}',
-                        style: F.bodySm.copyWith(
-                          color: p.ink,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
                     Expanded(
-                      child: Text(
-                        '${strain.zonesFromMaxHr ? '' : '${pct[i]} · '}${range(i)}',
-                        style: F.tab(F.cap).copyWith(color: p.ink3),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Zone ${i + 1} · ${names[i]}',
+                              style: F.bodySm.copyWith(
+                                color: p.ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (range(i).isNotEmpty)
+                              TextSpan(
+                                text: '  ${range(i)}',
+                                style: F.tab(F.cap).copyWith(color: p.ink3),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                     Text(
@@ -330,9 +323,8 @@ class ZoneMinutesCard extends StatelessWidget {
               ),
           const SizedBox(height: S.x2),
           Text(
-            'Below zone 1: ${durationWords(strain.restMinutes)}, sleep '
-            'included. ${strain.zonesFromMaxHr ? 'Zones use estimated fractions of maximum heart rate' : 'Zones are shares of your heart-rate reserve'}'
-            '${strain.restingHrUsed == null || maxHr == null ? '' : ' (resting ${strain.restingHrUsed!.round()}, max ${maxHr.round()} bpm)'}.',
+            'Resting (below zone 1): ${durationWords(strain.restMinutes)}, '
+            'including sleep.',
             style: F.cap.copyWith(color: p.ink3),
           ),
         ],
@@ -370,6 +362,9 @@ class WorkoutCard extends StatelessWidget {
     final ws = row.strain;
     final zones = ws?.zoneMinutes ?? const <double>[];
     final zt = zones.fold(0.0, (a, b) => a + b);
+    final h24 = MediaQuery.alwaysUse24HourFormatOf(context);
+    final from = clockTextOf(w.start, use24h: h24);
+    final to = clockTextOf(w.end, use24h: h24);
     // Distance and calories come with the exercise session itself (Health
     // Connect); shown only when the band recorded them.
     final distance = distanceText(w.distanceM);
@@ -386,14 +381,13 @@ class WorkoutCard extends StatelessWidget {
     return AppCard(
       semanticLabel: [
         w.name,
-        '${clockOf(w.start)} to ${clockOf(w.end)}, ${durationWords(w.durationMinutes)}',
-        if (ws != null) 'strain ${strain1(ws.strain)}',
+        '$from to $to, ${durationWords(w.durationMinutes)}',
+        if (ws != null) 'Strain ${strain1(ws.strain)}',
         if (ws?.avgHr != null) 'average ${ws!.avgHr!.round()} bpm',
         if (ws?.peakHr != null) 'peak ${ws!.peakHr!.round()} bpm',
-        if (ws?.trimp != null) 'TRIMP ${ws!.trimp!.round()}',
-        if (distance != null) 'distance $distance',
+        ?distance,
         if (kcal != null) '${w.calories!.round()} calories',
-        if (row.estimated) 'estimated',
+        if (row.estimated) 'estimate',
       ].join(', '),
       child: ExcludeSemantics(
         child: Column(
@@ -427,7 +421,7 @@ class WorkoutCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        '${clockOf(w.start)}–${clockOf(w.end)} · ${durationWords(w.durationMinutes)}',
+                        '$from–$to · ${durationWords(w.durationMinutes)}',
                         style: F.tab(F.cap).copyWith(color: p.ink3),
                       ),
                     ],
@@ -453,10 +447,9 @@ class WorkoutCard extends StatelessWidget {
                 runSpacing: S.x3,
                 children: [
                   if (ws?.avgHr != null)
-                    stat('Avg HR', '${ws!.avgHr!.round()}'),
+                    stat('Avg heart rate', '${ws!.avgHr!.round()}'),
                   if (ws?.peakHr != null)
-                    stat('Peak HR', '${ws!.peakHr!.round()}'),
-                  if (ws?.trimp != null) stat('TRIMP', '${ws!.trimp!.round()}'),
+                    stat('Peak heart rate', '${ws!.peakHr!.round()}'),
                   if (distance != null) stat('Distance', distance),
                   if (kcal != null) stat('Calories', kcal),
                 ],
@@ -479,12 +472,12 @@ class WorkoutCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const StatePill(label: 'Estimated', color: C.amber),
+                  const StatePill(label: 'Estimate', color: C.amber),
                   const SizedBox(width: S.x2),
                   Expanded(
                     child: Text(
-                      'Too little heart rate inside this workout, so its '
-                      'strain comes from its recorded average HR.',
+                      'Not enough heart rate during this workout, so its '
+                      'Strain comes from its average heart rate.',
                       style: F.cap.copyWith(color: p.ink3),
                     ),
                   ),
