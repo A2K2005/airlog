@@ -86,7 +86,7 @@ void main() {
     // Citations become numbered chips; the Sources row lists all three.
     expect(find.byType(CiteMark), findsNWidgets(6));
     expect(find.byType(SourceChip), findsNWidgets(3));
-    expect(find.text('3 numbers checked'), findsOneWidget);
+    expect(find.text('Checked against your data · 3 numbers'), findsOneWidget);
     // The stored transcript replaced the optimistic question: one bubble.
     expect(find.byType(UserBubble), findsOneWidget);
     // The composer is cleared.
@@ -120,8 +120,8 @@ void main() {
     final service = FakeCoachService(repo, script: [Scripted.fallback]);
     await pumpCoach(t, repo: repo, service: service, initial: Routes.coach);
     await _ask(t, 'Did I run on Sunday?');
-    expect(find.text(CoachAnswerCopy.fallback), findsOneWidget);
-    expect(find.textContaining('checked'), findsNothing);
+    expect(find.text(CoachCopy.fallback), findsOneWidget);
+    expect(find.textContaining(CoachCopy.checked), findsNothing);
     expect(find.byType(SourceChip), findsNWidgets(2));
   });
 

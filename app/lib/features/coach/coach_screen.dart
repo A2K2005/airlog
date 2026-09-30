@@ -248,7 +248,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     return Scaffold(
       backgroundColor: p.bg,
       appBar: AppBar(
-        title: const Text('Coach'),
+        title: const Text('Ask'),
         actions: [
           ...SampleDataChip.action(context),
           AppIconButton(
@@ -560,11 +560,6 @@ class _Header extends StatelessWidget {
           children: [
             _Chip(
               key: const ValueKey('engine-chip'),
-              accent: switch (config.provider) {
-                _ when !cloud => C.health,
-                CoachProvider.gemini => C.sky,
-                _ => C.violet,
-              },
               icon: cloud ? Icons.cloud_outlined : Icons.phone_android_rounded,
               label: config.engineLabel,
               semantic: 'Engine: ${config.engineLabel}. Change in setup',
@@ -572,7 +567,6 @@ class _Header extends StatelessWidget {
             ),
             _Chip(
               key: const ValueKey('mode-chip'),
-              accent: general ? null : C.health,
               icon: general ? Icons.menu_book_outlined : Icons.insights_rounded,
               label: config.modeLabel,
               semantic: 'Mode: ${config.modeLabel}. Change in setup',
@@ -592,48 +586,28 @@ class _Chip extends StatelessWidget {
     required this.label,
     required this.semantic,
     required this.onTap,
-    this.accent,
   });
 
   final IconData icon;
   final String label;
   final String semantic;
   final VoidCallback onTap;
-  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
-    final a = accent;
     return Pressable(
       onTap: onTap,
       semanticLabel: semantic,
       child: ExcludeSemantics(
         child: Container(
-          padding: const EdgeInsets.fromLTRB(S.x1, S.x1, S.x2, S.x1),
-          decoration: BoxDecoration(
-            color: p.card,
-            borderRadius: R.rPill,
-            border: Border.all(color: p.line),
-          ),
+          padding: const EdgeInsets.fromLTRB(S.x3, S.x1 + 2, S.x2, S.x1 + 2),
+          decoration: BoxDecoration(color: p.card2, borderRadius: R.rPill),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: a == null ? p.card2 : p.wash(a),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  icon,
-                  size: 14,
-                  color: a == null ? p.ink2 : p.on(a),
-                ),
-              ),
-              const SizedBox(width: S.x2),
+              Icon(icon, size: 15, color: p.ink2),
+              const SizedBox(width: S.x1 + 2),
               Flexible(
                 child: Text(
                   label,
@@ -645,7 +619,6 @@ class _Chip extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 2),
               Icon(Icons.expand_more_rounded, size: 16, color: p.ink3),
             ],
           ),
