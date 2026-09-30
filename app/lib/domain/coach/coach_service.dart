@@ -37,8 +37,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../day_key.dart';
+import '../engine/today_planner.dart';
 import '../repositories.dart';
 import '../results.dart';
+import 'answer_actions.dart';
+import 'answer_visuals.dart';
 import 'coach_contracts.dart';
 import 'format.dart';
 import 'policy.dart';
@@ -46,6 +49,7 @@ import 'prompts.dart';
 import 'personal_context.dart';
 import 'safety.dart';
 import 'tools.dart';
+import 'topics.dart';
 import 'verifier.dart';
 
 /// Version of the cloud disclosure the user must have accepted.
@@ -91,13 +95,16 @@ class CoachServiceImpl implements CoachService {
   }) async {
     final q = question.trim();
     if (q.isEmpty) {
-      throw const CoachException(CoachErrorKind.unknown, 'Empty question.');
+      throw const CoachException(
+        CoachErrorKind.unknown,
+        'Type a question first.',
+      );
     }
     final settings = await coach.settings();
     if (!settings.enabled) {
       throw const CoachException(
         CoachErrorKind.notConfigured,
-        'Ask is turned off. Turn it on in Settings → Coach.',
+        'Coach is turned off. Turn it on in Settings → Coach.',
       );
     }
 
@@ -129,12 +136,28 @@ class CoachServiceImpl implements CoachService {
       );
     }
 
-    // 2. Cloud gate: consent for this provider + mode, adult, current text.
-    final cloud = settings.provider != CoachProvider.offline;
-    if (cloud) _requireConsent(settings);
-    // The chosen model, then its same-provider backups ("Use a backup model
-    // when busy"). Throws notConfigured (no key).
-    final chain = await coach.modelChain();
+    // 2. Cloud gate: consent for this provider + mode, adult, current text,
+    //    and a stored key. A cloud engine that isn't ready never walls the
+    //    chat: the question is answered on this phone instead, as a purely
+    //    local question (local history, no context pre-read, no source
+    //    firewall, never replayed to a provider), and nothing is sent.
+    final cloudChosen = settings.provider != CoachProvider.offline;
+    var chain = const <LlmClient>[];
+    CoachException? notReady;
+    if (cloudChosen) {
+      try {
+        _requireConsent(settings);
+        // The chosen model, then its same-provider backups ("Use a backup
+        // model when busy"). Throws notConfigured (no key).
+        chain = await coach.modelChain();
+      } on CoachException catch (e) {
+        if (e.kind != CoachErrorKind.notConfigured) rethrow;
+        notReady = e;
+      }
+    } else {
+      chain = await coach.modelChain();
+    }
+    final cloud = cloudChosen && notReady == null;
 
     final useData = settings.mode == CoachMode.useMyData;
     final memoryScope = await _memoryScope();
@@ -145,21 +168,13 @@ class CoachServiceImpl implements CoachService {
         : const <LlmItem>[];
     await _storeUser(conv, q);
 
-    // 3. Daily budget: fail fast, before any network call.
+    // 3. Daily budget, before any network call. Spent: this question is
+    //    answered on this phone exactly like the budget running out mid-
+    //    question (the same context and replay scope), and nothing is sent.
+    var spent = false;
     if (cloud) {
       final u = await coach.usageToday();
-      if (u != null && u.exhausted) {
-        return _store(
-          ChatMessage(
-            id: _id('a'),
-            conversationId: conv,
-            role: ChatRole.assistant,
-            text: budgetText(u),
-            at: clock(),
-            error: CoachErrorKind.dailyLimit.name,
-          ),
-        );
-      }
+      spent = u != null && u.exhausted;
     }
 
     final now = clock();
@@ -195,36 +210,43 @@ class CoachServiceImpl implements CoachService {
           tally: tally,
         );
 
-    final chosen = chain.first.model;
+    final chosen = chain.isNotEmpty
+        ? chain.first.model
+        : settings.model ?? settings.provider.name;
     _Answer? answer;
-    CoachException? failure;
-    for (var i = 0; i < chain.length && answer == null; i++) {
-      final client = chain[i];
-      // A model known to be down (its day quota, the provider's retry
-      // delay) is skipped: no failed request first, no extra wait.
-      final down = cloud ? await coach.modelDown(client.model) : null;
-      if (down != null) {
-        failure = ModelUnavailable(down.reason, 'Known to be down.');
-        continue;
-      }
-      try {
-        answer = await attempt(client, network: cloud);
-      } on CoachException catch (e) {
-        failure = e;
-        if (!cloud) break;
-        if (e is ModelUnavailable) {
-          await coach.noteModelUnavailable(client.model, e);
-          if (i < chain.length - 1) continue;
+    CoachException? failure =
+        notReady ??
+        (spent ? const CoachException(CoachErrorKind.dailyLimit) : null);
+    if (!cloudChosen || (cloud && !spent)) {
+      for (var i = 0; i < chain.length && answer == null; i++) {
+        final client = chain[i];
+        // A model known to be down (its day quota, the provider's retry
+        // delay) is skipped: no failed request first, no extra wait.
+        final down = cloud ? await coach.modelDown(client.model) : null;
+        if (down != null) {
+          failure = ModelUnavailable(down.reason, 'Known to be down.');
+          continue;
         }
-        break;
+        try {
+          answer = await attempt(client, network: cloud);
+        } on CoachException catch (e) {
+          failure = e;
+          if (!cloud) break;
+          if (e is ModelUnavailable) {
+            await coach.noteModelUnavailable(client.model, e);
+            if (i < chain.length - 1) continue;
+          }
+          break;
+        }
       }
     }
     // Settings, key, consent, data mode, memory or the chat changed while
     // answering (the generation fences): the question is stale, so nothing
     // more runs, not even on this phone.
-    final stale = failure?.kind == CoachErrorKind.notConfigured;
+    final stale =
+        notReady == null && failure?.kind == CoachErrorKind.notConfigured;
     var onDevice = false;
-    if (answer == null && cloud && !stale) {
+    if (answer == null && cloudChosen && !stale) {
       try {
         answer = await attempt(coach.onDeviceClient(), network: false);
         onDevice = true;
@@ -245,15 +267,16 @@ class CoachServiceImpl implements CoachService {
       text = answer.text;
     }
 
-    final answeredBy = !cloud || answer == null
+    final answeredBy = !cloudChosen || answer == null
         ? null
         : onDevice
         ? ChatMessage.onDevice
         : answer.model ?? chosen;
     final fellBack = answeredBy != null && answeredBy != chosen;
 
-    // Nothing went over the network (every model known to be down, or the
-    // budget stopped it): there is nothing to show under "What was sent".
+    // Nothing went over the network (every model known to be down, the
+    // budget stopped it, or the cloud wasn't ready): there is nothing to
+    // show under "What was shared".
     final sent = cloud && tally.attempts > 0
         ? SentPayload(
             provider: settings.provider,
@@ -276,6 +299,16 @@ class CoachServiceImpl implements CoachService {
     final proposals = error == null && memoryOn
         ? answer!.proposals
         : const <MemoryProposal>[];
+    // What the answer's cards may show, read on the phone from its own tool
+    // results and never sent (AnswerVisuals, AnswerActions).
+    final ok = error == null ? answer : null;
+    final tools = ok == null ? const <String>[] : toolNames(ok.calls);
+    final visuals = ok == null || !useData || ok.factsOnly
+        ? const <AnswerVisual>[]
+        : AnswerVisuals.build(ok.results, ok.refs);
+    final actions = ok == null || !useData || latest == null
+        ? const <AnswerAction>[]
+        : await _actions(ok, tools, latest, now);
     return _store(
       ChatMessage(
         id: _id('a'),
@@ -294,12 +327,61 @@ class CoachServiceImpl implements CoachService {
         fallbackFrom: fellBack ? chosen : null,
         fallbackReason: fellBack ? failure?.kind.name : null,
         // An on-device fallback that sent nothing has no SentPayload to
-        // scope its replay by; it records the scope it was built under.
-        replayScope: fellBack && sent == null
+        // scope its replay by; it records the scope it was built under. A
+        // question answered locally because the cloud wasn't ready has no
+        // cloud scope at all, so it is never replayed.
+        replayScope: fellBack && sent == null && notReady == null
             ? replayScopeOf(settings, memoryScope)
             : null,
+        visuals: visuals,
+        actions: actions,
+        tools: tools,
+        factsOnly: ok?.factsOnly ?? false,
       ),
     );
+  }
+
+  /// The tools an answer's engine called, for its topic: 'get_sleep',
+  /// 'get_range:hrv'. The app's own context reads (PersonalContext's
+  /// "context_*" calls, the card seed) are left out: they read the same
+  /// day summary for every personal question.
+  static List<String> toolNames(List<ToolCall> calls) => [
+    for (final c in calls)
+      if (!c.id.startsWith('context_') && c.name != CoachTools.insightCard)
+        (c.name == CoachTools.range || c.name == CoachTools.compare) &&
+                c.input['metric'] is String
+            ? '${c.name}:${c.input['metric']}'
+            : c.name,
+  ];
+
+  /// Today's plan actions for the answer's topic, when the answer read the
+  /// newest day with data ([latest]). The plan's own words, never sent.
+  Future<List<AnswerAction>> _actions(
+    _Answer a,
+    List<String> tools,
+    String latest,
+    DateTime now,
+  ) async {
+    if (a.factsOnly) return const [];
+    final topic = ChatTopics.ofTools(tools);
+    if (topic == null) return const [];
+    final read = a.calls.any(
+      (c) =>
+          c.name == CoachTools.todaySummary ||
+          (c.name == CoachTools.day && c.input['date'] == latest) ||
+          (c.name == CoachTools.sleep && c.input['to'] == latest),
+    );
+    if (!read) return const [];
+    try {
+      final b = await health.day(latest);
+      if (b == null) return const [];
+      return AnswerActions.fromPlan(
+        TodayPlanner.plan(today: b, now: now),
+        topic,
+      );
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// The privacy scope a cloud answer is built under (PR #1 history
@@ -412,8 +494,8 @@ class CoachServiceImpl implements CoachService {
           await _memoryScope() != memoryScope) {
         throw const CoachException(
           CoachErrorKind.notConfigured,
-          'Coach settings or data mode changed. No further requests were '
-          'sent. Start a new question with your current settings.',
+          'Your settings changed, so Coach stopped. Nothing more was sent. '
+          'Ask again.',
         );
       }
       if (network) {
@@ -454,7 +536,7 @@ class CoachServiceImpl implements CoachService {
       if (health.mode != dataMode) {
         throw const CoachException(
           CoachErrorKind.notConfigured,
-          'Data mode changed while answering. Start a new question.',
+          'You switched data while Coach was answering. Ask again.',
         );
       }
       return t;
@@ -494,6 +576,7 @@ class CoachServiceImpl implements CoachService {
       var text = first?.text.trim() ?? '';
       var report = _verify(text, q, now, calls, results, memories, false);
       List<SourceRef> shownRefs = const [];
+      var factsOnly = false;
       final policy = OutputPolicy.check(text);
       if (text.isEmpty || !report.verified || !policy.ok) {
         // One repair round for both the verifier and the output policy, on
@@ -524,6 +607,7 @@ class CoachServiceImpl implements CoachService {
           text = table;
           report = _verify(text, q, now, calls, results, memories, true);
           shownRefs = refs;
+          factsOnly = true;
         }
       }
       if (shownRefs.isEmpty) {
@@ -537,6 +621,9 @@ class CoachServiceImpl implements CoachService {
         refs: shownRefs,
         proposals: List.of(toolbox.proposals),
         model: model,
+        calls: List.unmodifiable(calls),
+        results: List.unmodifiable(results),
+        factsOnly: factsOnly,
       );
     } finally {
       if (network) {
@@ -578,26 +665,7 @@ class CoachServiceImpl implements CoachService {
   /// Stores an assistant message, tagged "Sample data" in demo mode.
   Future<ChatMessage> _store(ChatMessage m) async {
     final out = health.mode == DataMode.demo
-        ? ChatMessage(
-            id: m.id,
-            conversationId: m.conversationId,
-            role: m.role,
-            text: m.text,
-            at: m.at,
-            refs: m.refs,
-            verification: m.verification,
-            sent: m.sent,
-            safety: m.safety,
-            proposedMemories: m.proposedMemories,
-            proposedCategories: m.proposedCategories,
-            proposedExpiries: m.proposedExpiries,
-            error: m.error,
-            sampleData: true,
-            answeredBy: m.answeredBy,
-            fallbackFrom: m.fallbackFrom,
-            fallbackReason: m.fallbackReason,
-            replayScope: m.replayScope,
-          )
+        ? m.copyWith(sampleData: true)
         : m;
     await coach.appendMessage(out);
     return out;
@@ -609,9 +677,13 @@ class CoachServiceImpl implements CoachService {
     final what = byRequests
         ? '${u.requestLimit} model requests'
         : '${CoachFormat.grouped(u.tokenLimit)} tokens';
-    return 'You\'ve reached today\'s limit for ${u.provider.label} '
-        '($what). No further requests will be sent. It resets at midnight. '
-        'You can switch to the on-device coach in Settings → Coach.';
+    final who = switch (u.provider) {
+      CoachProvider.claude => 'Claude',
+      CoachProvider.gemini => 'Gemini',
+      CoachProvider.offline => 'the coach',
+    };
+    return 'You’ve used today’s limit for $who ($what). Nothing more will '
+        'be sent. It resets at midnight. The on-phone coach still works.';
   }
 
   Future<void> _checkBudget() async {
@@ -669,11 +741,10 @@ class CoachServiceImpl implements CoachService {
     CoachErrorKind.invalidKey =>
       'Your API key was rejected. Check it in Settings → Coach.',
     CoachErrorKind.rateLimited =>
-      'The AI provider is rate-limiting requests. Try again in a minute.',
+      'Too many questions at once. Try again in a minute.',
     // The provider's own words (an HTTP status and error body) are never
     // shown; the app's daily budget message is.
-    CoachErrorKind.quotaExceeded =>
-      'Your AI provider account is out of credit or quota.',
+    CoachErrorKind.quotaExceeded => 'Your AI account is out of credit.',
     CoachErrorKind.dailyLimit =>
       e.message ??
           "You've reached today's limit. No further requests were sent. It resets at "
@@ -837,10 +908,10 @@ class CoachServiceImpl implements CoachService {
     switch (context?.screen) {
       case 'sleep':
         add(isToday ? 'How did I sleep last night?' : 'How did I sleep $when?');
-        add('How much sleep debt do I have?');
+        add('How much sleep have I missed?');
         add('How consistent was my sleep this week?');
       case 'strain' || 'workout':
-        add('What strain should I aim for today?');
+        add('How hard should I go today?');
         add('What workouts did I do this week?');
         add('Is my training load too high?');
       case 'trends' || 'weekly':
@@ -853,27 +924,27 @@ class CoachServiceImpl implements CoachService {
       case 'recovery':
         add(
           rec != null && rec.zone != RecoveryZone.green
-              ? 'Why is my recovery low $when?'
-              : 'What drove my recovery $when?',
+              ? 'Why is my Recovery low $when?'
+              : 'What changed my Recovery $when?',
         );
-        add('How does my HRV compare with my baseline?');
+        add('How does my HRV compare with my usual?');
         add('What does HRV mean?');
       default:
         if (rec != null && rec.zone == RecoveryZone.red) {
-          add('Why is my recovery low today?');
+          add('Why is my Recovery low today?');
         } else {
-          add('What drove my recovery today?');
+          add('What changed my Recovery today?');
         }
         if (b?.result.health.alert ?? false) {
           add('What does today\'s Health Monitor alert mean?');
         }
         final debt = b?.result.sleep?.debtAfterMinutes ?? 0;
         if ((b?.result.sleep?.hasData ?? false) && debt >= 60) {
-          add('How much sleep debt do I have?');
+          add('How much sleep have I missed?');
         } else {
           add('How did I sleep last night?');
         }
-        add('What strain should I aim for today?');
+        add('How hard should I go today?');
         add('Compare this week with last week');
     }
     add('Where is my data missing this week?');
@@ -899,6 +970,9 @@ class _Answer {
     required this.refs,
     required this.proposals,
     this.model,
+    this.calls = const [],
+    this.results = const [],
+    this.factsOnly = false,
   }) : refused = false;
 
   const _Answer.refusal(this.model)
@@ -906,6 +980,9 @@ class _Answer {
       report = null,
       refs = const [],
       proposals = const [],
+      calls = const [],
+      results = const [],
+      factsOnly = false,
       refused = true;
 
   final String text;
@@ -916,4 +993,11 @@ class _Answer {
   /// The model that wrote it (the provider's own word when it says).
   final String? model;
   final bool refused;
+
+  /// This attempt's tool calls and results (the answer's own evidence).
+  final List<ToolCall> calls;
+  final List<ToolResult> results;
+
+  /// The text is the deterministic facts table.
+  final bool factsOnly;
 }

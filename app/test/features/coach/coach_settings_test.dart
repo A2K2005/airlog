@@ -84,7 +84,7 @@ void main() {
     await t.pageBack();
     await t.pumpAndSettle();
     expect(find.text(CoachCopy.askAboutThis), findsNothing);
-    expect(find.bySemanticsLabel('Ask the coach'), findsNothing);
+    expect(find.bySemanticsLabel('Ask Coach'), findsNothing);
 
     await pumpCoach(t, repo: repo, initial: Routes.settingsCoach);
     await t.tap(find.byKey(const ValueKey('switch-show-coach')));
@@ -175,6 +175,42 @@ void main() {
     await t.pumpAndSettle();
     expect((await repo.settings()).backupModels, isFalse);
     expect(t.widget<Switch>(row).value, isFalse);
+  });
+
+  testWidgets('Who answers: On this phone by default, Claude and Gemini '
+      'behind the Connect sheet; model and data rows only for a cloud '
+      'engine', (t) async {
+    await _pump(t, FakeCoachRepository());
+    expect(find.text('WHO ANSWERS'), findsOneWidget);
+    for (final e in CoachProvider.values) {
+      expect(find.byKey(ValueKey('engine-${e.name}')), findsOneWidget);
+    }
+    expect(find.text('Nothing leaves your phone'), findsOneWidget);
+    expect(find.byKey(const ValueKey('row-model')), findsNothing);
+    expect(find.byKey(const ValueKey('row-data')), findsNothing);
+
+    final repo = FakeCoachRepository(
+      settings: _cloud,
+      keys: {CoachProvider.claude: _key},
+    );
+    await _pump(t, repo);
+    expect(
+      find.text('Your key · Anthropic · ≈ \$0.02–0.05 per question'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('row-model')), findsOneWidget);
+    expect(find.text(CoachCopy.modeLabel(CoachMode.useMyData)), findsOneWidget);
+  });
+
+  testWidgets('answer length lives here (not in the chat) and is saved', (
+    t,
+  ) async {
+    final repo = FakeCoachRepository();
+    await _pump(t, repo);
+    await _see(t, find.text('Detailed'));
+    await t.tap(find.text('Detailed'));
+    await t.pumpAndSettle();
+    expect(repo.current.length, ResponseLength.detailed);
   });
 
   test('usage line', () {

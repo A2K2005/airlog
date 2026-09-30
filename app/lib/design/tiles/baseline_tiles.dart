@@ -11,6 +11,17 @@ import '../components/tile.dart';
 import '../tokens/tokens.dart';
 import 'marks.dart';
 
+/// Where a value sits in its usual range, 0…1, for a baseline mark: the
+/// range's edges at 0.15 and 0.85, the middle at 0.5 (the Today tiles'
+/// formula). Null for a missing value or an unknown or one-sided range: a
+/// centred marker would be invented. [additive 2026-10-01]
+abstract final class BaselinePosition {
+  static double? of(double? v, double? lo, double? hi) {
+    if (v == null || lo == null || hi == null || hi <= lo) return null;
+    return (.15 + .7 * (v - lo) / (hi - lo)).clamp(0.0, 1.0);
+  }
+}
+
 /// A value in dots with its unit set right after it, baseline to baseline.
 /// The unit tucks 0.75 px into the last glyph's trailing column, as drawn.
 class DotValue extends StatelessWidget {

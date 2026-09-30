@@ -1,6 +1,8 @@
 // Every coach screen at 320 px wide with 1.3× text lays out without an
-// overflow, and the chat, a Discuss chat and Settings → Coach meet the
-// 48 dp tap-target and labelled-target guidelines.
+// overflow, and the chat (with its cards), a Discuss chat and Settings →
+// Coach meet the 48 dp tap-target and labelled-target guidelines. The
+// reply carries no inline targets; every number's source is a 48 dp row
+// behind ⋯ → "Checked against your data", and the metric cards.
 
 import 'package:airlog/app/ask_entry.dart';
 import 'package:airlog/app/copy.dart';
@@ -113,11 +115,35 @@ void main() {
         textScale: 1.3,
       );
     },
-    'setup': (t) async {
+    'chat, verified answer with cards': (t) async {
+      final repo = FakeCoachRepository();
+      final id = _seed(repo, Scripted.verified);
+      await pumpCoach(
+        t,
+        repo: repo,
+        initial: Routes.coach,
+        arguments: CoachArgs(conversationId: id),
+        size: _narrow,
+        textScale: 1.3,
+      );
+    },
+    'chat, trend and facts': (t) async {
+      final repo = FakeCoachRepository();
+      final id = _seed(repo, Scripted.trend);
+      await pumpCoach(
+        t,
+        repo: repo,
+        initial: Routes.coach,
+        arguments: CoachArgs(conversationId: id),
+        size: _narrow,
+        textScale: 1.3,
+      );
+    },
+    'settings, connect sheet': (t) async {
       await pumpCoach(
         t,
         repo: FakeCoachRepository(),
-        initial: Routes.coachSetup,
+        initial: Routes.settingsCoach,
         size: _narrow,
         textScale: 1.3,
       );
@@ -162,7 +188,11 @@ void main() {
     });
   }
 
-  for (final name in ['chat, cloud answer, spent budget', 'chat, Discuss']) {
+  for (final name in [
+    'chat, cloud answer, spent budget',
+    'chat, verified answer with cards',
+    'chat, Discuss',
+  ]) {
     testWidgets('tap targets and labels: $name', (t) async {
       final h = t.ensureSemantics();
       await screens[name]!(t);

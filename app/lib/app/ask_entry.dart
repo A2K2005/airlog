@@ -124,7 +124,7 @@ class AskIconButton extends ConsumerWidget {
     }
     return AppIconButton(
       icon: askIcon,
-      semanticLabel: 'Ask the coach',
+      semanticLabel: 'Ask Coach',
       onTap: () => openCoach(
         context,
         screen == null ? null : AskContext(screen: screen, date: date),

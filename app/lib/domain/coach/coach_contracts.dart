@@ -19,7 +19,7 @@
 /// * `claude` / `gemini` — optional cloud models with the user's own key
 ///   (BYOK), behind an explicit consent sheet.
 enum CoachProvider {
-  offline('On-device (no AI model)'),
+  offline('On this phone (no AI)'),
   claude('Claude (Anthropic)'),
   gemini('Gemini (Google)');
 
@@ -46,6 +46,7 @@ class CoachSettings {
     this.dailyRequestLimit = kDefaultDailyRequestLimit,
     this.dailyTokenLimit = kDefaultDailyTokenLimit,
     this.backupModels = true,
+    this.cloudHintDismissed = false,
   });
 
   /// Master switch for the Ask feature. The default `offline` provider sends
@@ -76,6 +77,10 @@ class CoachSettings {
   /// Never another provider. [additive 2026-09-30]
   final bool backupModels;
 
+  /// The chat's one-time "connect Claude or Gemini" card was dismissed
+  /// (UI only; no engine reads it). [additive 2026-10-01]
+  final bool cloudHintDismissed;
+
   bool get hasConsent => consentAt != null;
 
   CoachSettings copyWith({
@@ -92,6 +97,7 @@ class CoachSettings {
     int? dailyRequestLimit,
     int? dailyTokenLimit,
     bool? backupModels,
+    bool? cloudHintDismissed,
   }) => CoachSettings(
     enabled: enabled ?? this.enabled,
     provider: provider ?? this.provider,
@@ -106,6 +112,7 @@ class CoachSettings {
     dailyRequestLimit: dailyRequestLimit ?? this.dailyRequestLimit,
     dailyTokenLimit: dailyTokenLimit ?? this.dailyTokenLimit,
     backupModels: backupModels ?? this.backupModels,
+    cloudHintDismissed: cloudHintDismissed ?? this.cloudHintDismissed,
   );
 
   Map<String, dynamic> toJson() => {
@@ -120,6 +127,7 @@ class CoachSettings {
     'dailyRequestLimit': dailyRequestLimit,
     'dailyTokenLimit': dailyTokenLimit,
     'backupModels': backupModels,
+    if (cloudHintDismissed) 'cloudHintDismissed': true,
   };
 
   factory CoachSettings.fromJson(Map<String, dynamic> j) => CoachSettings(
@@ -139,6 +147,7 @@ class CoachSettings {
         j['dailyRequestLimit'] as int? ?? kDefaultDailyRequestLimit,
     dailyTokenLimit: j['dailyTokenLimit'] as int? ?? kDefaultDailyTokenLimit,
     backupModels: j['backupModels'] as bool? ?? true,
+    cloudHintDismissed: j['cloudHintDismissed'] as bool? ?? false,
   );
 }
 
@@ -333,6 +342,127 @@ class SentPayload {
   );
 }
 
+/// One day of a trend on an answer's card: [value] null = no reading that
+/// day (never zero). [additive 2026-10-01]
+class SeriesPoint {
+  const SeriesPoint(this.date, this.value);
+
+  /// yyyy-MM-dd.
+  final String date;
+  final double? value;
+
+  Map<String, dynamic> toJson() => {'date': date, 'value': value};
+  factory SeriesPoint.fromJson(Map<String, dynamic> j) =>
+      SeriesPoint(j['date'] as String, (j['value'] as num?)?.toDouble());
+}
+
+/// What an answer's card may draw next to one cited number, copied from
+/// THIS answer's tool results after verification (AnswerVisuals.build).
+/// Every number here is a SourceRef value a tool returned: the UI never
+/// computes a new one. Stored on the phone with the message; never sent to
+/// a model (history replays text only) and never read by the verifier.
+/// [additive 2026-10-01]
+class AnswerVisual {
+  const AnswerVisual({
+    required this.refId,
+    required this.metric,
+    this.series = const [],
+    this.usual,
+    this.usualLow,
+    this.usualHigh,
+    this.vsUsualPct,
+    this.state,
+  });
+
+  /// The cited ref this pictures (one of ChatMessage.refs).
+  final String refId;
+
+  /// 'recovery', or a RangeMetric wire name ('hrv', 'sleep_duration', …).
+  final String metric;
+
+  /// Oldest first, at most 31 days.
+  final List<SeriesPoint> series;
+
+  /// The personal usual (baseline mean) a tool returned for this metric.
+  final double? usual;
+
+  /// The usual range (Health Monitor rangeLow / rangeHigh).
+  final double? usualLow, usualHigh;
+
+  /// The tool's own "vs baseline" percentage, when it gave one.
+  final double? vsUsualPct;
+
+  /// Health Monitor state: 'in range' | 'above range' | 'below range'.
+  final String? state;
+
+  Map<String, dynamic> toJson() => {
+    'refId': refId,
+    'metric': metric,
+    if (series.isNotEmpty) 'series': [for (final p in series) p.toJson()],
+    if (usual != null) 'usual': usual,
+    if (usualLow != null) 'usualLow': usualLow,
+    if (usualHigh != null) 'usualHigh': usualHigh,
+    if (vsUsualPct != null) 'vsUsualPct': vsUsualPct,
+    if (state != null) 'state': state,
+  };
+
+  factory AnswerVisual.fromJson(Map<String, dynamic> j) => AnswerVisual(
+    refId: j['refId'] as String,
+    metric: j['metric'] as String,
+    series: [
+      for (final p in j['series'] as List? ?? const [])
+        SeriesPoint.fromJson(p as Map<String, dynamic>),
+    ],
+    usual: (j['usual'] as num?)?.toDouble(),
+    usualLow: (j['usualLow'] as num?)?.toDouble(),
+    usualHigh: (j['usualHigh'] as num?)?.toDouble(),
+    vsUsualPct: (j['vsUsualPct'] as num?)?.toDouble(),
+    state: j['state'] as String?,
+  );
+}
+
+/// One of today's plan actions shown under an answer, word for word from
+/// TodayPlan (AnswerActions.fromPlan). Built on the phone after the answer;
+/// never sent anywhere. [additive 2026-10-01]
+class AnswerAction {
+  const AnswerAction({
+    required this.kind,
+    required this.title,
+    required this.date,
+    this.meta,
+    this.route,
+  });
+
+  /// A PlanActionKind name ('sleep', 'effort', …).
+  final String kind;
+
+  /// PlanAction.title, verbatim.
+  final String title;
+
+  /// The plan's day, yyyy-MM-dd.
+  final String date;
+
+  /// The action's first evidence as "{label} {value}", verbatim.
+  final String? meta;
+  final String? route;
+
+  Map<String, dynamic> toJson() => {
+    'kind': kind,
+    'title': title,
+    'date': date,
+    if (meta != null) 'meta': meta,
+    if (route != null) 'route': route,
+  };
+
+  factory AnswerAction.fromJson(Map<String, dynamic> j) => AnswerAction(
+    kind: j['kind'] as String,
+    title: j['title'] as String,
+    date: j['date'] as String,
+    meta: j['meta'] as String?,
+    route: j['route'] as String?,
+  );
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -353,6 +483,10 @@ class ChatMessage {
     this.fallbackFrom,
     this.fallbackReason,
     this.replayScope,
+    this.visuals = const [],
+    this.actions = const [],
+    this.tools = const [],
+    this.factsOnly = false,
   });
 
   /// [answeredBy] when the on-device engine wrote the answer.
@@ -417,6 +551,58 @@ class ChatMessage {
   /// answer is scoped by [sent]). [additive 2026-09-30]
   final String? replayScope;
 
+  /// Pictures for the answer's cited numbers (AnswerVisual). Empty on older
+  /// messages: they show no cards. [additive 2026-10-01]
+  final List<AnswerVisual> visuals;
+
+  /// Today's plan actions for this answer's topic (AnswerAction).
+  /// [additive 2026-10-01]
+  final List<AnswerAction> actions;
+
+  /// The tools this answer's engine called ('get_sleep', 'get_range:hrv'),
+  /// without the app's own context reads: the chat's topic comes from
+  /// these. [additive 2026-10-01]
+  final List<String> tools;
+
+  /// The answer is the deterministic facts table (the verifier or output
+  /// policy rejected the model's text twice). The table re-verifies by
+  /// construction, so [verification] cannot tell. [additive 2026-10-01]
+  final bool factsOnly;
+
+  ChatMessage copyWith({
+    String? conversationId,
+    String? text,
+    List<SourceRef>? refs,
+    bool? sampleData,
+    List<AnswerVisual>? visuals,
+    List<AnswerAction>? actions,
+    List<String>? tools,
+    bool? factsOnly,
+  }) => ChatMessage(
+    id: id,
+    conversationId: conversationId ?? this.conversationId,
+    role: role,
+    text: text ?? this.text,
+    at: at,
+    refs: refs ?? this.refs,
+    verification: verification,
+    sent: sent,
+    safety: safety,
+    proposedMemories: proposedMemories,
+    proposedCategories: proposedCategories,
+    proposedExpiries: proposedExpiries,
+    error: error,
+    sampleData: sampleData ?? this.sampleData,
+    answeredBy: answeredBy,
+    fallbackFrom: fallbackFrom,
+    fallbackReason: fallbackReason,
+    replayScope: replayScope,
+    visuals: visuals ?? this.visuals,
+    actions: actions ?? this.actions,
+    tools: tools ?? this.tools,
+    factsOnly: factsOnly ?? this.factsOnly,
+  );
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'conversationId': conversationId,
@@ -436,6 +622,10 @@ class ChatMessage {
     if (fallbackFrom != null) 'fallbackFrom': fallbackFrom,
     if (fallbackReason != null) 'fallbackReason': fallbackReason,
     if (replayScope != null) 'replayScope': replayScope,
+    if (visuals.isNotEmpty) 'visuals': [for (final v in visuals) v.toJson()],
+    if (actions.isNotEmpty) 'actions': [for (final a in actions) a.toJson()],
+    if (tools.isNotEmpty) 'tools': tools,
+    if (factsOnly) 'factsOnly': true,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -468,6 +658,19 @@ class ChatMessage {
     fallbackFrom: j['fallbackFrom'] as String?,
     fallbackReason: j['fallbackReason'] as String?,
     replayScope: j['replayScope'] as String?,
+    visuals: [
+      for (final v in j['visuals'] as List? ?? const [])
+        AnswerVisual.fromJson(v as Map<String, dynamic>),
+    ],
+    actions: [
+      for (final a in j['actions'] as List? ?? const [])
+        AnswerAction.fromJson(a as Map<String, dynamic>),
+    ],
+    tools: [
+      for (final t in j['tools'] as List? ?? const [])
+        if (t is String) t,
+    ],
+    factsOnly: j['factsOnly'] as bool? ?? false,
   );
 }
 

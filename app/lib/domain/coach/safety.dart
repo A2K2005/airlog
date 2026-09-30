@@ -138,8 +138,8 @@ abstract final class SafetyCheck {
       'now (112 in the EU and India, 911 in the US, 999 in the UK) or have '
       'someone take you to the nearest emergency department. If it feels '
       'less severe, contact a doctor or urgent-care line today.\n\n'
-      'I\'m a wellness tool, not a medical service: your band\'s data can\'t '
-      'rule anything out.';
+      'I\'m a wellness tool, not a medical service: your tracker\'s data '
+      'can\'t rule anything out.';
 
   static const selfHarmMessage =
       'I\'m really sorry you\'re feeling this way. You deserve support right '
@@ -156,7 +156,7 @@ abstract final class SafetyCheck {
       'including whether to start, stop or change one. A pharmacist or your '
       'doctor can help with that, because they can weigh it against your '
       'health history. If it helps that conversation, I can show what your '
-      'band recorded, like your resting heart rate, HRV or sleep.';
+      'tracker recorded, like your resting heart rate, HRV or sleep.';
 
   static const eatingMessage =
       'It sounds like food and eating may be feeling hard right now, and '

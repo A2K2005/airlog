@@ -13,12 +13,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/ask_entry.dart';
 import '../../app/copy.dart';
-import '../../app/insight_card.dart' show sourceValue;
 import '../../app/platform_services.dart';
 import '../../app/providers.dart';
 import '../../app/route_names.dart';
 import '../../design/design.dart';
 import '../../domain/coach/coach_contracts.dart';
+import '../../domain/coach/format.dart';
 import '../../domain/day_key.dart';
 
 /// What the coach screens show about the stored setup.
@@ -241,12 +241,12 @@ List<String> discussFollowUps(String? kind) => switch (kind) {
     'What could help tonight?',
   ],
   'recovery' => const [
-    'What drove this Recovery?',
+    'What changed my Recovery?',
     'How has my HRV changed this week?',
     'How does this compare with last week?',
   ],
   'strain' || 'workout' => const [
-    'Was that a lot for my Recovery today?',
+    'Was that too much for today?',
     'How does this compare with my usual week?',
     'What should tomorrow look like?',
   ],
@@ -281,7 +281,7 @@ List<String> answerFollowUps(ChatMessage answer, {String? asked}) {
     ];
   } else if (topic == Routes.strain) {
     pool = const [
-      'Was that a lot for my Recovery?',
+      'Was that too much for today?',
       'What should tomorrow look like?',
       'How did I sleep last night?',
     ];
@@ -324,8 +324,8 @@ String? prefillFor(String? screen, String? date, String today) {
     'today' => isToday ? 'How am I doing today?' : 'How was $day for me?',
     'recovery' =>
       isToday
-          ? 'What drove my Recovery today?'
-          : 'What drove my Recovery on $day?',
+          ? 'What changed my Recovery today?'
+          : 'What changed my Recovery on $day?',
     'sleep' =>
       isToday ? 'How did I sleep last night?' : 'How did I sleep on $day?',
     'strain' =>
@@ -362,9 +362,13 @@ MemoryCategory guessCategory(String text) {
   return MemoryCategory.preferences;
 }
 
-/// A source's value as the chip prints it: "64 %", "52 ms", "6h 40m",
-/// "11.2". Null when the source carries no number.
-String? refValue(SourceRef r) => sourceValue(r);
+/// A source's value as the coach writes it: "64%", "52 ms", "6h 40m",
+/// "23:10" (CoachFormat, the tools' own format). Null when the source
+/// carries no number.
+String? refValue(SourceRef r) {
+  final v = r.value;
+  return v == null ? null : CoachFormat.value(v, r.unit);
+}
 
 /// Routes a source chip can open: pushed detail screens, and the day tabs
 /// pushed as pages (back returns to the chat).

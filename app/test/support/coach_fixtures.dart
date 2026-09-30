@@ -17,6 +17,7 @@ import 'package:airlog/app/route_names.dart';
 import 'package:airlog/design/design.dart';
 import 'package:airlog/domain/coach/coach_contracts.dart';
 import 'package:airlog/domain/coach/insight_contracts.dart';
+import 'package:airlog/domain/coach/prompts.dart';
 import 'package:airlog/domain/repositories.dart';
 import 'package:airlog/features/coach/coach_history_screen.dart';
 import 'package:airlog/features/coach/coach_memory_screen.dart';
@@ -54,11 +55,99 @@ enum Scripted {
 
   /// Every Claude model was busy: answered on this phone.
   onDeviceFallback,
+
+  /// A two-week HRV answer: a trend card against the usual line.
+  trend,
+
+  /// A Health Monitor answer: a card in the usual range.
+  range,
 }
 
 abstract final class CoachScript {
+  /// The verified answer's pictures: Recovery (the number only) and HRV
+  /// against its usual, as AnswerVisuals.build would give for a day summary.
+  static const visuals = <AnswerVisual>[
+    AnswerVisual(refId: 'r1', metric: 'recovery'),
+    AnswerVisual(refId: 'r2', metric: 'hrv', usual: 58, vsUsualPct: -10),
+  ];
+
+  /// Today's plan action for a Recovery answer.
+  static const actions = <AnswerAction>[
+    AnswerAction(
+      kind: 'effort',
+      title: 'Keep it light today',
+      date: kCoachToday,
+      meta: 'Goal 6–9',
+      route: Routes.strain,
+    ),
+  ];
+
+  static const trendText =
+      'Your HRV averaged 52 ms [r1] over the last two weeks, a little under '
+      'your usual.';
+
+  static const trendRefs = <SourceRef>[
+    SourceRef(
+      id: 'r1',
+      label: 'HRV mean · Tue 15 Sep to Mon 28 Sep',
+      value: 52,
+      unit: 'ms',
+      route: Routes.trends,
+    ),
+  ];
+
+  static const trendVisuals = <AnswerVisual>[
+    AnswerVisual(
+      refId: 'r1',
+      metric: 'hrv',
+      usual: 58,
+      series: [
+        SeriesPoint('2026-09-15', 57),
+        SeriesPoint('2026-09-16', 55),
+        SeriesPoint('2026-09-17', 58),
+        SeriesPoint('2026-09-18', 54),
+        SeriesPoint('2026-09-19', null),
+        SeriesPoint('2026-09-20', 51),
+        SeriesPoint('2026-09-21', 53),
+        SeriesPoint('2026-09-22', 50),
+        SeriesPoint('2026-09-23', 49),
+        SeriesPoint('2026-09-24', 52),
+        SeriesPoint('2026-09-25', 50),
+        SeriesPoint('2026-09-26', 48),
+        SeriesPoint('2026-09-27', 51),
+        SeriesPoint('2026-09-28', 52),
+      ],
+    ),
+  ];
+
+  static const rangeText =
+      'Your resting heart rate was 61 bpm [r1] last night, above your usual '
+      'range.';
+
+  static const rangeRefs = <SourceRef>[
+    SourceRef(
+      id: 'r1',
+      label: 'Resting HR · Mon 28 Sep',
+      value: 61,
+      unit: 'bpm',
+      date: kCoachToday,
+      route: Routes.recovery,
+    ),
+  ];
+
+  static const rangeVisuals = <AnswerVisual>[
+    AnswerVisual(
+      refId: 'r1',
+      metric: 'resting_hr',
+      usual: 54,
+      usualLow: 50,
+      usualHigh: 58,
+      state: 'above range',
+    ),
+  ];
+
   static const verifiedText =
-      'Your Recovery is 64 % today [r1], a little under your usual. HRV was '
+      'Your Recovery is 64% today [r1], a little under your usual. HRV was '
       '52 ms [r2], below your 30-night range, and you slept 6h 40m [r3]. A '
       'lighter day would suit it.';
 
@@ -89,11 +178,11 @@ abstract final class CoachScript {
     ),
   ];
 
+  /// The facts table, as CoachPrompts.factsTable writes it.
   static const fallbackText =
-      "I couldn't check every number in my answer, so here are the facts "
-      'from your data:\n'
-      '- Recovery · Mon 28 Sep: 64 % [r1]\n'
-      '- HRV · Mon 28 Sep: 52 ms [r2]';
+      '${CoachPrompts.fallbackNote}\n'
+      '• Recovery · Mon 28 Sep: 64% [r1]\n'
+      '• HRV · Mon 28 Sep: 52 ms [r2]';
 
   static const safetyText =
       "I can't help with chest pain here. If you have chest pain, faint, or "
@@ -101,7 +190,7 @@ abstract final class CoachScript {
       'Airlog is a wellness app and cannot assess symptoms.';
 
   static const memoryText =
-      'Good luck with the half marathon. Your Recovery is 64 % today [r1], '
+      'Good luck with the half marathon. Your Recovery is 64% today [r1], '
       'so a steady run fits.';
 
   static const memoryFact = 'Training for a half marathon on 15 Nov';
@@ -116,6 +205,7 @@ abstract final class CoachScript {
     toolsCalled: ['get_day', 'get_range'],
     dataTypes: ['Recovery (1 day)', 'HRV (30 nights)', 'Sleep (1 night)'],
     approxChars: 4200,
+    mode: CoachMode.useMyData,
   );
 
   static ChatMessage answer(
@@ -136,6 +226,9 @@ abstract final class CoachScript {
         unsupported: [],
         repaired: false,
       ),
+      visuals: visuals,
+      actions: actions,
+      tools: const ['get_today_summary'],
     ),
     Scripted.cloud => ChatMessage(
       id: id,
@@ -150,6 +243,38 @@ abstract final class CoachScript {
         repaired: false,
       ),
       sent: sent,
+      visuals: visuals,
+      tools: const ['get_day', 'get_range:hrv'],
+    ),
+    Scripted.trend => ChatMessage(
+      id: id,
+      conversationId: conversationId,
+      role: ChatRole.assistant,
+      text: trendText,
+      at: at,
+      refs: trendRefs,
+      verification: const Verification(
+        checkedNumbers: 1,
+        unsupported: [],
+        repaired: false,
+      ),
+      visuals: trendVisuals,
+      tools: const ['get_range:hrv'],
+    ),
+    Scripted.range => ChatMessage(
+      id: id,
+      conversationId: conversationId,
+      role: ChatRole.assistant,
+      text: rangeText,
+      at: at,
+      refs: rangeRefs,
+      verification: const Verification(
+        checkedNumbers: 1,
+        unsupported: [],
+        repaired: false,
+      ),
+      visuals: rangeVisuals,
+      tools: const ['get_health_monitor'],
     ),
     Scripted.viaBackup => ChatMessage(
       id: id,
@@ -192,11 +317,15 @@ abstract final class CoachScript {
       text: fallbackText,
       at: at,
       refs: refs.take(2).toList(),
+      // The facts table re-verifies by construction: only its flag says it
+      // is the fallback.
       verification: const Verification(
         checkedNumbers: 2,
-        unsupported: ['a 5 am run on Sunday'],
+        unsupported: [],
         repaired: true,
       ),
+      factsOnly: true,
+      tools: const ['get_today_summary'],
     ),
     Scripted.safety => ChatMessage(
       id: id,
@@ -601,7 +730,7 @@ abstract final class InsightScript {
     createdAt: DateTime(2026, 9, 28, 7, 30),
     headline: 'A lighter day suits you',
     body:
-        'Recovery is 64 %, a little under your usual, with HRV at 52 ms. '
+        'Recovery is 64%, a little under your usual, with HRV at 52 ms. '
         'With your half marathon ahead, an easy run keeps the plan on track.',
     metrics: const [
       SourceRef(

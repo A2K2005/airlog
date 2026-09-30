@@ -20,6 +20,7 @@ import '../../domain/coach/prompts.dart';
 import '../../domain/coach/quoted.dart';
 import '../../domain/coach/tools.dart';
 import '../../domain/day_key.dart';
+import '../../domain/engine/journal.dart' show JournalEngine;
 
 enum OfflineIntent {
   seed,
@@ -214,6 +215,31 @@ abstract final class OfflineRouter {
     r"consisten\w*|lately|recently|average|this month|month",
   );
 
+  /// The plain phrasings the suggested questions use (COPY_REVIEW C36),
+  /// mapped onto the words the rules match, so each lands on the same
+  /// intent as before: "what changed my Recovery" asks what drove it; "sleep
+  /// I've missed" is sleep debt; "compare with my usual" (but not "my usual
+  /// week", a window) is a baseline question. [q] is already lower-case.
+  static String aliases(String q) {
+    var out = q
+        .replaceAllMapped(
+          RegExp(r'\bwhat changed (my|this) recovery\b'),
+          (m) => 'what drove ${m[1]} recovery',
+        )
+        .replaceAll(
+          RegExp(
+            r"\bsleep (?:have|did|do) i miss(?:ed)?\b|\bsleep i'?ve missed\b|"
+            r'\bmissed sleep\b',
+          ),
+          'sleep debt',
+        );
+    if (_compare.hasMatch(out)) {
+      out = out.replaceAll(RegExp(r'\byour usual\b(?!\s+week)'), 'your baseline')
+          .replaceAll(RegExp(r'\bmy usual\b(?!\s+week)'), 'my baseline');
+    }
+    return out;
+  }
+
   static RangeMetric? metricOf(String q) {
     if (RegExp(r'sleep performance').hasMatch(q)) {
       return RangeMetric.sleepPerformance;
@@ -322,7 +348,7 @@ abstract final class OfflineRouter {
     Set<String> tools, {
     bool hasSeed = false,
   }) {
-    final q = question.toLowerCase().replaceAll('’', "'");
+    final q = aliases(question.toLowerCase().replaceAll('’', "'"));
     var n = 0;
     ToolCall call(String name, [Map<String, dynamic> input = const {}]) =>
         ToolCall(id: 'offline_${++n}', name: name, input: input);
@@ -460,7 +486,7 @@ abstract final class OfflineRouter {
 
 class OfflineComposer {
   OfflineComposer(this.question, this.ctx, this.plan, this.results)
-    : q = question.toLowerCase().replaceAll('’', "'") {
+    : q = OfflineRouter.aliases(question.toLowerCase().replaceAll('’', "'")) {
     for (final r in results) {
       for (final ref in r.refs) {
         refs[ref.id] = ref;
@@ -547,8 +573,8 @@ class OfflineComposer {
   String _seed() {
     final card = _res(CoachTools.insightCard);
     if (card == null || card['facts'] is! List) {
-      return 'I don\'t have the card\'s details here. Ask me about a '
-          'specific day or metric.';
+      return 'I don’t have the card’s details here. Ask me about one day or '
+          'one score.';
     }
     final facts = [
       for (final x in card['facts'] as List)
@@ -614,8 +640,11 @@ class OfflineComposer {
     if (h['alert'] == true || out.isNotEmpty) {
       b.write(
         h['alert'] == true
-            ? 'The Health Monitor raised an alert ${_day(d)}.'
-            : 'The Health Monitor shows a value outside your usual range '
+            ? 'Airlog flagged your overnight signals ${_day(d)}.'
+            : out.length == 1
+            ? 'One overnight signal was outside your usual range '
+                  '${_day(d)}.'
+            : 'Some overnight signals were outside your usual range '
                   '${_day(d)}.',
       );
       for (final m in out) {
@@ -679,7 +708,7 @@ class OfflineComposer {
         if (g is! Map || gaps >= (ctx.detailed ? 6 : 3)) continue;
         gaps++;
         b.write(
-          ' On ${CoachFormat.day('${d['date']}')} the band recorded no '
+          ' On ${CoachFormat.day('${d['date']}')} your tracker recorded no '
           'heart rate from ${f(g['from'])} to ${f(g['to'])} '
           '(${f(g['length'])}), so it was off or charging.',
         );
@@ -703,6 +732,16 @@ class OfflineComposer {
   }
 
   // ── Journal ───────────────────────────────────────────────────────────
+
+  /// The Journal's minimum days per group (JournalEngine.minDaysPerGroup),
+  /// spelled out.
+  static final _minDays = switch (JournalEngine.minDaysPerGroup) {
+    5 => 'five',
+    7 => 'seven',
+    10 => 'ten',
+    14 => 'fourteen',
+    final n => '$n',
+  };
 
   static const _factorWords = {
     'Alcohol': r'alcohol|drink|beer|wine',
@@ -743,15 +782,18 @@ class OfflineComposer {
     if (asked != null) {
       final hit = all.where((i) => i['factor'] == asked).firstOrNull;
       if (hit == null) {
+        // The Journal's own minimum (JournalEngine.minDaysPerGroup), as a
+        // word: a digit here would be a claim for the verifier to check.
         return 'I can\'t see a pattern for "$asked" yet: I need at least '
-            'five logged days with it and five without. Keep tagging it in '
-            'the journal.';
+            '$_minDays logged days with it and $_minDays without. Keep '
+            'tagging it in the journal.';
       }
       b.write(line(hit));
     } else {
       if (all.isEmpty) {
         return 'No journal factor has enough days yet to show a pattern: I '
-            'need at least five days with each tag and five without.';
+            'need at least $_minDays days with each tag and $_minDays '
+            'without.';
       }
       final sorted = [...all]
         ..sort(
@@ -850,7 +892,7 @@ class OfflineComposer {
     }
     final bl = r['baseline'] as Map?;
     if (bl != null && bl['mean'] != null) {
-      b.write(' Your baseline is ${f(bl['mean'])}.');
+      b.write(' Your usual is ${f(bl['mean'])}.');
     }
     final noData = (r['noDataDates'] as List? ?? const []);
     if (noData.isNotEmpty) {
@@ -873,9 +915,9 @@ class OfflineComposer {
     final b = StringBuffer();
     final target = l['strainTarget'];
     if (target is Map && target['value'] != null) {
-      b.write('Your strain target ${_day(d)} is ${f(target)}');
+      b.write('Your effort goal ${_day(d)} is ${f(target)}');
       if (l['recovery'] != null) {
-        b.write(', set from a recovery of ${f(l['recovery'])}');
+        b.write(', set from a Recovery of ${f(l['recovery'])}');
       }
       b.write('.');
       if (l['strainSoFar'] != null) {
@@ -883,8 +925,8 @@ class OfflineComposer {
       }
     } else {
       b.write(
-        'I don\'t have a strain target ${_day(d)}: it needs a '
-        'recovery score, and there isn\'t one.',
+        'I don’t have an effort goal ${_day(d)}: it needs a Recovery '
+        'score, and there isn’t one.',
       );
     }
     final load = l['load'] as Map? ?? const {};
@@ -895,10 +937,10 @@ class OfflineComposer {
         'is ${f(load['acute7'])} against ${f(load['chronic28'])} over the '
         'last four weeks, a ratio of ${f(load['ratio'])}: '
         '${switch (state) {
-          'detraining' => 'lighter than usual',
-          'optimal' => 'in a balanced range',
-          'elevated' => 'a step up from usual',
-          _ => 'well above what you are used to',
+          'detraining' => 'less than usual',
+          'optimal' => 'about usual',
+          'elevated' => 'more than usual',
+          _ => 'much more than usual',
         }}.',
       );
     } else {
@@ -1005,13 +1047,13 @@ class OfflineComposer {
         ? 'last night'
         : 'the night before ${CoachFormat.day(d)}';
     if (nights.isEmpty) {
-      return 'I don\'t have sleep data for $when: nothing was recorded (the '
-          'band was off, charging or not synced), so I can\'t score it.';
+      return 'I don’t have sleep data for $when: nothing was recorded, so I '
+          'can’t score it.';
     }
     final n = nights.last;
     final b = StringBuffer(
-      'You slept ${f(n['asleep'])} $when, a sleep performance of '
-      '${f(n['performance'])} against your sleep need of ${f(n['need'])}.',
+      'You slept ${f(n['asleep'])} $when, ${f(n['performance'])} of your '
+      'sleep goal of ${f(n['need'])}.',
     );
     if (n['bedtime'] != null && n['wake'] != null) {
       b.write(
@@ -1022,7 +1064,7 @@ class OfflineComposer {
     if (RegExp(r'\bdebt\b').hasMatch(q) ||
         ctx.detailed ||
         val(n['debtAfter']) != 0) {
-      b.write(' Your sleep debt is now ${f(n['debtAfter'])}.');
+      b.write(' You’ve missed ${f(n['debtAfter'])} of sleep recently.');
     }
     final st = n['stages'] as Map?;
     if (st != null && (ctx.detailed || RegExp(r'deep|rem|stage').hasMatch(q))) {
@@ -1052,9 +1094,8 @@ class OfflineComposer {
     if (avg != null) {
       b.write(
         'From ${_span(from, to)} you slept an average of '
-        '${f(avg['asleep'])} a night, with a sleep performance of '
-        '${f(avg['performance'])}, across ${f(s['nightsWithData'])} with '
-        'data.',
+        '${f(avg['asleep'])} a night, ${f(avg['performance'])} of your '
+        'sleep goal, across ${f(s['nightsWithData'])} with data.',
       );
       b.write(
         ' The shortest night was ${f(avg['shortest'])} '
@@ -1090,8 +1131,8 @@ class OfflineComposer {
     }
     if (RegExp(r'\bdebt\b').hasMatch(q) && nights.isNotEmpty) {
       b.write(
-        ' Your sleep debt after the latest night is '
-        '${f(nights.last['debtAfter'])}.',
+        ' After the latest night, you’ve missed '
+        '${f(nights.last['debtAfter'])} of sleep.',
       );
     }
     final noData = (s['noDataDates'] as List? ?? const []);
@@ -1115,8 +1156,8 @@ class OfflineComposer {
         p['sleep'] == null &&
         p['strain'] == null &&
         p['missing'] is String) {
-      return 'I don\'t have any data ${_day(d)}: the band wasn\'t worn or '
-          'hasn\'t synced yet.';
+      return 'I don’t have any data ${_day(d)}. Nothing was recorded or '
+          'synced yet.';
     }
     final m = plan.metric;
     final b = StringBuffer();
@@ -1168,7 +1209,7 @@ class OfflineComposer {
           .where((x) => x['input'] == 'Sleep performance')
           .firstOrNull;
       if (sleepD != null) {
-        b.write(' Sleep performance was ${f(sleepD['value'])}.');
+        b.write(' You got ${f(sleepD['value'])} of your sleep goal.');
       }
       for (final pen in (rec['penalties'] as List? ?? const [])) {
         if (pen is Map) {
@@ -1180,8 +1221,8 @@ class OfflineComposer {
       }
       if (rec['calibrating'] != null) {
         b.write(
-          ' Your baseline is still calibrating, so treat this as '
-          'provisional.',
+          ' Airlog is still learning your usual, so treat this as an early '
+          'estimate.',
         );
       }
     }
@@ -1232,8 +1273,8 @@ class OfflineComposer {
       case RangeMetric.sleepConsistency:
         if (sleep == null) return null;
         return 'You slept ${f(sleep['asleep'])} the night before '
-            '${CoachFormat.day(d)}, a sleep performance of '
-            '${f(sleep['performance'])}; sleep debt is ${f(sleep['debtAfter'])}.';
+            '${CoachFormat.day(d)}, ${f(sleep['performance'])} of your sleep '
+            'goal; you’ve missed ${f(sleep['debtAfter'])} of sleep recently.';
       case RangeMetric.recovery:
         return null;
     }
@@ -1320,8 +1361,8 @@ class OfflineComposer {
     if (e != null && e.contains('future')) {
       return 'That date is in the future, so there is no data for it yet.';
     }
-    return 'I couldn\'t read that from your data just now. Try asking about '
-        'a specific day or metric.';
+    return 'I couldn’t read that from your data just now. Try asking about '
+        'one day or one score.';
   }
 
   /// Sentences of [text], without splitting decimals ("0.2") or "e.g.".

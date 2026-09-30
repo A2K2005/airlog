@@ -1,8 +1,10 @@
-// Settings → Coach (pushed at /settings/coach; Settings links here): the
-// "Show coach" master switch, the engine, model and mode (into setup),
-// today's cloud usage, the answer length, "Coach messages" (on or off; v1
-// has no AI-written cards), What Coach knows, conversations, and turning the
-// cloud engine off.
+// Settings → Coach (pushed at /settings/coach; Settings links here, and the
+// chat's connect card and error fixes open it): the "Show Coach" master
+// switch; "Who answers" (On this phone by default, or Claude or Gemini,
+// connected through the Connect sheet: key, then consent); for a cloud
+// engine its model, data mode, backup-model switch and today's usage; the
+// answer length; "Coach messages"; What Coach knows; conversations; and
+// turning cloud answers off. There is no setup screen before the chat.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,10 +14,12 @@ import '../../app/copy.dart';
 import '../../app/insight_card.dart' show insightLevelProvider;
 import '../../app/providers.dart';
 import '../../app/route_names.dart';
+import '../../app/screen_kit.dart';
 import '../../design/design.dart';
 import '../../domain/coach/coach_contracts.dart';
 import '../../domain/coach/insight_contracts.dart';
 import 'coach_providers.dart';
+import 'widgets/connect_sheet.dart';
 
 /// "3 of 50 questions · 12k of 200k tokens".
 String usageLine(CoachUsage u) {
@@ -81,19 +85,35 @@ class CoachSettingsScreen extends ConsumerWidget {
         snack(
           context,
           ok
-              ? 'Back to on-device. Your key was deleted.'
-              : failure ?? 'Could not complete withdrawal. Try again.',
+              ? 'Back to On this phone. Your key was deleted.'
+              : failure ?? 'Couldn’t turn it off. Try again.',
         );
       }
     }
 
-    final engineSub = !c.cloud
-        ? 'Nothing leaves your phone'
-        : c.cloudReady
-        ? 'Your key · ${CoachCopy.company(c.provider)} · '
-              '${CoachCopy.model(c.provider, c.settings.model)?.cost ?? ''} '
-              'per question'
-        : 'Not set up yet: finish in setup';
+    Future<void> connect(CoachProvider p) async {
+      await showConnectSheet(context, p);
+      ref.invalidate(coachConfigProvider);
+      ref.invalidate(coachUsageProvider);
+    }
+
+    /// A radio row's subtitle: what the engine is, and its state.
+    String engineSub(CoachProvider e) {
+      if (e == CoachProvider.offline) return 'Nothing leaves your phone';
+      final company = CoachCopy.company(e);
+      if (c.provider != e) return 'Your key · $company';
+      if (!c.cloudReady) return 'Needs a quick review';
+      final cost = CoachCopy.model(e, c.settings.model)?.cost ?? '';
+      return 'Your key · $company · $cost per question';
+    }
+
+    Future<void> pickEngine(CoachProvider e) async {
+      if (e == CoachProvider.offline) {
+        if (c.cloud) await withdraw();
+        return;
+      }
+      await connect(e);
+    }
 
     final usage = c.cloud ? ref.watch(coachUsageProvider).value : null;
     // Null until read (or when the insight service is not wired).
@@ -105,7 +125,7 @@ class CoachSettingsScreen extends ConsumerWidget {
         final repo = ref.read(coachRepositoryProvider);
         await repo.saveSettings((await repo.settings()).copyWith(enabled: on));
       } catch (_) {
-        if (context.mounted) snack(context, 'Could not save. Try again.');
+        if (context.mounted) snack(context, 'Couldn’t save. Try again.');
       }
       ref.invalidate(coachConfigProvider);
       ref.invalidate(coachEnabledProvider);
@@ -118,7 +138,7 @@ class CoachSettingsScreen extends ConsumerWidget {
             .read(insightServiceProvider)
             .setLevel(on ? InsightLevel.basic : InsightLevel.off);
       } catch (_) {
-        if (context.mounted) snack(context, 'Could not save. Try again.');
+        if (context.mounted) snack(context, 'Couldn’t save. Try again.');
       }
       ref.invalidate(insightLevelProvider);
     }
@@ -134,7 +154,7 @@ class CoachSettingsScreen extends ConsumerWidget {
         children: [
           if (cfg == null && async.hasError) ...[
             const StatusCard(
-              title: 'Coach settings could not be read',
+              title: 'Couldn’t read Coach settings',
               body: 'Showing the defaults. Nothing was changed.',
               tone: StatusTone.warning,
             ),
@@ -174,32 +194,55 @@ class CoachSettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: S.x6),
-          const OverLabel('Engine'),
+          const OverLabel('Who answers'),
           const SizedBox(height: S.x3),
           _Group(
             children: [
-              _Row(
-                key: const ValueKey('row-engine'),
-                icon: c.cloud
-                    ? Icons.cloud_outlined
-                    : Icons.phone_android_rounded,
-                title: c.engineLabel,
-                subtitle: engineSub,
-                onTap: () => go(Routes.coachSetup),
-              ),
-              _Row(
-                key: const ValueKey('row-mode'),
-                icon: c.settings.mode == CoachMode.generalOnly
-                    ? Icons.menu_book_outlined
-                    : Icons.insights_rounded,
-                title: c.modeLabel,
-                subtitle: c.settings.mode == CoachMode.generalOnly
-                    ? 'Science and training info only; none of your data'
-                    : 'Looks up your scores; every number is checked',
-                onTap: () => go(Routes.coachSetup),
-              ),
+              for (final e in CoachProvider.values)
+                _EngineRow(
+                  key: ValueKey('engine-${e.name}'),
+                  engine: e,
+                  selected: c.provider == e,
+                  subtitle: engineSub(e),
+                  warn: e != CoachProvider.offline &&
+                      c.provider == e &&
+                      !c.cloudReady,
+                  onTap: cfg == null ? null : () => pickEngine(e),
+                ),
             ],
           ),
+          if (c.cloud) ...[
+            const SizedBox(height: S.x3),
+            _Group(
+              children: [
+                _Row(
+                  key: const ValueKey('row-model'),
+                  accent: C.violet,
+                  icon: Icons.memory_rounded,
+                  title: 'Model',
+                  subtitle:
+                      '${CoachCopy.model(c.provider, c.settings.model)?.name ?? ''}'
+                      ' · ${CoachCopy.model(c.provider, c.settings.model)?.cost ?? ''}'
+                      ' per question',
+                  onTap: () => connect(c.provider),
+                ),
+                _Row(
+                  key: const ValueKey('row-data'),
+                  accent: c.settings.mode == CoachMode.generalOnly
+                      ? null
+                      : C.health,
+                  icon: c.settings.mode == CoachMode.generalOnly
+                      ? Icons.menu_book_outlined
+                      : Icons.insights_rounded,
+                  title: c.modeLabel,
+                  subtitle: c.settings.mode == CoachMode.generalOnly
+                      ? 'General know-how only. It can’t see your data.'
+                      : 'Looks up your scores and checks every number',
+                  onTap: () => connect(c.provider),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: S.x3),
           AppCard(
             child: Column(
@@ -211,7 +254,7 @@ class CoachSettingsScreen extends ConsumerWidget {
                   values: ResponseLength.values,
                   selected: c.settings.length,
                   label: (l) =>
-                      l == ResponseLength.brief ? 'Brief' : 'Detailed',
+                      l == ResponseLength.brief ? 'Short' : 'Detailed',
                   semanticsLabel: 'Answer length',
                   onChanged: cfg == null
                       ? (_) {}
@@ -265,7 +308,7 @@ class CoachSettingsScreen extends ConsumerWidget {
                                 );
                               } catch (_) {
                                 if (context.mounted) {
-                                  snack(context, 'Could not save. Try again.');
+                                  snack(context, 'Couldn’t save. Try again.');
                                 }
                               }
                               ref.invalidate(coachConfigProvider);
@@ -361,7 +404,7 @@ class CoachSettingsScreen extends ConsumerWidget {
                 key: const ValueKey('row-history'),
                 icon: Icons.history_rounded,
                 title: 'Conversations',
-                subtitle: 'Kept on this phone; delete any or all',
+                subtitle: 'Kept on this phone. Delete any or all.',
                 onTap: () => go(Routes.coachHistory),
               ),
             ],
@@ -403,7 +446,7 @@ class CoachSettingsScreen extends ConsumerWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: AppButton(
-              label: 'How the coach handles your data',
+              label: 'How Coach handles your data',
               icon: Icons.lock_outline_rounded,
               kind: AppButtonKind.quiet,
               compact: true,
@@ -432,12 +475,93 @@ class _Group extends StatelessWidget {
           for (var i = 0; i < children.length; i++) ...[
             if (i > 0)
               Padding(
-                padding: const EdgeInsets.only(left: S.card + 34),
+                padding: const EdgeInsets.only(left: S.card + 36 + S.x3),
                 child: Divider(height: 1, thickness: S.hair, color: p.line),
               ),
             children[i],
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// One engine of "Who answers": a radio row. On this phone switches back
+/// (deleting any key); Claude or Gemini opens the Connect sheet.
+class _EngineRow extends StatelessWidget {
+  const _EngineRow({
+    super.key,
+    required this.engine,
+    required this.selected,
+    required this.subtitle,
+    required this.onTap,
+    this.warn = false,
+  });
+
+  final CoachProvider engine;
+  final bool selected;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  /// The chosen cloud engine needs a review (consent or key).
+  final bool warn;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
+    final name = CoachCopy.providerName(engine);
+    final (icon, accent) = switch (engine) {
+      CoachProvider.offline => (Icons.phone_android_rounded, C.health),
+      CoachProvider.claude => (Icons.cloud_outlined, C.violet),
+      CoachProvider.gemini => (Icons.cloud_outlined, C.sky),
+    };
+    return Semantics(
+      inMutuallyExclusiveGroup: true,
+      selected: selected,
+      child: Pressable(
+        onTap: onTap,
+        scale: .985,
+        semanticLabel: '$name. $subtitle',
+        child: ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: S.card,
+              vertical: S.x3,
+            ),
+            child: Row(
+              children: [
+                IconBadge(icon: icon, accent: accent),
+                const SizedBox(width: S.x3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, style: F.head.copyWith(color: p.ink)),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          subtitle,
+                          style: F.cap.copyWith(
+                            color: warn ? p.on(C.amber) : p.ink3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 20,
+                  color: selected ? p.ink : p.ink3,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -450,9 +574,13 @@ class _Row extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.accent,
   });
 
   final IconData icon;
+
+  /// Tints the icon badge; neutral when null.
+  final Color? accent;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
@@ -467,8 +595,8 @@ class _Row extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: S.card, vertical: S.x3),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: p.ink2),
-            const SizedBox(width: S.x4 - 2),
+            IconBadge(icon: icon, accent: accent),
+            const SizedBox(width: S.x3),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,10 +1,10 @@
 // The chat opened from an insight card's "Discuss", and the message-level
-// polish: the card pinned on top with follow-ups for its kind; nothing is
-// sent or pre-filled on arrival (a cloud send spends the user's key); a
-// follow-up tap only fills the composer; the card's seed reaches
-// CoachService.ask; follow-ups under each answer; the answer-shaped
-// waiting skeleton (never a spinner); the standing disclaimer; the calm
-// banner when today's cloud budget is spent.
+// polish: the card pinned on top with follow-ups for its kind, as chips
+// over the composer; nothing is sent or pre-filled on arrival (a cloud send
+// spends the user's key); a follow-up tap only fills the composer; the
+// card's seed reaches CoachService.ask; follow-ups under each answer; the
+// thinking dots (never a spinner); the one quiet disclaimer line; a spent
+// cloud budget never walls the chat.
 
 import 'package:airlog/app/ask_entry.dart';
 import 'package:airlog/app/copy.dart';
@@ -12,6 +12,8 @@ import 'package:airlog/app/route_names.dart';
 import 'package:airlog/domain/coach/coach_contracts.dart';
 import 'package:airlog/domain/repositories.dart' show DataMode;
 import 'package:airlog/features/coach/coach_providers.dart';
+import 'package:airlog/features/coach/widgets/answer_text.dart';
+import 'package:airlog/features/coach/widgets/connect_card.dart';
 import 'package:airlog/features/coach/widgets/message_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -57,7 +59,8 @@ void main() {
       arguments: _discussSleep,
     );
     expect(find.byType(DiscussPin), findsOneWidget);
-    expect(find.text("Discussing: Here's how you slept"), findsOneWidget);
+    expect(find.text("About this card: Here's how you slept"), findsOneWidget);
+    expect(find.byKey(const ValueKey('composer-chips')), findsOneWidget);
     expect(find.textContaining('7h 12m asleep'), findsOneWidget);
     for (final q in discussFollowUps('sleep')) {
       expect(find.text(q), findsOneWidget);
@@ -128,6 +131,7 @@ void main() {
       arguments: _discussSleep,
     );
     expect(find.byType(DiscussPin), findsOneWidget);
+    expect(find.byType(ConnectHintCard), findsNothing, reason: 'Discuss');
 
     await t.tap(find.bySemanticsLabel('Conversations'));
     await t.pumpAndSettle();
@@ -208,22 +212,35 @@ void main() {
     expect(find.byType(FollowUpChips), findsNothing);
   });
 
-  testWidgets('demo mode: answers that cite data say Sample data', (t) async {
+  testWidgets('demo mode: no Sample data label anywhere in the chat or its '
+      'history (it is shown app-wide instead)', (t) async {
     final repo = FakeCoachRepository();
-    final service = FakeCoachService(repo, script: [Scripted.safety]);
-    await pumpCoach(t, repo: repo, service: service, initial: Routes.coach);
+    final service = FakeCoachService(
+      repo,
+      script: [Scripted.safety, Scripted.verified],
+    );
+    await pumpCoach(
+      t,
+      repo: repo,
+      service: service,
+      initial: Routes.coach,
+      health: FakeRepo(),
+    );
+    expect(find.text(CoachCopy.sampleData), findsNothing);
     await t.enterText(find.byKey(const ValueKey('coach-input')), 'Chest pain');
     await t.pump();
     await _send(t);
-    // The safety answer quotes no data.
-    expect(find.text(CoachCopy.sampleData), findsNothing);
     await t.enterText(find.byKey(const ValueKey('coach-input')), 'How am I?');
     await t.pump();
     await _send(t);
-    expect(find.byKey(const ValueKey('answer-sample')), findsOneWidget);
+    expect(find.byType(ReplyText), findsOneWidget);
+    expect(find.text(CoachCopy.sampleData), findsNothing);
+    await t.tap(find.bySemanticsLabel('Conversations'));
+    await t.pumpAndSettle();
+    expect(find.text(CoachCopy.sampleData), findsNothing);
   });
 
-  testWidgets('live data: no Sample data tag', (t) async {
+  testWidgets('live data: no Sample data label either', (t) async {
     final repo = FakeCoachRepository();
     await pumpCoach(
       t,
@@ -234,11 +251,13 @@ void main() {
     await t.enterText(find.byKey(const ValueKey('coach-input')), 'How am I?');
     await t.pump();
     await _send(t);
-    expect(find.byType(SourceChip), findsNWidgets(3));
+    expect(find.byType(ReplyText), findsOneWidget);
     expect(find.text(CoachCopy.sampleData), findsNothing);
   });
 
-  testWidgets('waiting: an answer-shaped skeleton, never a spinner', (t) async {
+  testWidgets('waiting: thinking dots that come to rest, never a spinner', (
+    t,
+  ) async {
     final repo = FakeCoachRepository();
     final service = FakeCoachService(repo)..hold = true;
     await pumpCoach(t, repo: repo, service: service, initial: Routes.coach);
@@ -246,13 +265,14 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Send'));
     await t.pumpAndSettle();
-    expect(find.byKey(const ValueKey('waiting-skeleton')), findsOneWidget);
+    expect(find.byKey(const ValueKey('thinking-row')), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
+    // The loop is bounded (about 17 s), so the tree settles.
     expect(t.binding.hasScheduledFrame, isFalse);
     service.release();
     await t.pumpAndSettle();
-    expect(find.byKey(const ValueKey('waiting-skeleton')), findsNothing);
+    expect(find.byKey(const ValueKey('thinking-row')), findsNothing);
   });
 
   testWidgets('the standing disclaimer: AI engines say AI can make mistakes', (
@@ -274,9 +294,8 @@ void main() {
     expect(find.text(CoachCopy.aiDisclaimer), findsNothing);
   });
 
-  testWidgets("today's cloud budget spent: a calm banner, send disabled", (
-    t,
-  ) async {
+  testWidgets("today's cloud budget spent: no wall; the question still goes "
+      '(the service answers it on this phone)', (t) async {
     final repo =
         FakeCoachRepository(
             settings: _cloud,
@@ -290,15 +309,17 @@ void main() {
             requestLimit: 50,
             tokenLimit: 200000,
           );
-    final service = FakeCoachService(repo);
+    final service = FakeCoachService(repo, script: [Scripted.onDeviceFallback]);
     await pumpCoach(t, repo: repo, service: service, initial: Routes.coach);
-    expect(find.byKey(const ValueKey('usage-spent')), findsOneWidget);
-    expect(find.text(CoachCopy.usageSpent), findsOneWidget);
+    expect(find.byKey(const ValueKey('usage-spent')), findsNothing);
     final field = t.widget<TextField>(
       find.byKey(const ValueKey('coach-input')),
     );
-    expect(field.enabled, isFalse);
-    expect(service.asked, isEmpty);
+    expect(field.enabled, isTrue);
+    await t.enterText(find.byKey(const ValueKey('coach-input')), 'How am I?');
+    await t.pump();
+    await _send(t);
+    expect(service.asked, hasLength(1));
   });
 
   testWidgets('under the budget: no banner', (t) async {

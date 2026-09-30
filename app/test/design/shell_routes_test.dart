@@ -150,9 +150,8 @@ void main() {
     expect(find.byType(TodayScreen), findsNothing); // built lazily, offstage
   });
 
-  testWidgets('every pushed screen carries the Sample data chip in demo', (
-    t,
-  ) async {
+  testWidgets('every pushed screen carries the Sample data chip in demo, '
+      'except the coach chat', (t) async {
     await t.pumpWidget(_app());
     await t.pumpAndSettle();
     final nav = t.state<NavigatorState>(find.byType(Navigator).first);
@@ -163,7 +162,6 @@ void main() {
       Routes.settings,
       Routes.sources,
       Routes.profile,
-      Routes.coach,
     ]) {
       unawaited(nav.pushNamed(name));
       await t.pumpAndSettle();
@@ -171,6 +169,13 @@ void main() {
       nav.pop();
       await t.pumpAndSettle();
     }
+    // User decision (2026-10-01): no data-mode label anywhere in the coach
+    // chat; sample data is shown app-wide instead.
+    unawaited(nav.pushNamed(Routes.coach));
+    await t.pumpAndSettle();
+    expect(find.byType(SampleDataChip), findsNothing);
+    nav.pop();
+    await t.pumpAndSettle();
   });
 
   testWidgets('a tab request by id opens that tab', (t) async {

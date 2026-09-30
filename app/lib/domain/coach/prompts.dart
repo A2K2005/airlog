@@ -153,12 +153,12 @@ Rules:
   }
 
   static const fallbackNote =
-      'I couldn\'t phrase an answer without adding details your data '
-      'doesn\'t show, so here are the facts I found instead:';
+      'I couldn’t answer without guessing, so here are the numbers I found:';
 
   static const noFactsNote =
-      'I couldn\'t answer that from your data without guessing, and I found '
-      'no recorded values to show. Try asking about a specific day or metric.';
+      'I couldn’t answer that without guessing, and I found no numbers to '
+      'show. Try asking about one day or one score, like “How did I sleep '
+      'last night?”';
 
   /// Deterministic facts table from this turn's refs: the refs the failed
   /// answer cited first, then the rest, at most [max] lines. Every line

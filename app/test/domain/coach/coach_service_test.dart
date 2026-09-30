@@ -58,33 +58,53 @@ void main() {
     expect(f.transcripts, isEmpty);
   });
 
-  test('cloud needs consent, a current version and 18+', () async {
+  test('a cloud engine without consent, a current version or 18+ answers '
+      'on this phone: nothing is sent, and the answer is never replayed to '
+      'the cloud (D1)', () async {
     final f = Fake((_, _) => const LlmTurn(text: 'x'));
     for (final s in [
       cloudSettings.copyWith(clearConsent: true),
       cloudSettings.copyWith(adultConfirmed: false),
+      cloudSettings.copyWith(consentVersion: 0),
     ]) {
-      await expectLater(
-        module(f, settings: s).service.ask('How did I sleep?'),
-        throwsA(
-          isA<CoachException>().having(
-            (e) => e.kind,
-            'kind',
-            CoachErrorKind.notConfigured,
-          ),
-        ),
-      );
+      final a = await module(f, settings: s).service.ask('How did I sleep?');
+      expect(a.error, isNull);
+      expect(a.answeredBy, ChatMessage.onDevice);
+      expect(a.fallbackReason, CoachErrorKind.notConfigured.name);
+      expect(a.sent, isNull);
+      expect(a.replayScope, isNull);
+      expect(a.verification, isNotNull);
     }
     expect(f.transcripts, isEmpty);
   });
 
-  test('an exhausted daily budget fails fast with no network call', () async {
+  test('a cloud engine without a key answers on this phone', () async {
+    final f = Fake((_, _) => const LlmTurn(text: 'x'));
+    final m = CoachModule.inMemory(
+      InMemoryHealthRepository.demo(now: now),
+      clock: () => now,
+      settings: cloudSettings,
+      clients: (_, _, _) => f,
+    );
+    final a = await m.service.ask('How did I sleep?');
+    expect(a.error, isNull);
+    expect(a.answeredBy, ChatMessage.onDevice);
+    expect(a.fallbackReason, CoachErrorKind.notConfigured.name);
+    expect(f.transcripts, isEmpty);
+  });
+
+  test('an exhausted daily budget answers on this phone with no network '
+      'call, like the mid-question budget fallback', () async {
     final f = Fake((_, _) => const LlmTurn(text: 'x'));
     final m = module(f, settings: cloudSettings.copyWith(dailyRequestLimit: 1));
     await m.repository.recordUsage(CoachProvider.claude, 10, 10);
     final a = await m.service.ask('How did I sleep last night?');
-    expect(a.error, CoachErrorKind.dailyLimit.name);
-    expect(a.text, contains('limit'));
+    expect(a.error, isNull);
+    expect(a.answeredBy, ChatMessage.onDevice);
+    expect(a.fallbackReason, CoachErrorKind.dailyLimit.name);
+    expect(a.sent, isNull);
+    // Consent holds, so it replays under the same scope as any fallback.
+    expect(a.replayScope, isNotNull);
     expect(f.transcripts, isEmpty);
   });
 
@@ -118,7 +138,12 @@ void main() {
         .length;
     expect(rounds, 4);
     expect(a.text, startsWith(CoachPrompts.fallbackNote));
+    // The table re-verifies by construction, so only the flag says it is
+    // the facts-only fallback (the UI shows it as "What your data shows").
     expect(a.verification!.verified, isTrue);
+    expect(a.factsOnly, isTrue);
+    expect(a.visuals, isEmpty);
+    expect(a.tools, contains('get_today_summary'));
   });
 
   test('a request that never returns times out, and the question is '
@@ -271,6 +296,30 @@ void main() {
       expect(await m.repository.memories(), isEmpty);
     },
   );
+
+  test('an on-device answer records its tools, and the new fields survive '
+      'storage', () async {
+    final m = CoachModule.inMemory(
+      InMemoryHealthRepository.demo(now: now),
+      clock: () => now,
+      settings: const CoachSettings(),
+    );
+    final a = await m.service.ask(
+      'Is my HRV trending up or down over the last 30 days?',
+    );
+    expect(a.error, isNull);
+    expect(a.tools, contains('get_range:hrv'));
+    expect(a.factsOnly, isFalse);
+    for (final v in a.visuals) {
+      expect(a.refs.map((r) => r.id), contains(v.refId));
+      expect(v.series.length, lessThanOrEqualTo(31));
+    }
+    final back = ChatMessage.fromJson(a.toJson());
+    expect(back.tools, a.tools);
+    expect(back.visuals.length, a.visuals.length);
+    expect(back.actions.length, a.actions.length);
+    expect(back.factsOnly, a.factsOnly);
+  });
 
   test('older stored messages without categories still load', () {
     final m = ChatMessage.fromJson({

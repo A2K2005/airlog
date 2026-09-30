@@ -48,6 +48,18 @@ abstract final class Motion {
   /// so a long list never makes the user wait.
   static const staggerCap = 8;
 
+  /// Per-card stagger for the few cards under a coach answer (40–60 ms, so
+  /// each card reads as its own arrival). At most [cardStaggerCap] cards
+  /// are delayed.
+  static const cardStagger = Duration(milliseconds: 50);
+  static const cardStaggerCap = 3;
+
+  /// The coach's thinking dots: one fade step, and how many cycles play
+  /// before they rest (15 cycles of 4 steps, about 17 s). The only bounded
+  /// loop in the app, off under reduced motion (ThinkingDots).
+  static const dotStep = slow;
+  static const dotsCycles = 15;
+
   /// Wall clock for live screens (NOT an animation; not gated).
   static const tick = Duration(seconds: 1);
 

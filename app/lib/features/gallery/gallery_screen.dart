@@ -782,7 +782,7 @@ class GalleryBody extends StatelessWidget {
       ),
     ),
     _Case(
-      'showExplainSheet · NumberSwap · EnterFade',
+      'showExplainSheet · NumberSwap · EnterFade · ThinkingDots',
       Builder(
         builder: (c) => Wrap(
           spacing: S.x3,
@@ -804,6 +804,7 @@ class GalleryBody extends StatelessWidget {
               enabled: playSeed != null,
               child: const StatePill(label: 'Entered once', color: C.sky),
             ),
+            const ThinkingDots(),
           ],
         ),
       ),

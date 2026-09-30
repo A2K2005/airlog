@@ -13,7 +13,7 @@ Outside `lib/design/tokens/`, code must not contain the following. Use the repla
 | `fontSize:` | `F.*`, or `F.scaled` |
 | numeric `BorderRadius.circular(n)` | `R.*` |
 | `Colors.white` / `Colors.black` | palette colours |
-| `.repeat(` | nothing: no infinite animations |
+| `.repeat(` | nothing: no infinite animations. The one exception is `ThinkingDots` (`repeat(count: Motion.dotsCycles)`, about 17 s, then static; off under reduced motion; user decision 2026-10-01) |
 | `GestureDetector`, `InkWell`, `Listener`, `RawGestureDetector` | **`Pressable`** |
 
 Also:
@@ -63,7 +63,7 @@ Also:
 | `PreparingNote` | `({required title, body, icon})`; `PreparingNote.fromStatus(SyncStatus, {required demo})` uses the data layer's message, else "Preparing 90 days of sample data…" / "Reading your data from Health Connect…"; `PreparingNote.shows(sync, {required hasData})`. Static, a polite live region |
 | `CalibrationBanner` | `({required have, need = 14, body, onTap})` |
 | `CalibrationBanner.of` | `(Calibration)`; also `CalibrationBanner.shouldShow(c)` |
-| `DemoBadge` | `({label = 'Demo data', onTap})`: a message-level marker (coach messages, insight cards). Screens use `SampleDataChip` |
+| `DemoBadge` | `({label = 'Demo data', onTap})`: a card-level marker (insight cards). Coach chat messages carry no data-mode label (sample data is shown app-wide). Screens use `SampleDataChip`, except the coach chat and its history |
 | `ScreenHeader` | `({required title, subtitle, actions = [], below})` |
 | `SectionHeader` | `({required title, subtitle, actionLabel, onAction, trailing})` |
 | `SegmentedRange` | `({required days, required onChanged, options = [7, 30, 90]})` |
@@ -81,6 +81,7 @@ Also:
 | `NumberSwap` | `(text, {required style})`: for rare changes only (a sync), never for a number that ticks every second (Live) or changes on a day step |
 | `EnterFade` | `({required child, index, enabled, step = Motion.stagger})`: one-time stagger, 30 ms per item by default (`Motion.staggerTiles`, 50 ms, for a few large tiles), capped at 8 items |
 | `FadeSwap` | `({required swapKey, required child})`: a status that changes in place (a pill after coming back from Health Connect) crossfades in 160 ms, enter curve in, flipped out; a short fade under reduced motion. `DotStat(swap: true)` uses it for a number that changes on the same screen |
+| `ThinkingDots` | `({color, size = 6})`: three dots fading in turn while the coach answers. The only (bounded) loop: `Motion.dotsCycles` cycles of 4 × `Motion.dotStep`, then they rest at 60 %; static under reduced motion |
 | `OverLabel` | `(text)`: an uppercase group label |
 | `KeyValueLine` | `(label, value, {valueColor})`: the value in tabular figures |
 | `BulletLine` | `(text, {icon, strong, large = false})`: a dot or icon line with an optional bold lead-in. `large` uses body size, for the privacy policy |
@@ -114,7 +115,7 @@ Every chart:
 | `ScatterConsistency` | `({required nights (List<NightWindow?>), title, xLabels, height = 170, semanticsLabel})` |
 | `DualAxisChart.recoveryStrain` | `({required recovery, required strain, xLabels})` |
 | `AcwrGauge.fromLoad` | `(TrainingLoad?, {title = 'Training load'})`. The title is printed in both the empty and the measured state whenever it is non-null |
-| `Sparkline` | `({required values, required color, height = 28, width, lower, upper, showLast, semanticsLabel})`. Either band edge may be null on its own (a one-sided band) |
+| `Sparkline` | `({required values, required color, height = 28, width, lower, upper, mean, showLast, semanticsLabel})`. Either band edge may be null on its own (a one-sided band). `mean` draws the usual as a dotted line when there is no range |
 | `HypnogramChart` | `({required stages, start, end, title, height = 132, semanticsLabel})` |
 | `InputWeightBar` | `({required parts, semanticsLabel})`, `WeightPart(label, value, color, {valueText, hatched})`: one bar split by share or amount; hatched parts are "up to" amounts. Static |
 | `WeightStepBars` | `({required steps ((label, from, weight)), required color, weightText, semanticsLabel})`: multiplier columns; rows at large text |
@@ -153,7 +154,7 @@ The look is a 1:1 copy of the user's own Figma widget PNGs (`Widget/{Small,Mediu
   - The app ramp, for screens without a PNG: `display`, `t1`, `t2`, `head`, `body`, `bodySm`, `cap`, `micro`, `over`.
   - `F.numerals` is **Subway Ticker Grid** (dot matrix): `dot72`, `dot48`, `dot40`, `dot36`, `dot32`, `dot28`, `dot24`. The old numeral names `n96`, `n64`, `n44`, `n32`, `n24` and `n18` map onto it.
 - **Motion:**
-  - Durations: press 120 ms, release 90 ms, 160, 200 and 280 ms, exit 180 ms, sweep 700 ms. Stagger 30 ms per item (`Motion.stagger`), 50 ms per large tile (`Motion.staggerTiles`).
+  - Durations: press 120 ms, release 90 ms, 160, 200 and 280 ms, exit 180 ms, sweep 700 ms. Staggers: 30 ms for lists (`Motion.stagger`), 50 ms per large onboarding tile (`Motion.staggerTiles`), 50 ms for the few cards under a coach answer (`Motion.cardStagger`, first 3 cards).
   - Curves: enter (0.23,1,0.32,1), move (0.77,0,0.175,1), drawer (0.32,0.72,0,1).
   - `motion(c, d, {fade})` zeroes movement under reduced motion.
   - **Exits use the flipped curve.** A reverse runs its curve backwards, so an exit that reuses the enter curve plays as an ease-in. Every reverse or switch-out curve is `Motion.enter.flipped` or `Motion.drawer.flipped`.

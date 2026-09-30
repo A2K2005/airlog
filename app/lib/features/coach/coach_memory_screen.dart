@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/copy.dart';
 import '../../app/providers.dart';
+import '../../app/screen_kit.dart';
 import '../../design/design.dart';
 import '../../domain/coach/coach_contracts.dart';
 import '../../domain/coach/personal_context.dart';
@@ -30,7 +31,7 @@ class CoachMemoryScreen extends ConsumerWidget {
       final ok = f == null
           ? await vm.add(r.text, r.category, r.until)
           : await vm.edit(f.id, r.text, r.category, r.until);
-      if (context.mounted && !ok) snack(context, 'Could not save. Try again.');
+      if (context.mounted && !ok) snack(context, 'Couldn’t save. Try again.');
     }
 
     Future<void> deleteAll() async {
@@ -40,8 +41,8 @@ class CoachMemoryScreen extends ConsumerWidget {
         builder: (d) => AlertDialog(
           title: const Text('Delete every memory?'),
           content: const Text(
-            'Coach forgets everything you confirmed. Your chats stay. It '
-            'cannot be undone.',
+            'Coach forgets every fact you confirmed. Your chats stay. This '
+            'can’t be undone.',
           ),
           actions: [
             TextButton(
@@ -51,7 +52,7 @@ class CoachMemoryScreen extends ConsumerWidget {
             TextButton(
               onPressed: () => Navigator.of(d).pop(true),
               child: Text(
-                'Delete all',
+                'Delete all memories',
                 style: F.head.copyWith(color: P.of(d).on(C.recRed)),
               ),
             ),
@@ -61,7 +62,7 @@ class CoachMemoryScreen extends ConsumerWidget {
       if (yes != true) return;
       final ok = await vm.deleteAll();
       if (context.mounted) {
-        snack(context, ok ? 'All memories deleted.' : 'Could not delete.');
+        snack(context, ok ? 'All memories deleted.' : 'Couldn’t delete.');
       }
     }
 
@@ -70,8 +71,8 @@ class CoachMemoryScreen extends ConsumerWidget {
       body = [
         EmptyState(
           icon: Icons.error_outline_rounded,
-          title: 'Could not load memories',
-          body: 'The memories stored on this phone could not be read.',
+          title: 'Couldn’t load memories',
+          body: 'Airlog couldn’t open your saved facts.',
           actionLabel: 'Try again',
           onAction: () => ref.invalidate(coachMemoryProvider),
         ),
@@ -85,7 +86,7 @@ class CoachMemoryScreen extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.lock_outline_rounded, size: 18, color: p.ink2),
+              const IconBadge(icon: Icons.lock_outline_rounded, size: 32),
               const SizedBox(width: S.x3),
               Expanded(
                 child: Text(
@@ -137,7 +138,17 @@ class CoachMemoryScreen extends ConsumerWidget {
         ],
         for (final (cat, facts) in s.groups) ...[
           const SizedBox(height: S.x5),
-          OverLabel(cat.label),
+          Row(
+            children: [
+              IconBadge(
+                icon: _catIcon(cat),
+                accent: _catAccent(cat),
+                size: 28,
+              ),
+              const SizedBox(width: S.x2),
+              Expanded(child: OverLabel(cat.label)),
+            ],
+          ),
           const SizedBox(height: S.x2),
           AppCard(
             padding: const EdgeInsets.symmetric(vertical: S.x1),
@@ -155,7 +166,7 @@ class CoachMemoryScreen extends ConsumerWidget {
                     onDelete: () async {
                       final ok = await vm.delete(facts[i].id);
                       if (context.mounted) {
-                        snack(context, ok ? 'Forgotten.' : 'Could not delete.');
+                        snack(context, ok ? 'Forgotten.' : 'Couldn’t delete.');
                       }
                     },
                   ),
@@ -444,3 +455,22 @@ class _FactSheetState extends State<_FactSheet> {
     );
   }
 }
+
+/// One icon per memory category, for the group heads.
+IconData _catIcon(MemoryCategory c) => switch (c) {
+  MemoryCategory.goals => Icons.flag_outlined,
+  MemoryCategory.identity => Icons.person_outline_rounded,
+  MemoryCategory.lifestyle => Icons.schedule_rounded,
+  MemoryCategory.preferences => Icons.tune_rounded,
+  MemoryCategory.events => Icons.event_outlined,
+  MemoryCategory.healthHistory => Icons.medical_services_outlined,
+  MemoryCategory.mood => Icons.mood_rounded,
+};
+
+Color? _catAccent(MemoryCategory c) => switch (c) {
+  MemoryCategory.goals => C.recGreen,
+  MemoryCategory.events => C.sky,
+  MemoryCategory.healthHistory => C.health,
+  MemoryCategory.mood => C.violet,
+  _ => null,
+};

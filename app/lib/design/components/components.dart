@@ -21,4 +21,5 @@ export 'status_card.dart';
 export 'status_lines.dart';
 export 'surfaces.dart';
 export 'text_blocks.dart';
+export 'thinking_dots.dart';
 export 'tile.dart';

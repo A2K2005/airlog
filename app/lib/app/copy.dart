@@ -103,7 +103,7 @@ abstract final class CoachSettingsCopy {
   /// "Settings → Coach".
   static const path = 'Settings → $title';
 
-  static const withdrawTitle = 'Turn off the cloud engine';
+  static const withdrawTitle = 'Turn off cloud answers';
 }
 
 /// A model a cloud engine can use, with its approximate cost per question.
@@ -122,44 +122,46 @@ class CoachModel {
   final String cost;
 }
 
-/// Everything the coach discloses, in one place: the chat, Coach setup,
-/// Settings → Coach and the privacy policy print these strings, so the
-/// consent sheet and the policy cannot drift apart.
+/// Everything the coach discloses, in one place: the chat, the Connect
+/// sheet in Settings → Coach and the privacy policy print these strings, so
+/// the consent sheet and the policy cannot drift apart.
 abstract final class CoachCopy {
-  /// Version of the consent text. Bump it when what the setup screen
+  /// Version of the consent text. Bump it when what the Connect sheet
   /// promises changes; a consent stored with an older version asks again.
+  /// Wording-only edits (COPY_REVIEW D9) keep the version.
   static const consentVersion = 1;
 
   // ── standing lines ──────────────────────────────────────────────────────
   static const notMedical = 'Wellness info, not medical advice.';
-  static const checked = 'Checked against your data';
-  static const fallback = "Showing facts only — couldn't verify the answer";
   static const askAboutThis = 'Ask about this';
   static const askAboutToday = 'Ask about today';
 
-  /// The chat's empty state when the engine is on-device.
+  /// The chat's empty state when the engine is on this phone.
   static const onDeviceCan =
-      'On-device answers a fixed set of questions about your Recovery, '
-      'Sleep, Strain, trends and journal, from the numbers on this phone. '
-      'It has no AI model, so it cannot hold an open conversation.';
+      'The on-phone coach answers set questions about your Recovery, Sleep, '
+      'Strain, trends and journal. It isn’t an AI, so it can’t chat freely.';
+
+  /// The chat's one, dismissible nudge towards a cloud engine.
+  static const connectHint =
+      'For fuller answers, connect Claude or Gemini in Settings';
 
   // ── engines ─────────────────────────────────────────────────────────────
   static const onDeviceBody =
-      'Nothing leaves your phone. Answers a fixed set of questions about '
-      'your data.';
+      'Nothing leaves your phone. Answers set questions about your data.';
   static const claudeBody =
-      "Bring your own Anthropic API key. Anthropic doesn't train on API "
-      'data; deletes it within 30 days.';
+      'Uses your own Anthropic API key. Anthropic doesn’t train on it, and '
+      'deletes it within 30 days.';
   static const geminiBody =
-      'Bring your own Gemini API key. It must be on a billing-enabled '
-      '(paid) Google Cloud project.';
+      'Uses your own Gemini API key, which must be from a paid Google Cloud '
+      'project.';
   static const geminiWarning =
-      'Free Gemini keys may be used to train Google’s models, and people at '
-      'Google may read what is sent. Use a key from a paid project only. '
-      'Gemini is for adults (18+) and is not for medical advice.';
+      'With a free Gemini key, Google may use what you send to train its '
+      'models, and people at Google may read it. Only use a key from a paid '
+      'project. Gemini is for adults 18 and over, and isn’t for medical '
+      'advice.';
 
   static String providerName(CoachProvider p) => switch (p) {
-    CoachProvider.offline => 'On-device',
+    CoachProvider.offline => 'On this phone',
     CoachProvider.claude => 'Claude',
     CoachProvider.gemini => 'Gemini',
   };
@@ -254,29 +256,31 @@ abstract final class CoachCopy {
 
   static String backupModelsBody(CoachProvider p) {
     final who = providerName(p);
-    return 'If the chosen $who model is busy or out of its own quota, the '
-        'question goes to a smaller $who model with the same key. Never to '
-        'another company. When none can answer, Coach answers on this phone.';
+    return 'If your $who model is busy or hits its limit, a smaller $who '
+        'model answers with the same key. Never another company. If none '
+        'can answer, Coach answers on this phone.';
   }
 
-  /// The quiet line under an answer another engine wrote than the chosen
-  /// model: "via 3.5 Flash-Lite", or why it was answered on this phone.
-  /// Null when the chosen model answered.
+  /// Which engine wrote an answer, when it wasn't the chosen model: "Answered
+  /// by 3.5 Flash-Lite", or why it was answered on this phone (the answer's
+  /// ⋯ menu). Null when the chosen model answered.
   static String? answeredByNote(CoachProvider p, ChatMessage m) {
     final by = m.answeredBy;
     if (!m.fellBack || by == null) return null;
-    if (by != ChatMessage.onDevice) return 'via ${modelName(p, by)}';
+    if (by != ChatMessage.onDevice) return 'Answered by ${modelName(p, by)}';
     final who = providerName(p);
     final why = switch (m.fallbackReason) {
       'invalidKey' =>
-        "$who didn't accept your API key. Check it in "
+        '$who didn’t accept your API key. Check it in '
             '${CoachSettingsCopy.path}',
-      'quotaExceeded' => 'your $who account is out of credit or quota',
-      'dailyLimit' => 'today’s $who limit is reached',
-      'network' => "$who couldn't be reached",
-      _ => '$who is unavailable right now',
+      'quotaExceeded' => 'your $who account is out of credit',
+      'dailyLimit' => 'today’s $who limit is used up',
+      'network' => '$who couldn’t be reached',
+      'notConfigured' =>
+        '$who needs a quick review in ${CoachSettingsCopy.path}',
+      _ => '$who isn’t available right now',
     };
-    return 'Answered on this phone — $why.';
+    return 'Answered on this phone: $why.';
   }
 
   /// The action under an answer written on this phone as the fallback.
@@ -289,44 +293,44 @@ abstract final class CoachCopy {
   }
 
   static String modeLabel(CoachMode m) => switch (m) {
-    CoachMode.useMyData => 'Uses your data',
+    CoachMode.useMyData => 'With my data',
     CoachMode.generalOnly => 'General only',
   };
 
   // ── modes ───────────────────────────────────────────────────────────────
   static const useMyDataBody =
-      'Coach looks up only the numbers a question needs (your scores, '
-      'sleep, workouts and journal), and every number it quotes is checked '
-      'against its cited evidence. If your history includes Google Health '
-      'API data, health records stay on-device; use the on-device coach.';
+      'Coach looks up only the numbers a question needs (scores, sleep, '
+      'workouts and journal), and Airlog checks every number it quotes. '
+      'Data from Enhanced mode (Google Health) never leaves your phone. To '
+      'ask about it, use On this phone.';
   static const generalOnlyBody =
-      'Coach answers from general sleep and training science, like a '
-      'textbook. It sends your current question, including any personal '
-      'details you type, but does not read your stored health data.';
+      'Coach answers from general sleep and training know-how, like a '
+      'textbook. It sends only your question, including anything personal '
+      'you type. It can’t see your health data.';
 
   // ── what leaves the phone ───────────────────────────────────────────────
 
-  /// Sent with a question in "Use my data", and only what that question
+  /// Sent with a question "With my data", and only what that question
   /// needs.
   static const sentWithData = <String>[
-    'Your question and eligible earlier messages from this mode and provider',
-    'Computed daily scores (Recovery, Strain, Sleep) for the days asked '
-        'about',
+    'Your question, and earlier messages in this chat with the same mode '
+        'and provider',
+    'Your daily scores (Recovery, Strain, Sleep) for the days you ask about',
     'Sleep and workout summaries (times, durations, stages, averages)',
     'Journal tags, such as “Alcohol” or “Late meal”',
-    'Memories you confirmed',
+    'Facts you told Coach to remember',
   ];
 
   /// Sent with a question in "General only".
   static const sentGeneral = <String>[
-    'Your current question only; earlier messages are not sent',
+    'Only your current question. Earlier messages aren’t sent.',
   ];
 
   /// Never sent, in either mode.
   static const neverSent = <String>[
-    'Raw heart-rate streams, or any second-by-second reading',
-    'Google Health API (Enhanced mode) data, or scores built from it',
-    'Account profile details: Airlog has no account',
+    'Raw heart-rate readings, second by second',
+    'Enhanced mode (Google Health) data, or scores built from it',
+    'Account details: Airlog has no account',
   ];
 
   /// Who receives it.
@@ -351,80 +355,84 @@ abstract final class CoachCopy {
   };
 
   static const keyStorage =
-      'Your key is kept in Android’s keystore (encrypted secure storage) on '
-      'this phone. It is never written to Airlog’s database or exports, is '
-      'never shown again, and is sent only to the provider, with each '
-      'question.';
+      'Your key is locked in this phone’s secure storage. Airlog never '
+      'saves it anywhere else, never shows it again, and sends it only to '
+      'your provider, with each question.';
+
+  /// [keyStorage], naming the provider that receives the key.
+  static String keyStorageFor(CoachProvider p) =>
+      'Your key is locked in this phone’s secure storage. Airlog never '
+      'saves it anywhere else, never shows it again, and sends it only to '
+      '${company(p)}, with each question.';
 
   /// Shown at the start of every cloud chat session (Anthropic's usage
   /// policy asks for it; Google's terms rule out medical advice).
   static String aiDisclosure(CoachProvider p) =>
       'You’re chatting with an AI: ${providerName(p)}, by ${company(p)}. '
-      'It can be wrong. Numbers with a source chip come from your data. '
-      '$notMedical';
+      'It can make mistakes. $notMedical';
 
   // ── consent ─────────────────────────────────────────────────────────────
   static const adult = 'I’m 18 or older';
-  static const paidKey = 'My key is on a paid (billing-enabled) project';
+  static const paidKey = 'My key is from a paid (billing-enabled) project';
 
-  /// "I agree — turn on Claude".
+  /// "I agree: turn on Claude".
   static String agree(CoachProvider p) =>
-      'I agree — turn on ${providerName(p)}';
+      'I agree: turn on ${providerName(p)}';
 
   static const withdrawBody =
-      'Deletes your key from this phone and switches back to on-device. '
-      'Chats and memories stay on this phone until you delete them.';
+      'Deletes your key from this phone and switches back to On this phone. '
+      'Your chats and memories stay until you delete them.';
 
   // ── memories ────────────────────────────────────────────────────────────
   static const memoryAbout =
-      'Facts you confirmed are context, not measurements. Health numbers '
-      'come fresh from your data. Review old facts and edit changes here. '
-      'Memories stay on this phone, and are sent as '
-      'context only while a cloud engine is on.';
+      'These are facts you told Coach, not measurements. Your health numbers '
+      'always come fresh from your data. Facts stay on this phone, and are '
+      'only sent with your questions while Claude or Gemini is on.';
 
   // ── the privacy policy's section ────────────────────────────────────────
-  static const privacyTitle = 'Ask, the coach';
+  static const privacyTitle = 'Coach';
   static const privacyOnDevice =
-      'Ask answers questions about your data. By default it runs entirely '
-      'on this phone: a fixed set of questions answered from the scores '
-      'stored here, with no AI model. Nothing is sent anywhere.';
+      'Coach answers questions about your data. By default it runs entirely '
+      'on this phone: set questions, answered from the scores stored here, '
+      'with no AI. Nothing is sent anywhere.';
   static const privacyCloud =
-      'You can choose a cloud engine instead: Claude (Anthropic) or Gemini '
-      '(Google), with your own API key. Only after you agree on the setup '
-      'screen does a question send data off the phone, and then only to '
-      'the provider you chose, never to Airlog. Names or identifying details '
-      'you type in questions or memories are not redacted. In “Use my data” mode that '
-      'is:';
+      'You can choose Claude (Anthropic) or Gemini (Google) instead, with '
+      'your own API key. Only after you agree in ${CoachSettingsCopy.path} '
+      'does a question send data off the phone, and then only to the '
+      'provider you chose, never to Airlog. Names or identifying details '
+      'you type in questions or memories are not redacted. In “With my '
+      'data” mode that is:';
   static const privacyGeneral =
       'In “General only” mode, only your current question is sent. Earlier '
       'messages are not sent. If your history includes Google Health API '
-      'data, health records and derived scores stay on-device in cloud '
-      'mode. The on-device coach can still use them. Data handling:';
+      'data, health records and derived scores stay on-device while Claude '
+      'or Gemini is on. The on-device coach can still use them. Data '
+      'handling:';
   static const privacyMemories =
       'Memories are facts you confirmed (“training for a half marathon”), '
       'never health numbers. They stay on this phone, and are sent as '
-      'context only while a cloud engine is on.';
+      'context only while Claude or Gemini is on.';
   static const privacyDelete =
       'Chats and memories are stored on this phone. Delete any chat or '
-      'memory, or all of them, in Ask. ${CoachSettingsCopy.path} → '
+      'memory, or all of them, in Coach. ${CoachSettingsCopy.path} → '
       '${CoachSettingsCopy.withdrawTitle} deletes the key and stops all '
       'sending. Deleting on the phone does not reach copies a provider '
       'already holds under the retention above.';
 
-  /// The chat's standing line while a cloud (AI) engine answers. The
-  /// on-device engine has no AI model, so it keeps [notMedical].
+  /// The chat's one quiet line while a cloud (AI) engine answers. The
+  /// on-phone engine has no AI model, so it keeps [notMedical].
   static const aiDisclaimer = 'AI can make mistakes. Not medical advice.';
 
   /// Settings → Coach: the master switch. Off hides every entry point.
-  static const showCoach = 'Show coach';
+  static const showCoach = 'Show Coach';
   static const showCoachBody =
-      'Off hides Ask and the coach cards everywhere. Your chats and '
+      'Turn this off to hide Coach and its notes everywhere. Your chats and '
       'memories stay on this phone.';
 
-  /// The calm banner when today's cloud budget is spent.
+  /// Settings → Coach, under today's usage, once the cloud budget is spent.
   static const usageSpent =
-      'Today’s model-request limit for your AI provider is used up. It resets '
-      'tomorrow. On-device answers still work.';
+      'You’ve used today’s limit for your AI provider. It resets tomorrow. '
+      'The on-phone coach still answers.';
 
   /// The tag on coach answers and insight cards in demo mode.
   static const sampleData = 'Sample data';

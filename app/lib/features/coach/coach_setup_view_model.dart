@@ -95,9 +95,8 @@ class CoachSetupState {
   /// What still blocks the agree button, in words.
   List<String> get missing => [
     if (!keyReady) 'your API key',
-    if (!adult) 'the 18+ confirmation',
-    if (engine == CoachProvider.gemini && !paid)
-      'the paid-project confirmation',
+    if (!adult) 'the 18+ box',
+    if (engine == CoachProvider.gemini && !paid) 'the paid-project box',
   ];
 
   CoachSetupState copyWith({

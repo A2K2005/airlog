@@ -20,6 +20,10 @@ import '../support/dart_source.dart';
 
 const _tokenDir = 'lib/design/tokens/';
 const _gestureFile = 'lib/design/components/pressable.dart';
+
+/// The one bounded loop (Motion.dotsCycles, off under reduced motion):
+/// the coach's thinking dots (user decision D5, 2026-10-01).
+const _loopFile = 'lib/design/components/thinking_dots.dart';
 const _scanned = ['lib/design', 'lib/app', 'lib/features'];
 
 class _Rule {
@@ -61,8 +65,10 @@ final _rules = <_Rule>[
     'infinite .repeat()',
     RegExp(r'\.repeat\s*\('),
     'A loop that never ends cannot be stopped by the reduced-motion gate (and '
-        'never lets a test settle). Skeletons are static on purpose.',
-    allow: _nowhere,
+        'never lets a test settle). Skeletons are static on purpose. The one '
+        'exception is ThinkingDots: repeat(count: Motion.dotsCycles), off '
+        'under reduced motion.',
+    allow: (p) => p == _loopFile,
   ),
   _Rule(
     'Duration literal',
@@ -213,6 +219,13 @@ void main() {
       expect(Motion.release, lessThan(Motion.press));
       expect(Motion.exit, lessThan(Motion.slow));
       expect(Motion.stagger.inMilliseconds, lessThanOrEqualTo(40));
+      expect(Motion.cardStagger.inMilliseconds, inInclusiveRange(40, 60));
+      expect(Motion.dotStep.inMilliseconds, lessThanOrEqualTo(300));
+      // The bounded thinking loop rests after about 17 s.
+      expect(
+        (Motion.dotStep * 4 * Motion.dotsCycles).inSeconds,
+        inInclusiveRange(15, 20),
+      );
       expect(Motion.none, Duration.zero);
       // The one deliberate exception: the once-a-day ring sweep.
       expect(Motion.sweep.inMilliseconds, inInclusiveRange(600, 800));

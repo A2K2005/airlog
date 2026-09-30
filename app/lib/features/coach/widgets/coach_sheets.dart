@@ -1,15 +1,18 @@
-// The chat's bottom sheets: "What was sent" (per cloud answer), "Report
-// answer" (kept on this phone; details copied only if the user asks), and
-// the memory-category picker. Sheets use sheetMotion (drawer curve, exit
-// faster than enter, a cut under reduced motion).
+// The chat's bottom sheets: "What this answer shared" (per cloud answer),
+// "Report this answer" (kept on this phone; details copied only if the user
+// asks), the memory-category picker, an answer's sources, and one number's
+// metric sheet. Sheets use sheetMotion (drawer curve, exit faster than
+// enter, a cut under reduced motion).
 
 import 'package:flutter/material.dart';
 
 import '../../../app/copy.dart';
 import '../../../design/design.dart';
 import '../../../domain/coach/coach_contracts.dart';
+import 'metric_card.dart';
 
-Future<T?> _sheet<T>(
+/// A bottom sheet with the chat's handle and padding.
+Future<T?> coachSheet<T>(
   BuildContext context,
   List<Widget> children,
 ) => showModalBottomSheet<T>(
@@ -43,7 +46,8 @@ Future<T?> _sheet<T>(
   },
 );
 
-Widget _title(BuildContext context, String s) => Semantics(
+/// A sheet's title.
+Widget sheetTitle(BuildContext context, String s) => Semantics(
   header: true,
   child: Text(s, style: F.t1.copyWith(color: P.of(context).ink)),
 );
@@ -59,8 +63,8 @@ String approxSize(int chars) {
 /// What left the phone for one answer.
 Future<void> showSentSheet(BuildContext context, SentPayload sent) {
   final model = CoachCopy.model(sent.provider, sent.model);
-  return _sheet<void>(context, [
-    _title(context, 'What was sent'),
+  return coachSheet<void>(context, [
+    sheetTitle(context, 'What this answer shared'),
     const SizedBox(height: S.x2),
     Text(
       CoachCopy.recipient(sent.provider),
@@ -72,11 +76,11 @@ Future<void> showSentSheet(BuildContext context, SentPayload sent) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          KeyValueLine('To', CoachCopy.company(sent.provider)),
+          KeyValueLine('Sent to', CoachCopy.company(sent.provider)),
           KeyValueLine('Model', model?.name ?? sent.model),
           KeyValueLine('Size', approxSize(sent.approxChars)),
           KeyValueLine(
-            'Tools',
+            'Data looked up',
             sent.toolsCalled.isEmpty
                 ? 'None'
                 : sent.toolsCalled
@@ -87,10 +91,10 @@ Future<void> showSentSheet(BuildContext context, SentPayload sent) {
       ),
     ),
     const SizedBox(height: S.x4),
-    const OverLabel('Data in this question'),
+    const OverLabel('Your data in this question'),
     const SizedBox(height: S.x2),
     if (sent.dataTypes.isEmpty)
-      const BulletLine('None of your data: only the question.')
+      const BulletLine('None of your data, only your question.')
     else
       for (final d in sent.dataTypes) BulletLine(d),
     const SizedBox(height: S.x4),
@@ -111,22 +115,21 @@ Future<bool> showReportSheet(
   BuildContext context, {
   required Future<void> Function() onFlag,
 }) async {
-  final done = await _sheet<bool>(context, [
-    _title(context, 'Report this answer'),
+  final done = await coachSheet<bool>(context, [
+    sheetTitle(context, 'Report this answer'),
     const SizedBox(height: S.x2),
     Builder(
       builder: (c) => Text(
-        'Flag an answer that is wrong, unsafe or unhelpful. The flag stays '
-        'on this phone: Airlog has no server, so nothing is sent. The '
-        'question, the answer and its sources are copied, so you can share '
-        'them with the developer if you choose.',
+        'Flag an answer that’s wrong, unsafe or unhelpful. The flag stays '
+        'on this phone, and nothing is sent. Airlog copies the question and '
+        'answer so you can send them to the developer if you want.',
         style: F.body.copyWith(color: P.of(c).ink2),
       ),
     ),
     const SizedBox(height: S.x5),
     Builder(
       builder: (c) => AppButton(
-        label: 'Flag and copy details',
+        label: 'Flag and copy',
         icon: Icons.flag_outlined,
         expand: true,
         onTap: () async {
@@ -152,8 +155,8 @@ Future<bool> showReportSheet(
 Future<MemoryCategory?> showCategorySheet(
   BuildContext context,
   MemoryCategory current,
-) => _sheet<MemoryCategory>(context, [
-  _title(context, 'Save under'),
+) => coachSheet<MemoryCategory>(context, [
+  sheetTitle(context, 'Save under'),
   const SizedBox(height: S.x3),
   for (final c in MemoryCategory.values)
     Builder(
@@ -179,3 +182,186 @@ Future<MemoryCategory?> showCategorySheet(
       },
     ),
 ]);
+
+/// The numbers an answer quotes, each with where it came from, one 48 dp
+/// row each ("Checked against your data" when the verifier checked them
+/// all). A tap opens that number's metric sheet.
+Future<void> showSourcesSheet(
+  BuildContext context, {
+  required ChatMessage message,
+  required String title,
+  required String lede,
+  required bool checked,
+  required void Function(int index) onOpen,
+}) => coachSheet<void>(context, [
+  sheetTitle(context, title),
+  const SizedBox(height: S.x2),
+  Builder(
+    builder: (c) => Text(
+      lede,
+      style: F.bodySm.copyWith(color: P.of(c).ink2),
+    ),
+  ),
+  const SizedBox(height: S.x3),
+  for (var i = 0; i < message.refs.length; i++)
+    Builder(
+      builder: (c) {
+        final p = P.of(c);
+        final r = message.refs[i];
+        final value = r.value == null ? null : readingOf(r);
+        return Pressable(
+          key: ValueKey('source-row-${message.id}-${r.id}'),
+          scale: .985,
+          semanticLabel:
+              '${value ?? r.label}${checked ? ', checked' : ''}. From '
+              '${r.label}. Opens details.',
+          onTap: () {
+            Navigator.of(c).pop();
+            onOpen(i);
+          },
+          child: ExcludeSemantics(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: S.x3),
+              child: Row(
+                children: [
+                  Icon(
+                    checked ? Icons.check_rounded : Icons.circle_outlined,
+                    size: checked ? 18 : 8,
+                    color: checked ? p.on(C.recGreen) : p.ink3,
+                  ),
+                  const SizedBox(width: S.x3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (value != null)
+                          Text(
+                            value,
+                            style: F
+                                .tab(F.head)
+                                .copyWith(color: p.ink),
+                          ),
+                        Text(
+                          r.label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: F.cap.copyWith(color: p.ink3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: S.x1),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: p.ink3),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+]);
+
+/// One cited number: its value in dots, its picture when the answer's tools
+/// gave one, whether it was checked, and the screen it came from.
+Future<void> showMetricSheet(
+  BuildContext context, {
+  required SourceRef ref,
+  AnswerVisual? visual,
+  required bool checked,
+  VoidCallback? onOpenScreen,
+  String? screenName,
+}) {
+  final v = visual;
+  final values = v == null ? const <double?>[] : [for (final p in v.series) p.value];
+  final trend = v != null && MetricCard.tierOf(v) == MetricTier.trend;
+  final hasRange = v?.usualLow != null && v?.usualHigh != null;
+  return coachSheet<void>(context, [
+    sheetTitle(context, v == null ? ref.label.split(' · ').first : metricName(v.metric)),
+    Builder(
+      builder: (c) => Text(
+        captionOf(ref),
+        style: F.bodySm.copyWith(color: P.of(c).ink2),
+      ),
+    ),
+    const SizedBox(height: S.x4),
+    DotReading(readingOf(ref), style: F.dot48, unitStyle: F.body),
+    if (v != null && MetricCard.usualLine(v, ref) != null) ...[
+      const SizedBox(height: S.x2),
+      Builder(
+        builder: (c) => Text(
+          MetricCard.usualLine(v, ref)!,
+          style: F.bodySm.copyWith(color: P.of(c).ink2),
+        ),
+      ),
+    ],
+    if (v != null && MetricCard.stateWord(v.state) != null) ...[
+      const SizedBox(height: S.x1),
+      Builder(
+        builder: (c) => Text(
+          '${MetricCard.stateWord(v.state)} '
+          '(usual range ${readingIn(v.usualLow!, ref)} to '
+          '${readingIn(v.usualHigh!, ref)})',
+          style: F.bodySm.copyWith(color: P.of(c).ink2),
+        ),
+      ),
+    ],
+    if (trend) ...[
+      const SizedBox(height: S.x4),
+      AppCard(
+        child: BaselineBandChart(
+          title: 'Last ${values.length} days',
+          unit: ref.unit ?? '',
+          values: values,
+          color: MetricCard.accentFor(v.metric),
+          mean: v.usual,
+          lower: hasRange ? v.usualLow : null,
+          upper: hasRange ? v.usualHigh : null,
+          highlightIndex: values.length - 1,
+          height: 120,
+        ),
+      ),
+    ],
+    if (checked) ...[
+      const SizedBox(height: S.x4),
+      Builder(
+        builder: (c) {
+          final p = P.of(c);
+          return Row(
+            children: [
+              Icon(Icons.check_rounded, size: 18, color: p.on(C.recGreen)),
+              const SizedBox(width: S.x2),
+              Expanded(
+                child: Text(
+                  'Found in your data: Airlog checked this number.',
+                  style: F.bodySm.copyWith(color: p.ink2),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    ],
+    if (onOpenScreen != null) ...[
+      const SizedBox(height: S.x5),
+      Builder(
+        builder: (c) => AppButton(
+          key: const ValueKey('metric-open-screen'),
+          label: 'Open ${screenName ?? 'the screen'}',
+          kind: AppButtonKind.secondary,
+          expand: true,
+          onTap: () {
+            Navigator.of(c).pop();
+            onOpenScreen();
+          },
+        ),
+      ),
+    ],
+    const SizedBox(height: S.x4),
+    Builder(
+      builder: (c) => Text(
+        CoachCopy.notMedical,
+        style: F.cap.copyWith(color: P.of(c).ink3),
+      ),
+    ),
+  ]);
+}

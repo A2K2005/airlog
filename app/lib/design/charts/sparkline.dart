@@ -20,6 +20,7 @@ class Sparkline extends StatelessWidget {
     this.showLast = true,
     this.semanticsLabel,
     this.format = axisFixedOrInt,
+    this.mean,
   });
 
   /// DENSE, oldest first, null in gaps.
@@ -34,6 +35,10 @@ class Sparkline extends StatelessWidget {
   /// on its own (a one-sided band, e.g. the SpO₂ floor): the strip then runs
   /// from the bound to the open edge.
   final double? lower, upper;
+
+  /// Optional usual level drawn as a dotted line (a baseline mean without a
+  /// range). [additive]
+  final double? mean;
   final bool showLast;
   final String? semanticsLabel;
   final String Function(double) format;
@@ -58,6 +63,7 @@ class Sparkline extends StatelessWidget {
             knockout: p.card,
             lower: lower,
             upper: upper,
+            mean: mean,
             showLast: showLast,
           ),
         ),
@@ -74,12 +80,13 @@ class SparklinePainter extends CustomPainter {
     required this.knockout,
     this.lower,
     this.upper,
+    this.mean,
     this.showLast = true,
   });
 
   final List<double?> values;
   final Color color, band, knockout;
-  final double? lower, upper;
+  final double? lower, upper, mean;
   final bool showLast;
 
   @override
@@ -87,7 +94,8 @@ class SparklinePainter extends CustomPainter {
     if (values.isEmpty || s.width <= 0 || s.height <= 0) return;
     final lo = lower != null && lower!.isFinite ? lower : null;
     final up = upper != null && upper!.isFinite ? upper : null;
-    final e = autoExtent([...values, ?lo, ?up]);
+    final mid = mean != null && mean!.isFinite ? mean : null;
+    final e = autoExtent([...values, ?lo, ?up, ?mid]);
     if (e == null) return;
     const pad = 3.5;
     final h = s.height - pad * 2;
@@ -109,6 +117,16 @@ class SparklinePainter extends CustomPainter {
             ..color = color.withValues(alpha: .5)
             ..strokeWidth = 1,
         );
+      }
+    }
+    if (mid != null) {
+      // The usual as a dotted line: short dashes, faint, under the trace.
+      final ym = y(mid);
+      final dash = Paint()
+        ..color = color.withValues(alpha: .55)
+        ..strokeWidth = 1;
+      for (var x = 0.0; x < s.width; x += 5) {
+        cv.drawLine(Offset(x, ym), Offset(x + 2, ym), dash);
       }
     }
     final runs = minMaxRuns(values, w, y);
@@ -145,5 +163,6 @@ class SparklinePainter extends CustomPainter {
       o.values != values ||
       o.color != color ||
       o.lower != lower ||
-      o.upper != upper;
+      o.upper != upper ||
+      o.mean != mean;
 }

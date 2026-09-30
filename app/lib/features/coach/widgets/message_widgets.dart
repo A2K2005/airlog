@@ -1,30 +1,34 @@
-// The chat's rows: the user's question, an answer (its text with citations,
-// the Sources row, the verification pill, "What was sent", Report, and any
-// "Remember this?" proposals), the calm safety answer, an error with its
-// fix, the static waiting row, and the per-session AI disclosure.
+// The chat's plain rows: the user's question, "Remember this?", the calm
+// safety answer, an error with its fix, the pinned card of a "Discuss"
+// chat, the follow-up chips, and the one quiet AI-disclosure line. An
+// answer itself is an AnswerBlock (answer_block.dart).
 //
 // Dumb widgets: plain values and callbacks in, no providers.
 //
-// Motion (Emil): a message enters once, with a ≤ 200 ms fade and a 6 px
-// rise on the strong ease-out; old messages never animate again on rebuild;
-// under reduced motion only the fade remains. The waiting row is static.
+// Motion (Emil): a message enters once, with a 200 ms fade and an 8 px
+// rise on the strong ease-out; old messages never animate again on
+// rebuild; under reduced motion only the fade remains.
 
 import 'package:flutter/material.dart';
 
 import '../../../app/copy.dart';
 import '../../../design/design.dart';
 import '../../../domain/coach/coach_contracts.dart';
-import '../coach_providers.dart';
-import '../coach_view_model.dart' show MemoryChoice;
-import 'answer_text.dart';
 
 /// A one-time entrance for a new message. [play] false renders at once
 /// (every message loaded from storage, and every rebuild after the first).
+/// [delay] staggers the cards under an answer (Motion.cardStagger).
 class CoachEnter extends StatefulWidget {
-  const CoachEnter({super.key, required this.play, required this.child});
+  const CoachEnter({
+    super.key,
+    required this.play,
+    required this.child,
+    this.delay = Duration.zero,
+  });
 
   final bool play;
   final Widget child;
+  final Duration delay;
 
   @override
   State<CoachEnter> createState() => _CoachEnterState();
@@ -39,10 +43,20 @@ class _CoachEnterState extends State<CoachEnter>
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_c != null || !widget.play) return;
-    final d = motion(context, Motion.base, fade: true);
-    if (d == Duration.zero) return;
-    final c = AnimationController(vsync: this, duration: d);
-    _t = CurvedAnimation(parent: c, curve: Motion.enter);
+    final body = motion(context, Motion.base, fade: true);
+    if (body == Duration.zero) return;
+    // Under reduced motion every card fades in together: no stagger.
+    final delay = Motion.enabled(context) ? widget.delay : Duration.zero;
+    final total = delay + body;
+    final c = AnimationController(vsync: this, duration: total);
+    _t = CurvedAnimation(
+      parent: c,
+      curve: Interval(
+        delay.inMicroseconds / total.inMicroseconds,
+        1,
+        curve: Motion.enter,
+      ),
+    );
     _c = c..forward();
   }
 
@@ -63,7 +77,7 @@ class _CoachEnterState extends State<CoachEnter>
           ? AnimatedBuilder(
               animation: t,
               builder: (context, c) => Transform.translate(
-                offset: Offset(0, (1 - t.value) * 6),
+                offset: Offset(0, (1 - t.value) * 8),
                 child: c,
               ),
               child: widget.child,
@@ -102,315 +116,30 @@ class UserBubble extends StatelessWidget {
   }
 }
 
-/// "✓ Checked against your data · 3 numbers", or the fallback's honest
-/// "Showing facts only — couldn't verify the answer". Null when there is
-/// nothing to say (no numbers were quoted).
-class VerificationPill extends StatelessWidget {
-  const VerificationPill({super.key, required this.verification});
-  final Verification verification;
-
-  static bool shows(Verification? v) =>
-      v != null && (!v.verified || v.checkedNumbers > 0);
-
-  static String label(Verification v) {
-    if (!v.verified) return CoachCopy.fallback;
-    final n = v.checkedNumbers;
-    return '${CoachCopy.checked} · $n ${n == 1 ? 'number' : 'numbers'}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ok = verification.verified;
-    return StatePill(
-      label: label(verification),
-      color: ok ? C.recGreen : C.amber,
-      icon: ok ? Icons.check_rounded : Icons.info_outline_rounded,
-    );
-  }
-}
-
-/// One source: its number, label and value. Tapping opens its screen with
-/// the day selected; press feedback comes from Pressable.
-class SourceChip extends StatelessWidget {
-  const SourceChip({
-    super.key,
-    required this.number,
-    required this.source,
-    this.onTap,
-  });
-
-  final int number;
-  final SourceRef source;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = P.of(context);
-    final value = refValue(source);
-    final chip = Container(
-      padding: const EdgeInsets.fromLTRB(S.x2, S.x2, S.x3, S.x2),
-      decoration: BoxDecoration(
-        color: p.card2,
-        borderRadius: R.rMd,
-        border: Border.all(color: p.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CiteMark(number: number, inline: false),
-          const SizedBox(width: S.x2),
-          Flexible(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: source.label),
-                  if (value != null)
-                    TextSpan(
-                      text: '  $value',
-                      style: F
-                          .tab(F.cap)
-                          .copyWith(color: p.ink, fontWeight: FontWeight.w700),
-                    ),
-                ],
-              ),
-              style: F.cap.copyWith(color: p.ink2),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (onTap != null) ...[
-            const SizedBox(width: S.x1),
-            Icon(Icons.chevron_right_rounded, size: 16, color: p.ink3),
-          ],
-        ],
-      ),
-    );
-    final spoken =
-        'Source $number: ${source.label}${value == null ? '' : ', $value'}';
-    if (onTap == null) {
-      return Semantics(
-        label: spoken,
-        child: ExcludeSemantics(child: chip),
-      );
-    }
-    return Pressable(
-      onTap: onTap,
-      semanticLabel: '$spoken. Opens the screen.',
-      scale: .96,
-      child: ExcludeSemantics(child: chip),
-    );
-  }
-}
-
-/// An answer from the coach.
-class AnswerView extends StatelessWidget {
-  const AnswerView({
-    super.key,
-    required this.message,
-    required this.onOpenRef,
-    required this.onShowSent,
-    required this.onReport,
-    required this.reported,
-    required this.memoryOn,
-    required this.choiceOf,
-    required this.categoryOf,
-    required this.onPickCategory,
-    required this.onRemember,
-    required this.onDismissMemory,
-    required this.onOpenMemory,
-    this.sample = false,
-    this.engineNote,
-    this.askAgainLabel,
-    this.onAskAgain,
-  });
-
-  final ChatMessage message;
-
-  /// Another engine than the chosen model wrote this answer: "via 3.5
-  /// Flash-Lite", or "Answered on this phone — …" (CoachCopy.answeredByNote).
-  final String? engineNote;
-
-  /// "Ask Claude again" under an on-device fallback answer; null = hidden
-  /// (the chosen model is still known to be down, or a question is out).
-  final String? askAgainLabel;
-  final VoidCallback? onAskAgain;
-
-  /// Demo mode: the answer's numbers come from sample data, so it carries a
-  /// "Sample data" tag (only when it cites any).
-  final bool sample;
-  final void Function(SourceRef) onOpenRef;
-  final VoidCallback? onShowSent;
-  final VoidCallback onReport;
-  final bool reported;
-  final bool memoryOn;
-  final MemoryChoice Function(int index) choiceOf;
-  final MemoryCategory Function(int index) categoryOf;
-  final void Function(int index) onPickCategory;
-  final void Function(int index) onRemember;
-  final void Function(int index) onDismissMemory;
-  final VoidCallback onOpenMemory;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = message;
-    final v = m.verification;
-    final proposals = [
-      for (var i = 0; i < m.proposedMemories.length; i++)
-        if (memoryOn && choiceOf(i) != MemoryChoice.dismissed) i,
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (sample && m.refs.isNotEmpty) ...[
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: DemoBadge(
-              key: ValueKey('answer-sample'),
-              label: CoachCopy.sampleData,
-            ),
-          ),
-          const SizedBox(height: S.x2),
-        ],
-        CitedText(text: m.text, refs: m.refs),
-        if (m.refs.isNotEmpty) ...[
-          const SizedBox(height: S.x3),
-          const OverLabel('Sources'),
-          const SizedBox(height: S.x2),
-          Wrap(
-            spacing: S.x2,
-            runSpacing: 0,
-            children: [
-              for (var i = 0; i < m.refs.length; i++)
-                SourceChip(
-                  key: ValueKey('source-${m.id}-${m.refs[i].id}'),
-                  number: i + 1,
-                  source: m.refs[i],
-                  onTap: refRoute(m.refs[i]) == null
-                      ? null
-                      : () => onOpenRef(m.refs[i]),
-                ),
-            ],
-          ),
-        ],
-        if (VerificationPill.shows(v)) ...[
-          const SizedBox(height: S.x2),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: VerificationPill(verification: v!),
-          ),
-        ],
-        if (engineNote != null) ...[
-          const SizedBox(height: S.x2),
-          _EngineNote(
-            key: ValueKey('answer-engine-${m.id}'),
-            text: engineNote!,
-            onDevice: m.answeredBy == ChatMessage.onDevice,
-          ),
-          if (onAskAgain != null && askAgainLabel != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppButton(
-                key: ValueKey('ask-again-${m.id}'),
-                label: askAgainLabel!,
-                kind: AppButtonKind.quiet,
-                compact: true,
-                icon: Icons.refresh_rounded,
-                onTap: onAskAgain,
-              ),
-            ),
-        ],
-        const SizedBox(height: S.x1),
-        Wrap(
-          spacing: S.x5,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (onShowSent != null)
-              AppButton(
-                label: 'What was sent',
-                kind: AppButtonKind.quiet,
-                compact: true,
-                icon: Icons.outbox_outlined,
-                onTap: onShowSent,
-              ),
-            AppButton(
-              label: reported ? 'Reported' : 'Report answer',
-              kind: AppButtonKind.quiet,
-              compact: true,
-              icon: reported ? Icons.flag_rounded : Icons.flag_outlined,
-              onTap: reported ? null : onReport,
-            ),
-          ],
-        ),
-        for (final i in proposals) ...[
-          const SizedBox(height: S.x2),
-          RememberCard(
-            key: ValueKey('remember-${m.id}-$i'),
-            text: m.proposedMemories[i],
-            expiresOn: m.proposedExpiry(i),
-            choice: choiceOf(i),
-            category: categoryOf(i),
-            onPickCategory: () => onPickCategory(i),
-            onRemember: () => onRemember(i),
-            onDismiss: () => onDismissMemory(i),
-            onOpenMemory: onOpenMemory,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 /// "Remember this?" for one proposed fact. Nothing is saved until the user
-/// taps Remember; "No thanks" forgets it.
+/// taps Remember; "No thanks" forgets it. Once saved, the answer shows a
+/// status toast in its place.
 class RememberCard extends StatelessWidget {
   const RememberCard({
     super.key,
     required this.text,
     this.expiresOn,
-    required this.choice,
     required this.category,
     required this.onPickCategory,
     required this.onRemember,
     required this.onDismiss,
-    required this.onOpenMemory,
   });
 
   final String text;
   final String? expiresOn;
-  final MemoryChoice choice;
   final MemoryCategory category;
   final VoidCallback onPickCategory;
   final VoidCallback onRemember;
   final VoidCallback onDismiss;
-  final VoidCallback onOpenMemory;
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
-    if (choice == MemoryChoice.saved) {
-      return AppCard(
-        tone: CardTone.inset,
-        padding: const EdgeInsets.fromLTRB(S.x4, S.x1, S.x3, S.x1),
-        child: Row(
-          children: [
-            Icon(Icons.check_circle_outline_rounded, size: 18, color: p.ink2),
-            const SizedBox(width: S.x2),
-            Expanded(
-              child: Text(
-                'Saved to What Coach knows',
-                style: F.bodySm.copyWith(color: p.ink2),
-              ),
-            ),
-            AppButton(
-              label: 'View',
-              kind: AppButtonKind.quiet,
-              compact: true,
-              onTap: onOpenMemory,
-            ),
-          ],
-        ),
-      );
-    }
     return AppCard(
       padding: const EdgeInsets.fromLTRB(S.x4, S.x3, S.x4, S.x2),
       child: Column(
@@ -492,7 +221,8 @@ class RememberCard extends StatelessWidget {
   }
 }
 
-/// The deterministic safety answer: calm, distinct, and without sources.
+/// The deterministic safety answer: calm, distinct, and without sources,
+/// cards or chips.
 class SafetyAnswer extends StatelessWidget {
   const SafetyAnswer({super.key, required this.text});
   final String text;
@@ -516,11 +246,14 @@ class SafetyAnswer extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'For your safety',
-                  style: F.bodySm.copyWith(
-                    color: p.on(C.health),
-                    fontWeight: FontWeight.w700,
+                Semantics(
+                  header: true,
+                  child: Text(
+                    'For your safety',
+                    style: F.bodySm.copyWith(
+                      color: p.on(C.health),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 const SizedBox(height: S.x1),
@@ -534,38 +267,8 @@ class SafetyAnswer extends StatelessWidget {
   }
 }
 
-/// The quiet line that says which engine answered, when it wasn't the
-/// chosen model (model fallback).
-class _EngineNote extends StatelessWidget {
-  const _EngineNote({super.key, required this.text, required this.onDevice});
-  final String text;
-  final bool onDevice;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = P.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 1),
-          child: Icon(
-            onDevice ? Icons.phone_android_rounded : Icons.swap_horiz_rounded,
-            size: 14,
-            color: p.ink3,
-          ),
-        ),
-        const SizedBox(width: S.x1),
-        Expanded(
-          child: Text(text, style: F.cap.copyWith(color: p.ink3)),
-        ),
-      ],
-    );
-  }
-}
-
 /// What to do about each error.
-enum ErrorFix { setup, retry, none }
+enum ErrorFix { settings, retry, none }
 
 /// [message] is the stored answer text: only the daily limit shows it (the
 /// app's own budget message); every other kind has fixed copy here, so a
@@ -575,22 +278,25 @@ enum ErrorFix { setup, retry, none }
   CoachProvider provider, {
   String? message,
 }) {
-  final who = CoachCopy.company(provider);
+  final cloud = provider != CoachProvider.offline;
+  final who = cloud ? CoachCopy.company(provider) : 'your AI provider';
+  final name = cloud ? CoachCopy.providerName(provider) : 'The AI model';
+  final account = cloud ? who : 'AI';
   return switch (kind) {
     CoachErrorKind.notConfigured => (
-      title: 'Review coach settings',
+      title: 'Check Coach settings',
       body:
-          'Coach is not ready, or its settings changed during this answer. '
-          'Review setup or switch to on-device. No further requests were sent.',
-      fix: ErrorFix.setup,
-      action: 'Open setup',
+          'Coach’s settings changed while it was answering, so nothing more '
+          'was sent. Check them, or switch to On this phone.',
+      fix: ErrorFix.settings,
+      action: 'Open Coach settings',
     ),
     CoachErrorKind.invalidKey => (
-      title: 'Your key was not accepted',
+      title: 'Your key didn’t work',
       body:
-          '$who did not accept the saved API key. Paste it again in setup; '
-          'the old one is replaced.',
-      fix: ErrorFix.setup,
+          '$name didn’t accept your API key. Paste it again in '
+          '${CoachSettingsCopy.path}.',
+      fix: ErrorFix.settings,
       action: 'Fix the key',
     ),
     CoachErrorKind.rateLimited => (
@@ -600,20 +306,20 @@ enum ErrorFix { setup, retry, none }
       action: 'Try again',
     ),
     CoachErrorKind.quotaExceeded => (
-      title: 'Your provider account is out of credit',
+      title: 'Your $account account is out of credit',
       body:
-          'Add credit or raise the limit in the $who console, or switch to '
-          'on-device in setup.',
-      fix: ErrorFix.setup,
-      action: 'Open setup',
+          'Add credit in your $account account, or switch to On this phone '
+          'in ${CoachSettingsCopy.path}.',
+      fix: ErrorFix.settings,
+      action: 'Open Coach settings',
     ),
     CoachErrorKind.dailyLimit => (
       title: 'Today’s limit reached',
       body: (message?.trim().isNotEmpty ?? false)
           ? message!.trim()
           : CoachCopy.usageSpent,
-      fix: ErrorFix.setup,
-      action: 'Open setup',
+      fix: ErrorFix.settings,
+      action: 'Open Coach settings',
     ),
     CoachErrorKind.network => (
       title: 'No connection',
@@ -624,8 +330,8 @@ enum ErrorFix { setup, retry, none }
       action: 'Try again',
     ),
     CoachErrorKind.refused => (
-      title: "Coach couldn't answer that",
-      body: 'The model declined this question. Try asking it another way.',
+      title: '$name didn’t answer that',
+      body: 'Try asking it another way.',
       fix: ErrorFix.none,
       action: null,
     ),
@@ -637,9 +343,7 @@ enum ErrorFix { setup, retry, none }
     ),
     CoachErrorKind.unknown => (
       title: 'Something went wrong',
-      body:
-          'The answer did not complete. Your question may remain in chat. '
-          'Try again.',
+      body: 'The answer didn’t finish. Try again.',
       fix: ErrorFix.retry,
       action: 'Try again',
     ),
@@ -653,7 +357,7 @@ class ErrorAnswer extends StatelessWidget {
     required this.kind,
     required this.provider,
     this.message,
-    this.onSetup,
+    this.onSettings,
     this.onRetry,
   });
 
@@ -662,14 +366,14 @@ class ErrorAnswer extends StatelessWidget {
 
   /// The stored answer text (shown only for [CoachErrorKind.dailyLimit]).
   final String? message;
-  final VoidCallback? onSetup;
+  final VoidCallback? onSettings;
   final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final c = errorCopy(kind, provider, message: message);
     final onAction = switch (c.fix) {
-      ErrorFix.setup => onSetup,
+      ErrorFix.settings => onSettings,
       ErrorFix.retry => onRetry,
       ErrorFix.none => null,
     };
@@ -680,64 +384,6 @@ class ErrorAnswer extends StatelessWidget {
       icon: Icons.error_outline_rounded,
       actionLabel: onAction == null ? null : c.action,
       onAction: onAction,
-    );
-  }
-}
-
-/// The waiting state: a static, answer-shaped skeleton (three text lines
-/// and a row of source chips) under "Checking your data…". Fades in once,
-/// never loops, never a spinner.
-class WaitingRow extends StatelessWidget {
-  const WaitingRow({super.key, required this.generalOnly});
-  final bool generalOnly;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = P.of(context);
-    final label = generalOnly ? 'Working on it…' : 'Checking your data…';
-    return CoachEnter(
-      play: true,
-      child: Semantics(
-        liveRegion: true,
-        label: label,
-        child: ExcludeSemantics(
-          child: Column(
-            key: const ValueKey('waiting-skeleton'),
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.manage_search_rounded, size: 18, color: p.ink3),
-                  const SizedBox(width: S.x2),
-                  Text(label, style: F.bodySm.copyWith(color: p.ink2)),
-                ],
-              ),
-              const SizedBox(height: S.x3),
-              const SkeletonBox(height: 12),
-              const SizedBox(height: S.x2 + 2),
-              const FractionallySizedBox(
-                widthFactor: .92,
-                child: SkeletonBox(height: 12),
-              ),
-              const SizedBox(height: S.x2 + 2),
-              const FractionallySizedBox(
-                widthFactor: .6,
-                child: SkeletonBox(height: 12),
-              ),
-              if (!generalOnly) ...[
-                const SizedBox(height: S.x4),
-                const Row(
-                  children: [
-                    SkeletonBox(width: 120, height: 32, radius: R.rMd),
-                    SizedBox(width: S.x2),
-                    SkeletonBox(width: 96, height: 32, radius: R.rMd),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -754,7 +400,7 @@ class DiscussPin extends StatelessWidget {
     final b = body;
     return Semantics(
       container: true,
-      label: 'Discussing: $headline.${b == null ? '' : ' $b'}',
+      label: 'About this card: $headline.${b == null ? '' : ' $b'}',
       child: ExcludeSemantics(
         child: AppCard(
           key: const ValueKey('discuss-pin'),
@@ -773,7 +419,7 @@ class DiscussPin extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Discussing: $headline',
+                      'About this card: $headline',
                       style: F.bodySm.copyWith(
                         color: p.ink,
                         fontWeight: FontWeight.w700,
@@ -799,68 +445,136 @@ class DiscussPin extends StatelessWidget {
   }
 }
 
-/// Suggested questions as pills. Tapping one fills the composer; nothing
-/// is sent until the user taps send.
+/// Suggested questions as pills, in one row that scrolls sideways. Tapping
+/// one fills the composer; nothing is sent until the user taps send. With
+/// [play], fresh chips enter once, one after another (EnterFade: fade and
+/// an 8 px rise, 30 ms apart; fade only under reduced motion).
 class FollowUpChips extends StatelessWidget {
-  const FollowUpChips({super.key, required this.items, required this.onPick});
+  const FollowUpChips({
+    super.key,
+    required this.items,
+    required this.onPick,
+    this.play = false,
+  });
   final List<String> items;
   final ValueChanged<String> onPick;
+  final bool play;
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
-    return Wrap(
-      spacing: S.x2,
-      runSpacing: 0,
-      children: [
-        for (final q in items)
-          Pressable(
-            key: ValueKey('follow-up-$q'),
-            onTap: () => onPick(q),
-            semanticLabel: 'Suggested: $q. Fills the question box.',
-            scale: .96,
-            child: ExcludeSemantics(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: S.x3,
-                  vertical: S.x2,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: S.gutter),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) const SizedBox(width: S.x2),
+            EnterFade(
+              index: i,
+              enabled: play,
+              child: Pressable(
+                key: ValueKey('follow-up-${items[i]}'),
+                onTap: () => onPick(items[i]),
+                semanticLabel:
+                    'Suggested: ${items[i]}. Fills the question box.',
+                scale: .96,
+                child: ExcludeSemantics(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: S.x3,
+                      vertical: S.x2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: p.card,
+                      borderRadius: R.rPill,
+                      border: Border.all(color: p.line),
+                    ),
+                    child: Text(
+                      items[i],
+                      style: F.bodySm.copyWith(color: p.ink),
+                    ),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  borderRadius: R.rPill,
-                  border: Border.all(color: p.line),
-                ),
-                child: Text(q, style: F.bodySm.copyWith(color: p.ink)),
               ),
             ),
-          ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 }
 
-/// The AI disclosure at the start of every cloud chat session.
-class DisclosureCard extends StatelessWidget {
-  const DisclosureCard({super.key, required this.provider});
+/// The AI disclosure a cloud session opens with: one quiet centred line,
+/// no card (Anthropic's usage policy asks for it).
+class DisclosureLine extends StatelessWidget {
+  const DisclosureLine({super.key, required this.provider});
   final CoachProvider provider;
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
-    return AppCard(
-      tone: CardTone.inset,
-      padding: const EdgeInsets.all(S.x4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.smart_toy_outlined, size: 18, color: p.ink2),
-          const SizedBox(width: S.x3),
-          Expanded(
-            child: Text(
-              CoachCopy.aiDisclosure(provider),
-              style: F.cap.copyWith(color: p.ink2),
-            ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: S.x4),
+      child: Text(
+        CoachCopy.aiDisclosure(provider),
+        textAlign: TextAlign.center,
+        style: F.cap.copyWith(color: p.ink3),
+      ),
+    );
+  }
+}
+
+/// A small status note in the thread ("Saved to What Coach knows · View").
+class StatusToast extends StatelessWidget {
+  const StatusToast({
+    super.key,
+    required this.icon,
+    required this.text,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String text;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
+    final action = actionLabel;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        liveRegion: true,
+        container: true,
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            S.x3,
+            action == null ? S.x2 : 0,
+            action == null ? S.x3 : S.x1,
+            action == null ? S.x2 : 0,
           ),
-        ],
+          decoration: BoxDecoration(color: p.card2, borderRadius: R.rPill),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: p.on(C.recGreen)),
+              const SizedBox(width: S.x2),
+              Flexible(
+                child: Text(text, style: F.cap.copyWith(color: p.ink2)),
+              ),
+              if (action != null)
+                AppButton(
+                  label: action,
+                  kind: AppButtonKind.quiet,
+                  compact: true,
+                  onTap: onAction,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

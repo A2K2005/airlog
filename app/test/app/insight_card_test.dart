@@ -229,7 +229,7 @@ void main() {
       expect(find.byType(InsightFeed), findsOneWidget);
       expect(find.text('Unwired'), findsNothing);
       expect(find.text(CoachCopy.askAboutThis), findsOneWidget);
-      expect(find.bySemanticsLabel('Ask the coach'), findsOneWidget);
+      expect(find.bySemanticsLabel('Ask Coach'), findsOneWidget);
       expect(t.takeException(), isNull);
     });
 
@@ -254,7 +254,7 @@ void main() {
       expect(find.text("Here's how you slept"), findsNothing);
       expect(find.text('A moderate day so far'), findsNothing);
       expect(find.text(CoachCopy.askAboutThis), findsNothing);
-      expect(find.bySemanticsLabel('Ask the coach'), findsNothing);
+      expect(find.bySemanticsLabel('Ask Coach'), findsNothing);
     });
   });
 
