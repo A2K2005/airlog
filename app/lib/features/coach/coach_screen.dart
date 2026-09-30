@@ -70,14 +70,16 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
   CoachChatViewModel get _vm => ref.read(coachChatProvider(launch).notifier);
 
   Future<void> _send([String? text]) async {
+    if (ref.read(coachChatProvider(launch)).value?.sending ?? true) return;
     final q = (text ?? _input.text).trim();
     if (q.isEmpty) return;
     final sent = _vm.send(q);
     _input.clear();
     _toLatest();
     await sent;
+    if (!mounted) return;
     _toLatest();
-    if (mounted) ref.invalidate(coachUsageProvider);
+    ref.invalidate(coachUsageProvider);
   }
 
   /// A suggestion tap: puts [q] in the composer. Nothing is sent until the
@@ -181,6 +183,20 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     return yes == true;
   }
 
+  /// "Ask (provider) again" under an answer written on this phone as the
+  /// fallback, once the chosen model is no longer known to be down.
+  VoidCallback? _askAgainFor(CoachChatState s, CoachConfig cfg, ChatMessage m) {
+    final from = m.fallbackFrom;
+    if (m.answeredBy != ChatMessage.onDevice || from == null) return null;
+    if (!cfg.cloud || !cfg.ready || s.sending) return null;
+    final down = ref.watch(coachModelDownProvider(from));
+    if (down.isLoading || down.value != null) return null;
+    return () {
+      _toLatest();
+      _vm.askAgain(m.id);
+    };
+  }
+
   Future<void> _pickCategory(ChatMessage m, int i, MemoryCategory cur) async {
     final c = await showCategorySheet(context, cur);
     if (c != null) _vm.pickCategory(m.id, i, c);
@@ -265,7 +281,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
             sending: s?.sending ?? false,
             enabled: s != null && cfgAsync.hasValue && cfg.ready && !spent,
             length: cfg.settings.length,
-            onLength: cfgAsync.hasValue
+            onLength: cfgAsync.hasValue && !(s?.sending ?? false)
                 ? (l) async {
                     await saveLength(ref.read(coachRepositoryProvider), l);
                     ref.invalidate(coachConfigProvider);
@@ -489,6 +505,12 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
       child = AnswerView(
         message: m,
         sample: isSampleData(ref),
+        engineNote: CoachCopy.answeredByNote(
+          m.sent?.provider ?? cfg.provider,
+          m,
+        ),
+        askAgainLabel: CoachCopy.askAgain(m.sent?.provider ?? cfg.provider),
+        onAskAgain: _askAgainFor(s, cfg, m),
         reported: s.reported.contains(m.id),
         memoryOn: cfg.memoryOn,
         onOpenRef: (r) => openRef(context, ref, r),

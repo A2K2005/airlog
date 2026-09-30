@@ -207,7 +207,8 @@ void main() {
       expect(b.containsKey('thinking'), isFalse);
     });
 
-    test('Haiku 4.5: no beta header, no effort, no fallbacks', () async {
+    test('Haiku 4.5: manual extended thinking (2048 below max_tokens); no '
+        'beta header, no effort, no adaptive, no fallbacks', () async {
       final (c, seen) = _client([
         _json(_textResponse('ok')),
       ], model: 'claude-haiku-4-5');
@@ -218,13 +219,70 @@ void main() {
       expect(b['model'], 'claude-haiku-4-5');
       expect(b.containsKey('output_config'), isFalse);
       expect(b.containsKey('fallbacks'), isFalse);
-      expect(b.containsKey('thinking'), isFalse);
+      expect(b['thinking'], {'type': 'enabled', 'budget_tokens': 2048});
+      expect(
+        (b['thinking'] as Map)['budget_tokens'] as int,
+        lessThan(b['max_tokens'] as int),
+      );
       expect(b['tool_choice'], {'type': 'auto'});
       expect(
         (b['tools'] as List).every((t) => (t as Map)['strict'] == true),
         isTrue,
       );
     });
+
+    test(
+      'Haiku 4.5 replays its thinking blocks unchanged in the tool loop',
+      () async {
+        final first = {
+          'id': 'msg_h1',
+          'type': 'message',
+          'role': 'assistant',
+          'model': 'claude-haiku-4-5',
+          'content': [
+            {
+              'type': 'thinking',
+              'thinking': 'Need today.',
+              'signature': 'hSig',
+            },
+            {
+              'type': 'tool_use',
+              'id': 'toolu_h1',
+              'name': 'get_today_summary',
+              'input': <String, dynamic>{},
+            },
+          ],
+          'stop_reason': 'tool_use',
+          'usage': {'input_tokens': 10, 'output_tokens': 5},
+        };
+        final (c, seen) = _client([
+          _json(first),
+          _json(_textResponse('Done.')),
+        ], model: 'claude-haiku-4-5');
+        final t1 = await _ask(c);
+        await _ask(
+          c,
+          transcript: [
+            const LlmUser('How did I sleep?'),
+            LlmAssistant(t1),
+            const LlmToolResults([
+              ToolResult(
+                callId: 'toolu_h1',
+                name: 'get_today_summary',
+                content: {'ok': true},
+              ),
+            ]),
+          ],
+        );
+        final b = _body(seen[1]);
+        expect(b['thinking'], {'type': 'enabled', 'budget_tokens': 2048});
+        final msgs = _messages(seen[1]);
+        expect(msgs[1]['role'], 'assistant');
+        // The assistant turn goes back exactly as received: thinking first,
+        // signature intact (manual mode requires it before the tool_use).
+        expect(msgs[1]['content'], first['content']);
+      },
+    );
 
     test('no tools: tools and tool_choice are omitted', () async {
       final (c, seen) = _client([_json(_textResponse('ok'))]);

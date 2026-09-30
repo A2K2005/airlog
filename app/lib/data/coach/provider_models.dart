@@ -28,6 +28,7 @@ class LlmModelSpec {
     required this.inputUsdPerMTok,
     required this.outputUsdPerMTok,
     this.effort,
+    this.thinkingBudget,
     this.serverFallback = false,
     this.priceNote,
   });
@@ -47,6 +48,15 @@ class LlmModelSpec {
   /// Claude `output_config.effort`; null = the field is omitted (Haiku 4.5
   /// has no effort parameter).
   final String? effort;
+
+  /// Claude models before 4.6 (Haiku 4.5) think only in manual mode:
+  /// `thinking: {type: "enabled", budget_tokens: N}`, N ≥ 1024 and below
+  /// `max_tokens`. They take neither adaptive thinking (a 400) nor effort.
+  /// Null = send no `thinking` (Opus / Sonnet 5.5 think adaptively by
+  /// default and reject `enabled`). Source: platform.claude.com/docs/en/
+  /// build-with-claude/extended-thinking ("Budget rules and tuning";
+  /// "Migrating to adaptive thinking"), read 2026-09-30.
+  final int? thinkingBudget;
 
   /// Claude only: send `fallbacks: "default"` with the
   /// [ClaudeApi.serverFallbackBeta] header (safety-classifier declines are
@@ -102,6 +112,9 @@ abstract final class ProviderModels {
       label: 'Claude Haiku 4.5',
       inputUsdPerMTok: 1,
       outputUsdPerMTok: 5,
+      // As a backup for Opus / Sonnet (medium effort) it still reasons
+      // before it answers: a fixed thinking budget, well under max_tokens.
+      thinkingBudget: 2048,
     ),
   ];
 
@@ -144,6 +157,37 @@ abstract final class ProviderModels {
     for (final m in all)
       if (m.provider == provider) m,
   ];
+
+  /// "Use a backup model when busy": each provider's models, in the order
+  /// the coach falls back through them (same key; never another provider,
+  /// because consent covers one). PRODUCT_PLAN §7 "Coach model fallback".
+  static const chains = <CoachProvider, List<String>>{
+    CoachProvider.claude: [claudeOpus, claudeSonnet, claudeHaiku],
+    CoachProvider.gemini: [geminiFlash, geminiFlashLite],
+  };
+
+  /// The models to try for one question, in order: [model] (or the
+  /// provider's default), then, when [backups], the models after it in its
+  /// provider's chain (a model outside the chain is followed by the whole
+  /// chain). Empty for offline.
+  static List<String> chainFor(
+    CoachProvider provider,
+    String? model, {
+    bool backups = true,
+  }) {
+    final first = (model == null || model.trim().isEmpty)
+        ? defaultFor(provider)
+        : model.trim();
+    if (first == null) return const [];
+    if (!backups) return [first];
+    final chain = chains[provider] ?? const <String>[];
+    final at = chain.indexOf(first);
+    return [
+      first,
+      for (final m in at < 0 ? chain : chain.sublist(at + 1))
+        if (m != first) m,
+    ];
+  }
 }
 
 /// Estimated cost in USD of one request at list prices, or null for an

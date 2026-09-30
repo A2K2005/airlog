@@ -10,10 +10,6 @@ Built end to end on 90 days of sample data. Next milestone: field validation on 
 
 ![Airlog's Today, Recovery, Sleep and Trends screens for the same sample day: a plan headed "Ready to push", Recovery 78, 7 h 1 m of sleep against a 7 h 51 m target, and 30 days of recovery and strain](docs/readme/hero.png)
 
-<img src="docs/readme/metrics.svg" width="100%" alt="Airlog in numbers: 1,019 automated tests passing in the last full local run; 361 of 361 coach claims traced to the user's data; 88 of 88 planted hallucinations caught; 83 of 83 red-flag questions routed to safety copy, with 0 of 85 benign questions flagged; 18 of 18 UI tiles pass a pixel-diff test against the source design; 0 Airlog servers or accounts">
-
-<sub>The coach figures are regression gates run with a scripted model on sample data. Next: a live benchmark across Claude and Gemini models.</sub>
-
 [Product plan](PRODUCT_PLAN.md) · [Research](research/) · [Architecture](app/ARCHITECTURE.md) · [Coach evals](app/docs/EVALS.md) · [Build and run](app/README.md)
 
 ---

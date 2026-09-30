@@ -12,6 +12,7 @@ class InMemoryCoachRepository extends CoachRepositoryImpl {
     CoachSettings settings = const CoachSettings(),
     super.clock,
     super.clients,
+    super.onDevice,
     Map<CoachProvider, String> keys = const {},
   }) : super(
          store: MemoryCoachStore(),

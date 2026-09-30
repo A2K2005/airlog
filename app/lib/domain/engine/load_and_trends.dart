@@ -63,6 +63,7 @@ abstract final class TrendMath {
 
 abstract final class TrainingLoadEngine {
   static const int minDays = 14;
+  static const int minAcuteDays = 5;
 
   /// Acute and chronic windows (calendar days).
   static const int acuteDays = 7, chronicDays = 28;
@@ -78,7 +79,7 @@ abstract final class TrainingLoadEngine {
     ];
     final acute = window(acuteDays);
     final chronic = window(chronicDays);
-    if (chronic.length < minDays || acute.isEmpty) return null;
+    if (chronic.length < minDays || acute.length < minAcuteDays) return null;
     final acute7 = Stats.mean(acute);
     final chronic28 = Stats.mean(chronic);
     if (!(chronic28 > 0)) return null;

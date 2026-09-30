@@ -34,7 +34,7 @@ class TodayScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(todayViewModelProvider);
     final vm = ref.read(todayViewModelProvider.notifier);
-    final now = ref.watch(clockProvider)();
+    final now = ref.watch(currentTimeProvider);
     final sync = ref.watch(syncStatusProvider).value;
     final plan = ref.watch(todayPlanProvider);
     final s = async.value;
@@ -300,7 +300,9 @@ class TodayScreen extends ConsumerWidget {
   static double? bandPosition(HealthMetricStatus st) {
     final v = st.value, lo = st.lower, hi = st.upper;
     if (v == null) return null;
-    if (lo == null || hi == null || hi <= lo) return .5;
+    // An unknown or one-sided range has no defensible normalized position.
+    // Keep its measured text/status, but do not invent a centred marker.
+    if (lo == null || hi == null || hi <= lo) return null;
     return (.15 + .7 * (v - lo) / (hi - lo)).clamp(0.0, 1.0);
   }
 
@@ -396,7 +398,8 @@ class TodayScreen extends ConsumerWidget {
         AlertSegment(out.length.toDouble(), C.amber),
         AlertSegment((judged - out.length).toDouble(), C.recGreen),
       ],
-      axis: [for (final t in s.health) t.status.kind.label],
+      // This bar counts judged metrics by status; it is not a time series
+      // or an axis locating each vital. Individual readings are above it.
       onTap: () => showExplainSheet<void>(
         context,
         title: a.title,

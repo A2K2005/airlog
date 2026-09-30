@@ -209,6 +209,28 @@ void main() {
       },
     );
 
+    test('Flash-Lite (the backup) reasons at the same level as Flash for '
+        'each answer length', () async {
+      for (final length in ResponseLength.values) {
+        final configs = <Object?>[];
+        for (final model in [
+          ProviderModels.geminiFlash,
+          ProviderModels.geminiFlashLite,
+        ]) {
+          final (c, seen) = _client([
+            _json(
+              _candidate([
+                {'text': 'ok'},
+              ]),
+            ),
+          ], model: model);
+          await _ask(c, length: length);
+          configs.add(_body(seen.single)['generationConfig']);
+        }
+        expect(configs[1], configs[0], reason: length.name);
+      }
+    });
+
     test('no tools: tools and toolConfig are omitted', () async {
       final (c, seen) = _client([
         _json(

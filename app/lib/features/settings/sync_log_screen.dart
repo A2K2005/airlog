@@ -51,7 +51,7 @@ class SyncLogScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(syncLogViewProvider);
-    final now = ref.watch(clockProvider)();
+    final now = ref.watch(currentTimeProvider);
     final v = async.value;
     final p = P.of(context);
     final List<Widget> body;

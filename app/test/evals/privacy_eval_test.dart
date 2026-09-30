@@ -253,8 +253,12 @@ void main() {
         ));
     final m2 = cloud(h, bad);
     final err = await m2.service.ask('What drove my recovery today?');
+    // Model fallback (PRODUCT_PLAN §7): a rejected key is account-wide, so
+    // the question is answered on this phone and the reason is recorded;
+    // the key still appears nowhere.
     check('key: never in error text',
-        err.error == CoachErrorKind.invalidKey.name &&
+        err.fallbackReason == CoachErrorKind.invalidKey.name &&
+            err.answeredBy == ChatMessage.onDevice &&
             !err.text.contains(kKey) &&
             !jsonEncode(err.toJson()).contains(kKey),
         err.text);

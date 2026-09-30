@@ -283,6 +283,25 @@ class MemoryRawStore implements RawStore {
 }
 
 class MemoryAppStore implements AppStore {
+  @override
+  Future<T> mutate<T>(Future<T> Function() body, {DataMode? mode}) async {
+    if (mode != null) await setSetting('data.pending.${mode.name}', 'true');
+    return body();
+  }
+
+  @override
+  Future<List<DayBundle>> bundles(
+    DataMode mode,
+    String from,
+    String to,
+  ) async => [
+    for (final e in _records.entries)
+      if (e.key.$1 == mode &&
+          e.key.$2.compareTo(from) >= 0 &&
+          e.key.$2.compareTo(to) <= 0 &&
+          _results[e.key] != null)
+        DayBundle(e.value, _results[e.key]!),
+  ]..sort((a, b) => a.date.compareTo(b.date));
   final Map<(DataMode, String), DayRecord> _records = {};
   final Map<(DataMode, String), DayResult> _results = {};
   final Map<(DataMode, String), JournalEntry> _journal = {};
@@ -296,6 +315,7 @@ class MemoryAppStore implements AppStore {
     List<DayResult> results, {
     String? clearFrom,
   }) {
+    _settings.remove('data.pending.${mode.name}');
     if (clearFrom != null) {
       _records.removeWhere(
         (k, _) => k.$1 == mode && k.$2.compareTo(clearFrom) >= 0,

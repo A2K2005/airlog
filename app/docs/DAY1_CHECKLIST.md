@@ -1,6 +1,6 @@
 # Day 1 with the Fitbit Air: the Phase 0 probe
 
-The app runs on synthetic data until the band arrives. This checklist switches it to real data and answers the four questions that gate the design (PRODUCT_PLAN.md §5, Phase 0).
+This is an **unexecuted physical-device acceptance checklist**, not evidence of tracker compatibility. Demo data is opt-in; new live installs may have no data. Record device/OS, source-app versions, build and timestamps for every check. Vendor menu paths and capabilities below are historical suggestions to verify, not guarantees.
 
 ## Before the band arrives
 - [ ] Install the debug APK on your phone (`flutter install` or `adb install`, see README).
@@ -18,9 +18,9 @@ Open Settings → **Diagnostics** and tap *Run probe (7 days)*. Record the resul
 | Question | Where to look | Result | Decision |
 |---|---|---|---|
 | 1. Do HR, HRV, RHR, respiratory rate, skin temp and **SpO₂** exist **from the Air**? (Google Health declares write permission for all of them; research/07) | Diagnostics → per-type origins/devices (expect `com.fitbit.FitbitMobile` with device "Fitbit Air", not a Pixel Watch) | | If HR or HRV is missing: enable **Enhanced mode** (Google Health API) as the primary source for them |
-| 2. HR density | Diagnostics → HEART_RATE median spacing / samples per hour | | ≤ 60 s → full zone-based Strain; sparser → the engine falls back automatically (shown as "estimated" on Strain) |
-| 3. HRV frequency | Diagnostics → HEART_RATE_VARIABILITY_RMSSD samples per night | | ≥ 1 per 10 min asleep → nightly mean is solid; 1 per night → still fine for Recovery |
-| 4. RR intervals over Bluetooth | Live → connect to the Air (after enabling "share heart rate" on the band) → does *HRV check* unlock? | | Yes → on-demand HRV and stress are available; no → hide them (already automatic) |
+| 2. HR density | Diagnostics → HEART_RATE median spacing / samples per hour, full-day coverage | | Sparse HR remains partial, not a steps/MET strain estimate. No usable HR anchors means unavailable. Check that partial days do not enter training-load comparisons |
+| 3. HRV frequency | Diagnostics → HEART_RATE_VARIABILITY_RMSSD samples per night, origin/device and definition | | Confirm accepted nightly RMSSD semantics. One sample is not proof of measurement quality; inspect coverage/confidence and missing-input messaging |
+| 4. RR intervals over Bluetooth | Live → connect to the tracker, if it supports HR sharing → does *HRV check* unlock? | | Confirm actual RR payloads and clean disconnect behavior. An HRV check is not a validated stress assessment |
 
 Also note:
 - **Sync latency:** time from waking to the sleep session appearing.
@@ -33,13 +33,24 @@ Share the probe JSON from Diagnostics → *Share dump* if you want these numbers
 1. Create a Google Cloud project, enable the Google Health API, and create an **Android OAuth client**:
    - package `app.airlog.airlog`
    - your debug SHA-1, from `cd android && ./gradlew signingReport`
-2. On the OAuth consent screen, add yourself as a test user. Publishing the client "In production" while unverified avoids 7-day re-auth; on day 8, check that tokens still refresh.
+2. Configure permitted test users and the consent screen according to current provider requirements. Do not change publishing status solely to bypass a token-expiry expectation; test actual token refresh after the applicable expiry period.
 3. Build with `--dart-define=GOOGLE_OAUTH_CLIENT_ID=<id>` (see README), then Settings → Sources → **Connect Google Health**.
 4. Optional cross-check from this PC: the `ghealth` CLI (Google-Health-API GitHub org) with the same project.
 
 ## After 14 nights
-- The Recovery calibration banner disappears, and scores move from *provisional* to *established*.
-- Compare against how you feel for 2 weeks (Phase 1 exit criterion). Tune only constants, bump `kAlgoVersion`, and recompute; the history is versioned.
+- Check calibration against qualifying nights from the selected comparable source, not elapsed calendar days. Missing inputs can still leave confidence low; no effort target should appear from low-confidence recovery.
+- Compare against how you feel for 2 weeks as a usability check, not clinical validation. Any algorithm change needs regression review, a `kAlgoVersion` bump and recomputation. Stored rows carry a version; they are not an archive of every prior algorithm's output.
+
+## Launch regressions to exercise
+
+- [ ] Sleep duration without stages shows stages/restorative sleep unavailable, not fabricated Light sleep.
+- [ ] Source/device changes do not produce a physiological trend from the source step alone.
+- [ ] Live zones and strain use the same known HR anchors; without anchors they remain unavailable.
+- [ ] Pause/resume and midnight update Today/freshness without reopening the app.
+- [ ] Interrupt a sync, relaunch, then verify historical edits/deletions and scores converge.
+- [ ] Delete data while a sync is delayed; old work must not repopulate it.
+- [ ] Large text and screen-reader alternatives remain readable on a small phone.
+- [ ] Known under-18 profiles do not receive scoring or coaching prescriptions.
 
 ## Using another app (Samsung Health, WHOOP, Oura, …)
 

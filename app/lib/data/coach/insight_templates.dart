@@ -93,6 +93,9 @@ abstract final class InsightTemplates {
   static int revisionOf(Insight i) {
     var h = 0x811c9dc5;
     final s = StringBuffer(textOf(i));
+    for (final id in i.usedMemoryIds) {
+      s.write('|memory:$id');
+    }
     for (final r in i.refs) {
       s.write('|${r.label}=${r.value}${r.unit}@${r.date}');
     }
@@ -214,7 +217,7 @@ abstract final class InsightTemplates {
     }
     final deep = sl.stageMinutes[SleepStage.deep] ?? 0;
     final rem = sl.stageMinutes[SleepStage.rem] ?? 0;
-    if (deep > 0 && rem > 0) {
+    if (sl.hasStageData && deep > 0 && rem > 0) {
       final dr = x.add('Deep sleep · $day', deep, 'min', date: d, route: rt);
       final rr = x.add('REM sleep · $day', rem, 'min', date: d, route: rt);
       bullets.add(

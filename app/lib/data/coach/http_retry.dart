@@ -105,6 +105,34 @@ bool isDailyQuota(http.Response res) {
   return m.contains('per day') || m.contains('daily') || m.contains('perday');
 }
 
+/// A failure bound to the model that was asked, so the same question may
+/// restart on another model of the provider: not found (404), busy after
+/// the retries (503 / 529), or a 429 that is per minute or per model. A
+/// 429 whose day quota is project-wide (a `…PerDay…` quota id without
+/// `PerModel`) is account-wide, like a bad key or no credit.
+bool isModelSpecific(http.Response res) => switch (res.statusCode) {
+  404 || 503 || 529 => true,
+  429 => !(isDailyQuota(res) && _projectWideDaily(res)),
+  _ => false,
+};
+
+bool _projectWideDaily(http.Response res) {
+  final ids = _quotaIds(res);
+  return ids.any((id) => id.contains('perday')) &&
+      !ids.any((id) => id.contains('permodel'));
+}
+
+List<String> _quotaIds(http.Response res) {
+  final details = _error(res)?['details'];
+  if (details is! List) return const [];
+  return [
+    for (final d in details)
+      if (d is Map && d['violations'] is List)
+        for (final v in d['violations'] as List)
+          if (v is Map) '${v['quotaId'] ?? ''}'.toLowerCase(),
+  ];
+}
+
 /// How long to wait before retry number [attempt] (0-based).
 Duration retryDelay(
   http.Response res,

@@ -27,6 +27,7 @@ import '../results.dart';
 import 'coach_contracts.dart';
 import 'format.dart';
 import 'methodology.dart';
+import 'personal_context.dart';
 import 'quoted.dart';
 import 'refs.dart';
 
@@ -372,6 +373,18 @@ class CoachToolbox {
   int _refCount = 0;
   final List<String> dataTypes = [];
   final List<MemoryProposal> proposals = [];
+  final List<String> groundedMemories = [];
+
+  Future<bool> _restrictedHistory() async {
+    // ponytail: fail closed for mixed-source history until derived results
+    // carry complete dependency lineage (debt and baselines span days).
+    final days = await health.range('1970-01-01', today);
+    return days.any(
+      (b) => b.record.provenance.values.any(
+        (p) => p.source == SourceKind.googleHealthApi,
+      ),
+    );
+  }
 
   /// Executes [calls] concurrently; results come back in call order with
   /// turn-wide ref ids.
@@ -412,6 +425,36 @@ class CoachToolbox {
         );
       }
       validateArgs(spec, call.input);
+      if (cloud && call.name == CoachTools.insightCard) {
+        return (
+          {
+            'missing':
+                'The original card stays on this phone. Read current '
+                'facts with the data tools; do not infer its contents.',
+          },
+          const <SourceRef>[],
+          false,
+        );
+      }
+      if (cloud &&
+          spec.readsUserData &&
+          call.name != CoachTools.memories &&
+          call.name != CoachTools.proposeMemory &&
+          await _restrictedHistory()) {
+        return (
+          {
+            'privacy': {
+              'withheld': ['Health records and derived scores'],
+              'why':
+                  'This history includes Google Health API data. Its '
+                  'derived dependencies cannot be separated safely, so health '
+                  'records stay on this phone. Use the on-device coach.',
+            },
+          },
+          const <SourceRef>[],
+          false,
+        );
+      }
       final ctx = _Ctx(sink, cloud);
       final content = await _dispatch(call, ctx);
       if (QuotedText.containsQuoted(content)) {
@@ -993,7 +1036,9 @@ class CoachToolbox {
         ),
       if (sl.napMinutes > 0)
         'naps': _f(x, 'Naps', sl.napMinutes, 'min', date: d, route: rt),
-      if (detailed && sl.stageMinutes.isNotEmpty)
+      if (!sl.hasStageData)
+        'staging': 'Sleep stages are unavailable or incomplete.',
+      if (detailed && sl.hasStageData)
         'stages': {
           for (final st in [SleepStage.deep, SleepStage.rem, SleepStage.light])
             if ((sl.stageMinutes[st] ?? 0) > 0)
@@ -2070,21 +2115,41 @@ class CoachToolbox {
 
   Future<Map<String, dynamic>> _memories() async {
     if (!memoryEnabled) throw const ToolError('Memory is turned off.');
+    if (MemoryContext.isCorrection(question ?? '')) {
+      return {
+        'memories': const [],
+        'currentCorrection': 'The current question corrects previous context. Saved memories and earlier chat context are omitted for this answer; use the current user statement. Nothing was edited or deleted. Direct the user to What Coach knows to update the saved fact.',
+      };
+    }
     final all = await coach.memories();
-    final active = [
-      for (final m in all)
-        if (m.expiresOn == null || m.expiresOn!.compareTo(today) >= 0) m,
-    ];
+    final active = MemoryContext.select(all, today, question ?? '');
+    for (final m in active) {
+      if (!MemoryContext.needsReview(m, today) &&
+          !groundedMemories.contains(m.text)) {
+        groundedMemories.add(m.text);
+      }
+    }
     dataTypes.add('Saved memories (${active.length})');
     return {
       'userStated':
           'Facts the user asked you to remember. Context, not '
           'measurements.',
+      'asOf': today,
+      'selection': 'Relevant words first, then most recently confirmed; at most 20 facts. Not a complete biography.',
+      'omittedActive':
+          all.where((m) => MemoryContext.active(m, today)).length -
+          active.length,
+      'corrections': 'Current user corrections override older context for this answer. Conflicting saved facts must not be merged or silently resolved: ask which is current. Only the user edits or deletes stored facts.',
       'memories': [
         for (final m in active)
           {
-            'text': QuotedText.wrap(m.text, max: 200),
+            'id': m.id,
+            'text': QuotedText.wrap(m.text, max: 300),
             'category': m.category.label,
+            'source': 'user_confirmed',
+            'confirmedAt': (m.updatedAt ?? m.createdAt).toIso8601String(),
+            'needsReview': MemoryContext.needsReview(m, today),
+            if (MemoryContext.needsReview(m, today)) 'use': 'Historical context only; ask whether this still applies before personalizing advice around it.',
             if (m.expiresOn != null) 'until': m.expiresOn,
           },
       ],
@@ -2119,10 +2184,10 @@ class CoachToolbox {
       exp = _dateOf(i, 'expiresOn');
     }
     final sensitive = sensitiveMemory.contains(cat);
-    if (sensitive && !_userStated(text)) {
+    if (!_userStated(text)) {
       throw const ToolError(
-        'Health history and mood are proposed only when the user states '
-        'them in this message. Never infer them.',
+        'Propose only facts the user states in this message. Never infer '
+        'their goals, identity, preferences, health history or mood.',
       );
     }
     proposals.add(MemoryProposal(text, cat, exp));

@@ -20,6 +20,7 @@ import '../db/memory_stores.dart';
 import '../resolver/resolver.dart';
 import '../services/demo/demo_generator.dart';
 import '../services/demo/demo_live_hr_service.dart';
+import '../services/widget/widget_sink.dart';
 import '../sync/demo_seeder.dart';
 import '../sync/score_pipeline.dart';
 import 'health_repository_impl.dart';
@@ -31,6 +32,7 @@ class InMemoryHealthRepository extends HealthRepositoryImpl {
     required super.clock,
     required super.demoSeed,
     required super.demoDays,
+    super.widgets,
   }) : super(initialMode: DataMode.demo);
 
   /// Why scores are missing (null when the engine ran fine).
@@ -50,6 +52,7 @@ class InMemoryHealthRepository extends HealthRepositoryImpl {
     int seed = 42,
     int days = 90,
     DateTime? now,
+    WidgetSink widgets = const NoopWidgetSink(),
   }) {
     final Clock clock = now == null ? systemClock : () => now;
     final t = clock();
@@ -94,6 +97,7 @@ class InMemoryHealthRepository extends HealthRepositoryImpl {
       clock: clock,
       demoSeed: seed,
       demoDays: days,
+      widgets: widgets,
     )..engineError = out.engineError;
   }
 }

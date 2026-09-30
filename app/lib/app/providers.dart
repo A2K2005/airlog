@@ -4,6 +4,9 @@
 // main.dart overrides the two root providers with the real data layer;
 // tests override them with fakes. Additive changes only.
 
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/coach/coach_contracts.dart';
@@ -78,6 +81,46 @@ final dataModeProvider = Provider<DataMode>((ref) {
 /// can pin time (override with the same `now` the demo repository uses).
 /// [screens, additive]
 final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// Time is an input even when no health data changed. Kept separate from the
+/// injected clock so deterministic fixtures can still own the wall clock.
+final clockPulseProvider = StreamProvider.autoDispose<int>((ref) {
+  final changes = StreamController<int>();
+  Timer? timer;
+  var revision = 0;
+  void schedule() {
+    timer?.cancel();
+    final now = ref.read(clockProvider)();
+    final nextMinute = DateTime.fromMillisecondsSinceEpoch(
+      (now.millisecondsSinceEpoch ~/ 60000 + 1) * 60000,
+    );
+    timer = Timer(nextMinute.difference(now), () {
+      changes.add(++revision);
+      schedule();
+    });
+  }
+
+  final lifecycle = AppLifecycleListener(
+    onResume: () {
+      changes.add(++revision);
+      schedule();
+    },
+    onPause: () => timer?.cancel(),
+  );
+  schedule();
+  ref.onDispose(() {
+    timer?.cancel();
+    lifecycle.dispose();
+    unawaited(changes.close());
+  });
+  return changes.stream;
+});
+
+/// Reactive screen time, refreshed on minute boundaries and app resume.
+final currentTimeProvider = Provider.autoDispose<DateTime>((ref) {
+  ref.watch(clockPulseProvider);
+  return ref.watch(clockProvider)();
+});
 
 /// Shell tab indices, in NavigationBar order (see app/shell.dart `AppTab`).
 /// [screens, additive]

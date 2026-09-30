@@ -23,7 +23,7 @@ String usageLine(CoachUsage u) {
       ? '$n'
       : '${(n / 1000).toStringAsFixed(n < 10000 ? 1 : 0).replaceFirst(RegExp(r'\.0$'), '')}k';
   final tokens = u.inputTokens + u.outputTokens;
-  return '${u.requests} of ${u.requestLimit} questions · '
+  return '${u.requests} of ${u.requestLimit} model requests · '
       '${k(tokens)} of ${k(u.tokenLimit)} tokens';
 }
 
@@ -67,8 +67,12 @@ class CoachSettingsScreen extends ConsumerWidget {
       );
       if (yes != true) return;
       var ok = true;
+      String? failure;
       try {
         await withdrawCloud(ref.read(coachRepositoryProvider));
+      } on CoachException catch (e) {
+        ok = false;
+        failure = e.message;
       } catch (_) {
         ok = false;
       }
@@ -78,7 +82,7 @@ class CoachSettingsScreen extends ConsumerWidget {
           context,
           ok
               ? 'Back to on-device. Your key was deleted.'
-              : 'Could not turn it off. Try again.',
+              : failure ?? 'Could not complete withdrawal. Try again.',
         );
       }
     }
@@ -222,6 +226,56 @@ class CoachSettingsScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (c.cloud) ...[
+            const SizedBox(height: S.x3),
+            AppCard(
+              key: const ValueKey('row-backup-models'),
+              padding: const EdgeInsets.fromLTRB(S.card, S.x3, S.x3, S.x3),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          CoachCopy.backupModels,
+                          style: F.head.copyWith(color: p.ink),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          CoachCopy.backupModelsBody(c.provider),
+                          style: F.cap.copyWith(color: p.ink3),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: S.x3),
+                  Semantics(
+                    label: CoachCopy.backupModels,
+                    child: Switch(
+                      key: const ValueKey('switch-backup-models'),
+                      value: c.settings.backupModels,
+                      onChanged: cfg == null
+                          ? null
+                          : (on) async {
+                              try {
+                                await saveBackupModels(
+                                  ref.read(coachRepositoryProvider),
+                                  on,
+                                );
+                              } catch (_) {
+                                if (context.mounted) {
+                                  snack(context, 'Could not save. Try again.');
+                                }
+                              }
+                              ref.invalidate(coachConfigProvider);
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (usage != null) ...[
             const SizedBox(height: S.x3),
             AppCard(

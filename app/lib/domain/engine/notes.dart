@@ -238,6 +238,16 @@ abstract final class Notes {
     fix: 'Add your birth year (or a measured max HR) in Settings → Profile.',
   );
 
+  static const StatusNote strainInvalidAnchors = StatusNote(
+    metric: 'strain',
+    severity: NoteSeverity.warning,
+    title: 'Heart-rate zones unavailable',
+    body:
+        'Heart rate arrived, but the maximum and resting heart rates do not '
+        'provide a usable range. No Strain score is calculated from these anchors.',
+    fix: 'Review your max HR in Settings → Profile and your resting-HR source.',
+  );
+
   /// No resting HR today: zones use % of max HR (Swain 1994) instead of
   /// heart-rate reserve, and there is no TRIMP cross-check.
   static const StatusNote zonesFromMaxHr = StatusNote(

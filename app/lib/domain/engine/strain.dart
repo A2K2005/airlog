@@ -142,6 +142,28 @@ abstract final class StrainEngine {
   static (double, double) maxHrZoneAnchors(double maxHr) =>
       (swainIntercept * maxHr, (swainIntercept + swainSlope) * maxHr);
 
+  /// The same usable anchors for scoring, charts and live sessions.
+  /// Null means zones cannot be computed, rather than measured zero effort.
+  static (double, double)? zoneAnchors({double? restingHr, double? maxHr}) {
+    if (maxHr == null || !maxHr.isFinite || maxHr < 25 || maxHr > 250) {
+      return null;
+    }
+    final known =
+        restingHr != null &&
+        restingHr.isFinite &&
+        restingHr >= 25 &&
+        restingHr <= 150;
+    final anchors = known ? (restingHr, maxHr) : maxHrZoneAnchors(maxHr);
+    return anchors.$2 > anchors.$1 + 20 ? anchors : null;
+  }
+
+  static List<double> displayFloors({double? restingHr, double? maxHr}) {
+    final a = zoneAnchors(restingHr: restingHr, maxHr: maxHr);
+    return a == null
+        ? const []
+        : [for (final f in displayZoneLowerBounds) a.$1 + f * (a.$2 - a.$1)];
+  }
+
   /// [ours] Half-width of the effort RANGE that TodayPlan shows around
   /// [targetStrain] (Pulse gives one number; a range reads as guidance, not
   /// precision). The range is target ± this, rounded to whole strain points

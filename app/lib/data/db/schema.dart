@@ -9,7 +9,7 @@
 // To change the schema: bump [kSchemaVersion] and append a step to
 // [kMigrations] (never edit an old step).
 
-const int kSchemaVersion = 3;
+const int kSchemaVersion = 4;
 
 /// Statements that build the schema at version 1.
 const List<String> kSchemaV1 = [
@@ -172,7 +172,29 @@ const List<String> kSchemaV1 = [
 
 /// Upgrade steps: index i upgrades from version i+1 to i+2.
 /// (e.g. `['ALTER TABLE raw_hr ADD COLUMN quality REAL']`.)
-const List<List<String>> kMigrations = [kCoachSchemaV2, kAnyAppSchemaV3];
+const List<List<String>> kMigrations = [
+  kCoachSchemaV2,
+  kAnyAppSchemaV3,
+  kIntegritySchemaV4,
+];
+
+const List<String> kIntegritySchemaV4 = [
+  'ALTER TABLE day_record ADD COLUMN hr_start INTEGER',
+  // Old derived blobs have no timezone anchor. Rebuild from timestamped raw
+  // buckets instead of guessing their absolute time after travel.
+  'DELETE FROM day_record',
+  'DELETE FROM day_result',
+  '''CREATE TABLE hr_record_day (
+    source TEXT NOT NULL, record_id TEXT NOT NULL, origin TEXT NOT NULL,
+    date TEXT NOT NULL, PRIMARY KEY(source, record_id, origin, date)
+  )''',
+  '''INSERT OR IGNORE INTO hr_record_day SELECT source, record_id,
+    COALESCE(origin_package, ''), date(t / 1000, 'unixepoch', 'localtime')
+    FROM raw_hr WHERE record_id IS NOT NULL''',
+  // A one-off authoritative backfill rebuilds provenance for recent older
+  // buckets. Older unindexed history is never treated as deletable by id.
+  "DELETE FROM change_tokens WHERE source = 'hc'",
+];
 
 /// v2 → v3: any app via Health Connect (decision 2026-09-29). HR buckets are
 /// kept per origin app, so the resolver can use ONE app's heart rate per day
@@ -268,6 +290,7 @@ const List<String> kCoachSchemaV2 = [
 
 /// Every table the app owns (export, wipe, tests).
 const List<String> kRawTables = [
+  'hr_record_day',
   'raw_hr',
   'hr_day',
   'raw_hrv',

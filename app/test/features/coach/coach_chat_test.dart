@@ -207,6 +207,134 @@ void main() {
     expect(find.textContaining('HTTP 402'), findsNothing);
   });
 
+  testWidgets('model fallback: the answer says quietly which engine wrote '
+      'it; the chosen model\'s answers say nothing', (t) async {
+    final repo = FakeCoachRepository(
+      settings: _claudeOn,
+      keys: {CoachProvider.claude: 'sk-ant-api03-test-1234'},
+    );
+    final service = FakeCoachService(
+      repo,
+      script: [Scripted.cloud, Scripted.viaBackup, Scripted.onDeviceFallback],
+    );
+    await pumpCoach(t, repo: repo, service: service, initial: Routes.coach);
+    await _ask(t, 'How am I?');
+    expect(find.textContaining('via '), findsNothing);
+    expect(find.textContaining('Answered on this phone'), findsNothing);
+
+    await _ask(t, 'And today?');
+    expect(find.text('via Sonnet 5.5'), findsOneWidget);
+
+    await _ask(t, 'And tomorrow?');
+    expect(
+      find.text('Answered on this phone — Claude is unavailable right now.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an answer written on this phone offers "Ask Claude again": '
+      "the same question with the chat's context", (t) async {
+    final repo = FakeCoachRepository(
+      settings: _claudeOn,
+      keys: {CoachProvider.claude: 'sk-ant-api03-test-1234'},
+    );
+    final service = FakeCoachService(
+      repo,
+      script: [Scripted.onDeviceFallback, Scripted.cloud],
+    );
+    await pumpCoach(t, repo: repo, service: service, initial: Routes.coach);
+    await _ask(t, 'How am I?');
+    final again = find.text(CoachCopy.askAgain(CoachProvider.claude));
+    expect(again, findsOneWidget);
+    await t.ensureVisible(again);
+    await t.pumpAndSettle();
+    await t.tap(again);
+    await t.pumpAndSettle();
+    expect(service.asked, hasLength(2));
+    expect(service.asked[1].$1, 'How am I?');
+    expect(service.asked[1].$3, service.asked[0].$3);
+    // Same conversation: a new turn, not a new chat.
+    final conv = (await repo.conversations()).single;
+    final stored = await repo.messages(conv.id);
+    expect(
+      [
+        for (final m in stored)
+          if (m.role == ChatRole.user) m.text,
+      ],
+      ['How am I?', 'How am I?'],
+    );
+  });
+
+  testWidgets('"Ask Claude again" hides while the chosen model is known '
+      'to be down', (t) async {
+    final repo =
+        FakeCoachRepository(
+            settings: _claudeOn,
+            keys: {CoachProvider.claude: 'sk-ant-api03-test-1234'},
+          )
+          ..down['claude-opus-5-5'] = ModelDown(
+            kCoachNow.add(const Duration(hours: 3)),
+            CoachErrorKind.quotaExceeded,
+          );
+    final service = FakeCoachService(repo, script: [Scripted.onDeviceFallback]);
+    await pumpCoach(t, repo: repo, service: service, initial: Routes.coach);
+    await _ask(t, 'How am I?');
+    expect(find.textContaining('Answered on this phone'), findsOneWidget);
+    expect(find.text(CoachCopy.askAgain(CoachProvider.claude)), findsNothing);
+  });
+
+  test('fallback notes name the reason plainly', () {
+    ChatMessage m(String by, String? reason) => ChatMessage(
+      id: 'a',
+      conversationId: 'c',
+      role: ChatRole.assistant,
+      text: 'x',
+      at: kCoachNow,
+      answeredBy: by,
+      fallbackFrom: 'gemini-3.8-flash',
+      fallbackReason: reason,
+    );
+    const g = CoachProvider.gemini;
+    expect(
+      CoachCopy.answeredByNote(g, m('gemini-3.5-flash-lite', 'server')),
+      'via 3.5 Flash-Lite',
+    );
+    expect(
+      CoachCopy.answeredByNote(g, m(ChatMessage.onDevice, 'server')),
+      'Answered on this phone — Gemini is unavailable right now.',
+    );
+    expect(
+      CoachCopy.answeredByNote(g, m(ChatMessage.onDevice, 'invalidKey')),
+      contains("Gemini didn't accept your API key"),
+    );
+    expect(
+      CoachCopy.answeredByNote(g, m(ChatMessage.onDevice, 'quotaExceeded')),
+      contains('out of credit or quota'),
+    );
+    // The chosen model answered: no note.
+    expect(
+      CoachCopy.answeredByNote(
+        g,
+        ChatMessage(
+          id: 'a',
+          conversationId: 'c',
+          role: ChatRole.assistant,
+          text: 'x',
+          at: kCoachNow,
+          answeredBy: 'gemini-3.8-flash',
+        ),
+      ),
+      isNull,
+    );
+    // Ids outside the catalogue still read well.
+    expect(
+      CoachCopy.modelName(CoachProvider.claude, 'claude-opus-4-8'),
+      'Opus 4.8',
+    );
+    expect(CoachCopy.modelName(g, 'gemini-4.0-pro'), '4.0 Pro');
+    expect(CoachCopy.modelName(g, 'something-else'), 'something-else');
+  });
+
   testWidgets('errors: a stored error message maps to its kind', (t) async {
     final repo = FakeCoachRepository();
     final service = FakeCoachService(repo, script: [Scripted.errorMessage]);

@@ -175,6 +175,7 @@ class HealthConnectBridge(
             token = resp.pageToken
             pages++
         } while (!token.isNullOrEmpty() && pages < 200)
+        check(token.isNullOrEmpty()) { "Health Connect read exceeded page limit; window is incomplete" }
         return out
     }
 

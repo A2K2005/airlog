@@ -12,7 +12,21 @@
 //   options: --dart-define=EVAL_MODEL=claude-sonnet-5-5
 //            --dart-define=EVAL_LIMIT=10   (first N questions)
 //            --dart-define=EVAL_DELAY_MS=13000  (pause between questions;
-//              free-tier keys allow only a few requests per minute)
+//              default 20000 for Gemini, 0 for Claude: each question makes
+//              2-3 requests and low-tier Gemini keys allow ~5 a minute)
+//            --dart-define=EVAL_COOLDOWN_MS=60000  (extra pause after a
+//              rate-limited or busy answer, so one 429 does not cascade)
+//            --dart-define=EVAL_BACKUPS=false  (no backup models: measure
+//              only the chosen model; failures still answer on-device)
+//            --dart-define=EVAL_FOLLOWUPS=false  (skip the follow-up set)
+//            --dart-define=EVAL_FOLLOWUP_LIMIT=5  (first N follow-up chats)
+//
+// After the grounding set it runs the follow-up set
+// (test/evals/data/golden_followups.jsonl): two-turn chats whose second
+// question only makes sense with the first. Both sets report the pass rate
+// per model (the model that wrote each answer). To measure a backup model
+// on its own for the quality bar in docs/EVALS.md, run with
+// EVAL_MODEL=<backup> and EVAL_BACKUPS=false.
 //
 // Without the key it prints how to run it and does nothing. The key is read
 // from the environment only: never printed, logged or written anywhere.
@@ -33,15 +47,64 @@ import 'package:flutter_test/flutter_test.dart';
 
 // ignore_for_file: avoid_print
 
-/// 45 min of questions plus the pauses between them.
-const _delayMsDefine = int.fromEnvironment('EVAL_DELAY_MS', defaultValue: 0);
+const _gemini = String.fromEnvironment('EVAL_PROVIDER') == 'gemini';
+
+/// Pause between questions (-1 = the provider's default).
+const _delayMsDefine = int.fromEnvironment('EVAL_DELAY_MS', defaultValue: -1);
+const _delayMs = _delayMsDefine >= 0 ? _delayMsDefine : (_gemini ? 20000 : 0);
+
+/// Extra pause after a rate-limited / busy answer.
+const _cooldownMs = int.fromEnvironment(
+  'EVAL_COOLDOWN_MS',
+  defaultValue: 60000,
+);
+
+const _followups = bool.fromEnvironment('EVAL_FOLLOWUPS', defaultValue: true);
+const _followupLimit = int.fromEnvironment(
+  'EVAL_FOLLOWUP_LIMIT',
+  defaultValue: 1000,
+);
+
+/// 60 min of questions plus the pauses (and a cooldown per question, worst
+/// case) between them: about 50 grounding questions and 20 follow-up asks.
 final evalTimeout =
-    const Duration(minutes: 45) +
-    const Duration(milliseconds: _delayMsDefine) * 60;
+    const Duration(minutes: 60) +
+    const Duration(milliseconds: _delayMs + _cooldownMs) * 80;
+
+/// A live pass: no error, written by a model (an on-device fallback says
+/// nothing about the model), verified without the repair round, and clean
+/// under the output policy.
+bool _passes(ChatMessage a) {
+  final v = a.verification;
+  return a.error == null &&
+      a.answeredBy != ChatMessage.onDevice &&
+      (v?.verified ?? false) &&
+      !(v?.repaired ?? true) &&
+      OutputPolicy.check(a.text).ok;
+}
+
+/// Pass count and total per model that wrote the answer.
+class _PerModel {
+  final pass = <String, int>{};
+  final total = <String, int>{};
+  void add(String model, bool ok) {
+    total[model] = (total[model] ?? 0) + 1;
+    if (ok) pass[model] = (pass[model] ?? 0) + 1;
+  }
+
+  Iterable<String> lines() sync* {
+    final keys = total.keys.toList()..sort((a, b) => total[b]! - total[a]!);
+    for (final k in keys) {
+      final p = pass[k] ?? 0, n = total[k]!;
+      yield '  ${k.padRight(24)}$p/$n  '
+          '${(100 * p / n).toStringAsFixed(1)}% pass';
+    }
+  }
+}
 
 void main() {
   test('live eval (opt-in)', () async {
-    final gemini = const String.fromEnvironment('EVAL_PROVIDER') == 'gemini';
+    const gemini = _gemini;
     final provider = gemini ? CoachProvider.gemini : CoachProvider.claude;
     final envKey = gemini ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
     final key = Platform.environment[envKey];
@@ -55,7 +118,7 @@ void main() {
     const m = String.fromEnvironment('EVAL_MODEL');
     final model = m.isEmpty ? ProviderModels.defaultFor(provider)! : m;
     const limit = int.fromEnvironment('EVAL_LIMIT', defaultValue: 1000);
-    const delayMs = _delayMsDefine;
+    const delayMs = _delayMs;
 
     // Demo data only, at a fixed clock.
     final now = DateTime(2026, 9, 29, 9);
@@ -71,6 +134,10 @@ void main() {
         adultConfirmed: true,
         dailyRequestLimit: 100000,
         dailyTokenLimit: 1000000000,
+        backupModels: const bool.fromEnvironment(
+          'EVAL_BACKUPS',
+          defaultValue: true,
+        ),
       ),
       keys: {provider: key.trim()},
     );
@@ -85,6 +152,11 @@ void main() {
     var pass = 0, verified = 0, repaired = 0, fallback = 0, errors = 0;
     // Error answers by kind: busy (server), rate-limited, anything else.
     var errServer = 0, errRate = 0, errOther = 0;
+    // Which engine wrote each answer (model fallback: a backup model of the
+    // same provider, or on-device); errors are tallied as "error".
+    final byModel = <String, int>{};
+    final perModel = _PerModel();
+    var onDevice = 0;
     final out = StringBuffer();
     for (final (i, r) in rows.indexed) {
       if (i > 0 && delayMs > 0) {
@@ -99,11 +171,14 @@ void main() {
       final a = await coach.service.ask(r['q'] as String, context: ctx);
       final v = a.verification;
       final isFallback = a.text.startsWith('I couldn\'t');
-      final ok =
-          a.error == null &&
-          (v?.verified ?? false) &&
-          !(v?.repaired ?? true) &&
-          OutputPolicy.check(a.text).ok;
+      final by = a.error != null ? 'error' : a.answeredBy ?? model;
+      byModel[by] = (byModel[by] ?? 0) + 1;
+      final local = a.answeredBy == ChatMessage.onDevice;
+      if (local) onDevice++;
+      // An on-device fallback answer is verified by construction: it says
+      // nothing about the model, so it never counts as a pass.
+      final ok = _passes(a);
+      perModel.add(by, ok);
       if (ok) pass++;
       if (v?.verified ?? false) verified++;
       if (v?.repaired ?? false) repaired++;
@@ -119,7 +194,22 @@ void main() {
             errOther++;
         }
       }
-      out.writeln('${ok ? 'PASS' : 'FAIL'} ${r['id']} ${r['q']}');
+      // Busy or rate-limited (an error, or the reason the coach fell back to
+      // a backup model / this phone): back off before the next question so
+      // the per-minute window can refill (the clients already retried twice).
+      const busy = {'server', 'rateLimited'};
+      if ((busy.contains(a.error) || busy.contains(a.fallbackReason)) &&
+          _cooldownMs > 0 &&
+          i < rows.length - 1) {
+        await Future<void>.delayed(const Duration(milliseconds: _cooldownMs));
+      }
+      out.writeln('${ok ? 'PASS' : 'FAIL'} ${r['id']} [$by] ${r['q']}');
+      if (a.fellBack) {
+        out.writeln(
+          '     fell back from ${a.fallbackFrom} '
+          '(${a.fallbackReason ?? 'provider-side'})',
+        );
+      }
       if (!ok) {
         out.writeln(
           '     ${a.error ?? ''} ${v?.unsupported ?? ''} '
@@ -127,6 +217,54 @@ void main() {
         );
       }
     }
+    // Follow-ups: two turns in one chat; the second answer is scored.
+    final fu = _followups
+        ? [
+            for (final line in File(
+              'test/evals/data/golden_followups.jsonl',
+            ).readAsLinesSync())
+              if (line.trim().isNotEmpty)
+                jsonDecode(line) as Map<String, dynamic>,
+          ].take(_followupLimit).toList()
+        : const <Map<String, dynamic>>[];
+    final fuPerModel = _PerModel();
+    var fuPass = 0;
+    final fuOut = StringBuffer();
+    for (final r in fu) {
+      Future<void> pause() async {
+        if (delayMs > 0) {
+          await Future<void>.delayed(const Duration(milliseconds: delayMs));
+        }
+      }
+
+      await pause();
+      final a1 = await coach.service.ask(r['q1'] as String);
+      await pause();
+      final a2 = await coach.service.ask(
+        r['q2'] as String,
+        conversationId: a1.conversationId,
+      );
+      final by = a2.error != null ? 'error' : a2.answeredBy ?? model;
+      // Turn 1 must have been answered by a model too, or the follow-up
+      // says nothing about carrying a model's own earlier answer.
+      final ok = a1.error == null && _passes(a2);
+      fuPerModel.add(by, ok);
+      if (ok) fuPass++;
+      fuOut.writeln('${ok ? 'PASS' : 'FAIL'} ${r['id']} [$by] ${r['q2']}');
+      if (!ok) {
+        fuOut.writeln(
+          '     turn 1: ${a1.error ?? a1.answeredBy ?? model} · '
+          '${a2.error ?? ''} ${a2.verification?.unsupported ?? ''} '
+          '${a2.text.replaceAll('\n', ' ')}',
+        );
+      }
+      const busy = {'server', 'rateLimited'};
+      if ((busy.contains(a2.error) || busy.contains(a2.fallbackReason)) &&
+          _cooldownMs > 0) {
+        await Future<void>.delayed(const Duration(milliseconds: _cooldownMs));
+      }
+    }
+
     final u = await coach.repository.usageToday();
     final cost = u == null
         ? null
@@ -144,20 +282,43 @@ void main() {
         'errors                    $errors  '
         '(server $errServer · rateLimited $errRate · other $errOther)',
       )
-      ..writeln('delay between questions   $delayMs ms')
+      ..writeln('answered on this phone    $onDevice  ${pct(onDevice)}')
+      ..writeln('answered by (per model):')
+      ..writeAll([
+        for (final e
+            in byModel.entries.toList()..sort((a, b) => b.value - a.value))
+          '  ${e.key.padRight(24)}${e.value}  ${pct(e.value)}',
+      ], '\n')
+      ..writeln()
+      ..writeln('pass rate per model (grounding):')
+      ..writeAll(perModel.lines(), '\n')
+      ..writeln()
+      ..writeln(
+        'follow-ups                ${fu.length} chats · pass $fuPass'
+        '${fu.isEmpty ? '' : '  ${(100 * fuPass / fu.length).toStringAsFixed(1)}%'}',
+      )
+      ..writeln('pass rate per model (follow-ups):')
+      ..writeAll(fuPerModel.lines(), '\n')
+      ..writeln()
+      ..writeln(
+        'delay between questions   $delayMs ms (cooldown $_cooldownMs ms)',
+      )
       ..writeln('requests                  ${u?.requests ?? 0}')
       ..writeln('input tokens              ${u?.inputTokens ?? 0}')
       ..writeln('output tokens             ${u?.outputTokens ?? 0}')
       ..writeln(
         'estimated cost (USD)      '
-        '${cost == null ? 'unknown model' : cost.toStringAsFixed(4)}',
+        '${cost == null ? 'unknown model' : cost.toStringAsFixed(4)}'
+        '${byModel.keys.any((k) => k != model && k != 'error' && k != ChatMessage.onDevice) ? '  (all tokens priced as $model)' : ''}',
       );
     print(summary);
     print(out);
+    if (fu.isNotEmpty) print('follow-ups:\n$fuOut');
     try {
       final dir = Directory('build/evals')..createSync(recursive: true);
-      File('${dir.path}/live_${provider.name}.txt')
-          .writeAsStringSync('$summary\n$out');
+      File('${dir.path}/live_${provider.name}.txt').writeAsStringSync(
+        '$summary\n$out${fu.isEmpty ? '' : '\nfollow-ups:\n$fuOut'}',
+      );
     } catch (_) {}
   }, timeout: Timeout(evalTimeout));
 }

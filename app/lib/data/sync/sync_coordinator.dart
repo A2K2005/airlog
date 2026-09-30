@@ -9,6 +9,7 @@ import '../../domain/repositories.dart';
 import '../common/time.dart';
 import '../common/timing.dart';
 import '../db/stores.dart';
+import '../db/write_guard.dart';
 import '../resolver/resolver.dart';
 import '../services/google_health/google_health_source.dart';
 import '../services/health_connect/hc_types.dart';
@@ -65,6 +66,7 @@ class SyncCoordinator {
     }
     final ghSrc = gh;
     if (ghSrc != null && enabled.contains(SourceKind.googleHealthApi)) {
+      await pipeline.updatePlans(clock());
       dirty.addAll(
         await GhSync(gh: ghSrc, raw: raw, app: app, clock: clock).run(log),
       );
@@ -72,8 +74,12 @@ class SyncCoordinator {
     await raw.pruneRawHr(clock().subtract(kRawHrRetention));
     ComputeOutcome? out;
     String? from;
-    if (dirty.isNotEmpty) {
-      from = dirty.reduce((a, b) => a.compareTo(b) <= 0 ? a : b);
+    final pending =
+        await app.getSetting(pendingRecomputeKey(DataMode.live.name)) != null;
+    if (dirty.isNotEmpty || pending) {
+      from = pending
+          ? null
+          : dirty.reduce((a, b) => a.compareTo(b) <= 0 ? a : b);
       out = await pipeline.recompute(
         DataMode.live,
         fromDate: from,

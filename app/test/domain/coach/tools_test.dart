@@ -136,7 +136,12 @@ void main() {
 
   test('propose_memory saves nothing and refuses health numbers', () async {
     final coach = InMemoryCoachRepository(clock: () => now);
-    final b = box(coach: coach);
+    // PR #1: every proposal, not only health history and mood, must be
+    // stated by the user in this message; the question states the goal.
+    final b = box(
+      coach: coach,
+      question: "I'm training for a half marathon on 15 Nov. How am I doing?",
+    );
     final ok = await one(b, 'propose_memory', {
       'text': 'Training for a half marathon on 15 Nov',
       'category': 'goals',

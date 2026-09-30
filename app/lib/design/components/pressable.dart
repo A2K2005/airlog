@@ -34,6 +34,7 @@ class Pressable extends StatefulWidget {
     this.scale = .97,
     this.minSize = S.tap,
     this.selected,
+    this.onActivate,
   });
 
   final Widget child;
@@ -65,6 +66,10 @@ class Pressable extends StatefulWidget {
   /// For toggles/segments: exposes selected state to screen readers.
   final bool? selected;
 
+  /// Keyboard/assistive activation for controls whose pointer gesture differs
+  /// (e.g. a hold-to-delete opens confirmation instead of simulating a hold).
+  final VoidCallback? onActivate;
+
   @override
   State<Pressable> createState() => _PressableState();
 }
@@ -90,6 +95,17 @@ class _PressableState extends State<Pressable>
       widget.onPressCancel != null;
 
   bool _down = false;
+  bool _focused = false;
+
+  @override
+  void didUpdateWidget(covariant Pressable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_enabled && _down) {
+      _down = false;
+      oldWidget.onPressCancel?.call();
+      _c.reset();
+    }
+  }
 
   @override
   void dispose() {
@@ -165,6 +181,8 @@ class _PressableState extends State<Pressable>
     );
     if (!_enabled) {
       return Semantics(
+        button: true,
+        enabled: false,
         label: widget.semanticLabel,
         selected: widget.selected,
         child: sized,
@@ -183,7 +201,7 @@ class _PressableState extends State<Pressable>
     // One node per target: a child's own label (a ring's or a tile's spoken
     // summary) becomes the button's label instead of a separate, unlabelled
     // button wrapped around a labelled container.
-    return MergeSemantics(
+    final target = MergeSemantics(
       child: Semantics(
         button: true,
         label: widget.semanticLabel,
@@ -198,6 +216,33 @@ class _PressableState extends State<Pressable>
           onTapUp: _pressUp,
           onTapCancel: _pressCancel,
           child: feedback,
+        ),
+      ),
+    );
+    return MergeSemantics(
+      child: FocusableActionDetector(
+        includeFocusSemantics: false,
+        onShowFocusHighlight: (focused) => setState(() => _focused = focused),
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              (widget.onActivate ?? _tap)();
+              return null;
+            },
+          ),
+        },
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: R.rMd,
+            border: _focused
+                ? Border.all(color: P.of(context).ink, width: 2)
+                : null,
+          ),
+          child: target,
         ),
       ),
     );

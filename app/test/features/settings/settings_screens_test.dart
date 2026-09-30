@@ -187,7 +187,11 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('Delete all data?'), findsNothing);
       expect(repo.calls, contains('wipeData'));
-      expect(find.text('All data deleted.'), findsOneWidget);
+      // PR #1: says exactly what went (settings and keys stay).
+      expect(
+        find.text('Stored records deleted. Settings and keys kept.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('fill: 2 s linear while pressed, 200 ms ease-out on release', (
@@ -275,7 +279,11 @@ void main() {
       await t.tap(find.text('Delete'));
       await t.pumpAndSettle();
       expect(repo.calls, contains('wipeData'));
-      expect(find.text('All data deleted.'), findsOneWidget);
+      // PR #1: says exactly what went (settings and keys stay).
+      expect(
+        find.text('Stored records deleted. Settings and keys kept.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the delete card is the label the privacy policy names', (
@@ -297,7 +305,7 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('v2'), findsOneWidget);
+      expect(find.text('v3'), findsOneWidget); // PR #1: algorithm v3
       expect(find.text('App version'), findsOneWidget);
     });
 
@@ -470,7 +478,8 @@ void main() {
     });
   });
 
-  for (final b in const [Brightness.dark]) { // dark only
+  for (final b in const [Brightness.dark]) {
+    // dark only
     testWidgets('golden settings · ${b.name}', (t) async {
       await pumpB(
         t,

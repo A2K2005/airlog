@@ -80,21 +80,18 @@ class LoadCard extends StatelessWidget {
     final p = P.of(context);
     final l = load;
     final line = l == null
-        ? 'Needs at least ${TrainingLoadEngine.minDays} days of strain in the '
-              'last ${TrainingLoadEngine.chronicDays} days.'
+        ? 'Needs at least ${TrainingLoadEngine.minDays} days with sufficient HR coverage in the '
+              'last ${TrainingLoadEngine.chronicDays} days, including '
+              '${TrainingLoadEngine.minAcuteDays} in the last week. Today is excluded.'
         : switch (l.state) {
             LoadState.detraining =>
-              'This week is lighter than your last four. Fine for a rest '
-                  'week; fitness fades if it stays here.',
+              'Recorded effort this week is lower than your recent average.',
             LoadState.optimal =>
-              'This week matches what your body is used to: load is '
-                  'building without a spike.',
+              'Recorded effort this week is close to your recent average.',
             LoadState.elevated =>
-              'This week is noticeably harder than your recent normal. '
-                  'Watch recovery for the next few days.',
+              'Recorded effort this week is above your recent average.',
             LoadState.high =>
-              'This week is much harder than your last four. Spikes like '
-                  'this are when overreaching tends to start.',
+              'Recorded effort this week is well above your recent average.',
           };
     return AppCard(
       child: Column(

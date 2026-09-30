@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Today (Medium/19, 348 × 164). home_screen only: never the lock screen.
+     updatePeriodMillis is a 3 h safety net; midnight and the plan's phase
+     boundaries come from an inexact RTC alarm (WIDGETS_PLAN §5). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:initialLayout="@layout/airlog_widget"
+    android:initialLayout="@layout/airlog_today_widget"
+    android:previewLayout="@layout/airlog_widget_preview"
     android:minWidth="250dp"
     android:minHeight="110dp"
     android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="1800000"
+    android:updatePeriodMillis="10800000"
     android:widgetCategory="home_screen"
     android:description="@string/airlog_widget_description" />

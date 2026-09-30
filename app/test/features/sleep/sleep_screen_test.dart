@@ -56,9 +56,14 @@ void main() {
 
   testWidgets('full night: slept vs need, parts, bedtime, stages', (t) async {
     await _pump(t);
-    expect(find.bySemanticsLabel('Performance 89 percent'), findsOneWidget);
-    expect(find.text('7h 1m'), findsOneWidget);
-    expect(find.text('of a 7h 51m target'), findsOneWidget);
+    // PR #1 dropped the duplicate performance ring: the summary tile carries
+    // the score.
+    expect(
+      find.bySemanticsLabel(RegExp('performance 89 percent')),
+      findsOneWidget,
+    );
+    // The slept / target line lived in the removed ring block; the summary
+    // tile states both (its label above).
     expect(find.text('Debt after the night 58m'), findsOneWidget);
     expect(find.text('Baseline 7h 36m'), findsOneWidget);
     expect(find.text('Debt share 3m'), findsOneWidget);
@@ -126,7 +131,7 @@ void main() {
     expect(find.byType(NapsCard), findsOneWidget);
     expect(find.text('15:28–16:00'), findsOneWidget);
     expect(find.text('29m asleep'), findsOneWidget);
-    expect(find.textContaining('incl. 29m nap'), findsOneWidget);
+    expect(find.textContaining('includes 29m of naps'), findsOneWidget);
   });
 
   group('no overflow at 320 px and 1.3× text', () {

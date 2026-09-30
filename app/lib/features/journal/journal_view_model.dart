@@ -98,7 +98,7 @@ class JournalViewModel extends AsyncNotifier<JournalState> {
   Future<JournalState> build() async {
     ref.watch(revisionProvider);
     final repo = ref.watch(healthRepositoryProvider);
-    final now = ref.watch(clockProvider)();
+    final now = ref.watch(currentTimeProvider);
     final today = eveningKeyOf(now);
     // The evening of the day being looked at elsewhere, else this evening
     // (never one that has not started).

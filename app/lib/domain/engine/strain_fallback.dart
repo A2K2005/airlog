@@ -153,11 +153,22 @@ abstract final class StrainDay {
     final s = series ?? HrSeries.of(samples);
     // No resting HR: %HRmax zones (Swain), never an assumed 62 bpm.
     final fromMax = restingHr == null && maxHr != null;
-    final anchors = fromMax ? StrainEngine.maxHrZoneAnchors(maxHr) : null;
-    final rhr = anchors?.$1 ?? restingHr ?? 0;
-    final zoneMax = anchors?.$2 ?? maxHr;
+    final anchors = StrainEngine.zoneAnchors(
+      restingHr: restingHr,
+      maxHr: maxHr,
+    );
+    final rhr = anchors?.$1 ?? 0;
+    final zoneMax = anchors?.$2;
     final coverage = awakeCoverageSeries(record, s, now, dayBoundsUs: bounds);
     final sparse = s.length < minSamples || coverage < minCoverage;
+    // Persist quality against the complete calendar day. A morning sync
+    // must not become a complete historical observation just as time passes.
+    final dayCoverage = awakeCoverageSeries(
+      record,
+      s,
+      DateTime.fromMicrosecondsSinceEpoch(bounds.$2),
+      dayBoundsUs: bounds,
+    );
     final steps = Inputs.steps(record);
     final target = recoveryScore == null
         ? null
@@ -211,6 +222,7 @@ abstract final class StrainDay {
           workouts: workouts,
           steps: steps,
           zonesFromMaxHr: fromMax,
+          partial: s.length < minSamples || dayCoverage < minCoverage,
         ),
         coverage: coverage,
         samples: s.length,

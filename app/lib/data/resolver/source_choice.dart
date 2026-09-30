@@ -390,7 +390,7 @@ Map<Metric, OriginDays> originDaysOf(RawRows rows) {
     }
   }
   for (final r in rows.hrv) {
-    if (hc(r)) add(Metric.hrv, r.originPackage, nightKey(r.t));
+    if (hc(r) && !r.isSpot) add(Metric.hrv, r.originPackage, nightKey(r.t));
   }
   for (final r in rows.sleep) {
     if (hc(r)) add(Metric.sleep, r.originPackage, dayKeyOf(r.end));

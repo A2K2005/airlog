@@ -48,12 +48,14 @@ class CoachModule {
     CoachSettings settings = const CoachSettings(),
     LlmClientFactory? clients,
     Map<CoachProvider, String> keys = const {},
+    LlmClient? onDevice,
   }) {
     final repo = InMemoryCoachRepository(
       settings: settings,
       clock: clock,
       clients: clients,
       keys: keys,
+      onDevice: onDevice,
     );
     return CoachModule._compose(health, repo, repo.memoryStore, clock: clock);
   }

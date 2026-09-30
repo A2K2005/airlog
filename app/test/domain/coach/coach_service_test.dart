@@ -121,7 +121,8 @@ void main() {
     expect(a.verification!.verified, isTrue);
   });
 
-  test('a request that never returns times out as a network error', () async {
+  test('a request that never returns times out, and the question is '
+      'answered on this phone instead (model fallback)', () async {
     final f = Fake((_, _) => Completer<LlmTurn>().future);
     final m = CoachModule.inMemory(
       InMemoryHealthRepository.demo(now: now),
@@ -137,7 +138,14 @@ void main() {
       requestTimeout: const Duration(milliseconds: 50),
     );
     final a = await svc.ask('How did I sleep?');
-    expect(a.error, CoachErrorKind.network.name);
+    // A timeout is not bound to the model, so no backup model is asked:
+    // the on-device engine answers, labelled with why.
+    expect(a.error, isNull);
+    expect(a.answeredBy, ChatMessage.onDevice);
+    expect(a.fallbackFrom, 'fake');
+    expect(a.fallbackReason, CoachErrorKind.network.name);
+    expect(a.verification, isNotNull);
+    expect(f.transcripts, hasLength(1));
   });
 
   test('a refusal is handled gracefully', () async {
@@ -168,10 +176,11 @@ void main() {
   });
 
   test('a card seed is card context in the question\'s own message: no '
-      'synthetic tool turn, not offered as a tool, still evidence', () async {
+      'synthetic tool turn, not offered as a tool; a cloud provider gets the '
+      'withholding notice, not the card (PR #1)', () async {
     final f = Fake((t, tools) {
       expect(tools.map((x) => x.name), isNot(contains(CoachTools.insightCard)));
-      return const LlmTurn(text: 'You slept 6h 43m [r1].');
+      return const LlmTurn(text: 'The card itself stays on your phone.');
     });
     const ctx = AskContext(
       screen: 'sleep',
@@ -196,11 +205,14 @@ void main() {
     final q = first.single as LlmUser;
     expect(q.text, 'Tell me more');
     expect(q.data.single.name, CoachTools.insightCard);
-    expect(q.data.single.refs.single.id, 'r1');
+    // PR #1: the card's facts stay on the phone (on-device gets them, see
+    // tools_test "the card seed carries its facts as quoted data"); the
+    // cloud reads current facts through the guarded data tools instead.
+    expect(q.data.single.refs, isEmpty);
+    expect(q.data.single.content, contains('missing'));
+    expect('${q.data.single.content}', isNot(contains('403')));
     expect(a.verification!.verified, isTrue);
-    expect(a.refs.single.value, 403);
     expect(a.sent!.toolsCalled, isEmpty, reason: 'nothing was called');
-    expect(a.sent!.dataTypes, contains('The insight card you opened'));
   });
 
   test('general-only: no data tools, no history, no seed', () async {

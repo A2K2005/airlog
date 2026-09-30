@@ -76,12 +76,24 @@ class _HoldToConfirmState extends State<HoldToConfirm>
   void initState() {
     super.initState();
     _c.addStatusListener((s) {
-      if (s == AnimationStatus.completed && _holding && !_firedThisPress) {
+      if (s == AnimationStatus.completed &&
+          widget.enabled &&
+          _holding &&
+          !_firedThisPress) {
         _firedThisPress = true;
         unawaited(HapticFeedback.heavyImpact());
         widget.onConfirmed();
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant HoldToConfirm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled) {
+      _holding = false;
+      _c.reset();
+    }
   }
 
   @override
@@ -94,11 +106,11 @@ class _HoldToConfirmState extends State<HoldToConfirm>
       MediaQuery.maybeAccessibleNavigationOf(context) ?? false;
 
   void _down() {
-    if (_screenReader) return;
+    if (_screenReader || !widget.enabled) return;
     _holding = true;
     _firedThisPress = false;
-    // Linear, from wherever an interrupted release left the fill.
-    _c.forward(from: _c.value);
+    // An interrupted gesture never contributes to the next confirmation.
+    _c.forward(from: 0);
   }
 
   /// Early release: snap back. After a completed hold the fill also empties
@@ -159,6 +171,7 @@ class _HoldToConfirmState extends State<HoldToConfirm>
       haptic: PressHaptic.none,
       semanticLabel: '${widget.label}. Press and hold for two seconds.',
       onTap: on ? _tap : null,
+      onActivate: on ? widget.onAccessibleConfirm : null,
       onPressDown: on ? _down : null,
       onPressUp: on ? _up : null,
       onPressCancel: on ? _up : null,

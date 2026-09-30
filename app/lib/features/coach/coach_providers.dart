@@ -44,6 +44,7 @@ class CoachConfig {
   bool get cloudReady =>
       cloud &&
       hasKey &&
+      settings.adultConfirmed &&
       settings.hasConsent &&
       (settings.consentVersion ?? 0) >= CoachCopy.consentVersion;
 
@@ -80,18 +81,29 @@ final coachConfigProvider = FutureProvider.autoDispose<CoachConfig>((
 /// Turns the cloud engine off: deletes every stored key, switches back to
 /// on-device and clears the consent. Chats and memories stay.
 Future<CoachSettings> withdrawCloud(CoachRepository repo) async {
-  for (final p in CoachProvider.values) {
-    if (p == CoachProvider.offline) continue;
-    try {
-      await repo.deleteApiKey(p);
-    } catch (_) {}
-  }
   final s = (await repo.settings()).copyWith(
     provider: CoachProvider.offline,
     clearModel: true,
     clearConsent: true,
   );
+  // Stop new sends even if secure storage subsequently refuses deletion.
   await repo.saveSettings(s);
+  var failed = false;
+  for (final p in CoachProvider.values) {
+    if (p == CoachProvider.offline) continue;
+    try {
+      await repo.deleteApiKey(p);
+    } catch (_) {
+      failed = true;
+    }
+  }
+  if (failed) {
+    throw const CoachException(
+      CoachErrorKind.unknown,
+      'Cloud is off, but a stored key could not be deleted. Try removing '
+      'the key again in coach setup.',
+    );
+  }
   return s;
 }
 
@@ -100,6 +112,20 @@ Future<void> saveLength(CoachRepository repo, ResponseLength length) async {
   final s = await repo.settings();
   if (s.length == length) return;
   await repo.saveSettings(s.copyWith(length: length));
+}
+
+/// When [model] is known to be down (its day quota, the provider's retry
+/// delay): the chat hides "Ask … again" until it is back.
+final coachModelDownProvider = FutureProvider.autoDispose
+    .family<ModelDown?, String>(
+      (ref, model) => ref.watch(coachRepositoryProvider).modelDown(model),
+    );
+
+/// "Use a backup model when busy".
+Future<void> saveBackupModels(CoachRepository repo, bool on) async {
+  final s = await repo.settings();
+  if (s.backupModels == on) return;
+  await repo.saveSettings(s.copyWith(backupModels: on));
 }
 
 // ── launching a chat ──────────────────────────────────────────────────────

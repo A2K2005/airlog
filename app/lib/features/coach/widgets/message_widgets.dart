@@ -219,9 +219,21 @@ class AnswerView extends StatelessWidget {
     required this.onDismissMemory,
     required this.onOpenMemory,
     this.sample = false,
+    this.engineNote,
+    this.askAgainLabel,
+    this.onAskAgain,
   });
 
   final ChatMessage message;
+
+  /// Another engine than the chosen model wrote this answer: "via 3.5
+  /// Flash-Lite", or "Answered on this phone — …" (CoachCopy.answeredByNote).
+  final String? engineNote;
+
+  /// "Ask Claude again" under an on-device fallback answer; null = hidden
+  /// (the chosen model is still known to be down, or a question is out).
+  final String? askAgainLabel;
+  final VoidCallback? onAskAgain;
 
   /// Demo mode: the answer's numbers come from sample data, so it carries a
   /// "Sample data" tag (only when it cites any).
@@ -287,6 +299,26 @@ class AnswerView extends StatelessWidget {
             child: VerificationPill(verification: v!),
           ),
         ],
+        if (engineNote != null) ...[
+          const SizedBox(height: S.x2),
+          _EngineNote(
+            key: ValueKey('answer-engine-${m.id}'),
+            text: engineNote!,
+            onDevice: m.answeredBy == ChatMessage.onDevice,
+          ),
+          if (onAskAgain != null && askAgainLabel != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(
+                key: ValueKey('ask-again-${m.id}'),
+                label: askAgainLabel!,
+                kind: AppButtonKind.quiet,
+                compact: true,
+                icon: Icons.refresh_rounded,
+                onTap: onAskAgain,
+              ),
+            ),
+        ],
         const SizedBox(height: S.x1),
         Wrap(
           spacing: S.x5,
@@ -314,6 +346,7 @@ class AnswerView extends StatelessWidget {
           RememberCard(
             key: ValueKey('remember-${m.id}-$i'),
             text: m.proposedMemories[i],
+            expiresOn: m.proposedExpiry(i),
             choice: choiceOf(i),
             category: categoryOf(i),
             onPickCategory: () => onPickCategory(i),
@@ -333,6 +366,7 @@ class RememberCard extends StatelessWidget {
   const RememberCard({
     super.key,
     required this.text,
+    this.expiresOn,
     required this.choice,
     required this.category,
     required this.onPickCategory,
@@ -342,6 +376,7 @@ class RememberCard extends StatelessWidget {
   });
 
   final String text;
+  final String? expiresOn;
   final MemoryChoice choice;
   final MemoryCategory category;
   final VoidCallback onPickCategory;
@@ -398,6 +433,8 @@ class RememberCard extends StatelessWidget {
           ),
           const SizedBox(height: S.x1),
           Text('“$text”', style: F.bodySm.copyWith(color: p.ink2)),
+          if (expiresOn != null)
+            Text('Use until $expiresOn', style: F.cap.copyWith(color: p.ink3)),
           Wrap(
             spacing: S.x3,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -497,6 +534,36 @@ class SafetyAnswer extends StatelessWidget {
   }
 }
 
+/// The quiet line that says which engine answered, when it wasn't the
+/// chosen model (model fallback).
+class _EngineNote extends StatelessWidget {
+  const _EngineNote({super.key, required this.text, required this.onDevice});
+  final String text;
+  final bool onDevice;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            onDevice ? Icons.phone_android_rounded : Icons.swap_horiz_rounded,
+            size: 14,
+            color: p.ink3,
+          ),
+        ),
+        const SizedBox(width: S.x1),
+        Expanded(
+          child: Text(text, style: F.cap.copyWith(color: p.ink3)),
+        ),
+      ],
+    );
+  }
+}
+
 /// What to do about each error.
 enum ErrorFix { setup, retry, none }
 
@@ -511,10 +578,10 @@ enum ErrorFix { setup, retry, none }
   final who = CoachCopy.company(provider);
   return switch (kind) {
     CoachErrorKind.notConfigured => (
-      title: "Coach isn't set up yet",
+      title: 'Review coach settings',
       body:
-          'Add your API key in setup, or switch back to on-device, which '
-          'needs no key.',
+          'Coach is not ready, or its settings changed during this answer. '
+          'Review setup or switch to on-device. No further requests were sent.',
       fix: ErrorFix.setup,
       action: 'Open setup',
     ),
@@ -551,8 +618,8 @@ enum ErrorFix { setup, retry, none }
     CoachErrorKind.network => (
       title: 'No connection',
       body:
-          'The question could not reach $who. Check your connection and '
-          'try again. Nothing was lost.',
+          'No answer arrived from $who. Check your connection and try again. '
+          'A request may already have reached the provider.',
       fix: ErrorFix.retry,
       action: 'Try again',
     ),
@@ -570,7 +637,9 @@ enum ErrorFix { setup, retry, none }
     ),
     CoachErrorKind.unknown => (
       title: 'Something went wrong',
-      body: 'The answer did not arrive. Nothing was saved. Try again.',
+      body:
+          'The answer did not complete. Your question may remain in chat. '
+          'Try again.',
       fix: ErrorFix.retry,
       action: 'Try again',
     ),

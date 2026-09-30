@@ -81,7 +81,7 @@ class ZoneTimeline extends StatelessWidget {
     }
     return '$title, beats per minute, ${clockOf(start)} to ${clockOf(end)}. '
         'Lowest ${lo.bpm.round()}, peak ${hi.bpm.round()} at ${clockOf(hi.t)}, '
-        'peak zone ${zoneOf(hi.bpm, zoneFloors)}.';
+        '${zoneFloors.length == 5 ? 'peak zone ${zoneOf(hi.bpm, zoneFloors)}.' : 'Zones unavailable without valid heart-rate anchors.'}';
   }
 
   @override
@@ -89,10 +89,11 @@ class ZoneTimeline extends StatelessWidget {
     final p = P.of(context);
     final s = _inWindow;
     final validWindow = end.isAfter(start);
-    final floors = [
+    final finiteFloors = [
       for (final f in zoneFloors)
         if (f.isFinite) f,
     ]..sort();
+    final floors = finiteFloors.length == 5 ? finiteFloors : <double>[];
     final bpm = [for (final x in s) x.bpm];
     final spread = bpm.isEmpty ? 0.0 : bpm.reduce(max) - bpm.reduce(min);
     final a = axis ?? AxisSpec.of(bpm, ticks: 3, step: spread > 80 ? 40 : 20);
@@ -108,6 +109,8 @@ class ZoneTimeline extends StatelessWidget {
       semanticsLabel: _spoken(s),
       legend: empty
           ? const []
+          : floors.isEmpty
+          ? [('Heart rate · zones unavailable', ink[0])]
           : [
               for (var z = 0; z <= 5; z++)
                 if (present.contains(z)) (z == 0 ? 'Rest' : 'Zone $z', ink[z]),
