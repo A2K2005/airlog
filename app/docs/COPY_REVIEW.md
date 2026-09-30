@@ -423,6 +423,18 @@ The plan card's generated text is in §4.1. The strings below are the rest of th
 
 ### 3.10 Onboarding [Revamp]
 
+> **Status (onboarding redesign, branch `airlog/onboarding-revamp`):**
+> - O01–O26 are applied or superseded. The strings now live in `features/onboarding/onboarding_copy.dart`.
+> - The flow is now Welcome (a sample Recovery tile and ⓘ score chips), Works with (device types and two privacy tiles), and Choose (a birth-year wheel, then two choice tiles).
+> - O03, O04–O06 and O10–O14 are replaced by tiles and ⓘ sheets.
+> - O08 is replaced by the ⓘ footnote "Our own formula, worked out on this phone. Not medical advice."
+> - O09 leaves onboarding; the line stays in Settings, Licences and Methodology.
+> - O19's field is replaced by a bounded wheel, so the range error can't occur.
+> - O22 and O23 say "your phone’s app store", not "Google Play" (decision D1).
+> - O20 and O21 no longer apply to onboarding. The user removed the "What Airlog will read" step, so "Use my tracker" opens Android’s Health Connect permission sheet directly (it lists each data type with a switch).
+> - Health Connect’s own privacy-policy link still opens `/privacy`.
+> - Still open: O27 (`hcReadTypes` in `app/copy.dart`) and the O20 lede inside `app/hc_rationale.dart`'s Sources sheet. Both are shared, so they're out of onboarding's scope.
+
 | ID | P | Current | Proposed (paste-ready) | Why | Where |
 |---|---|---|---|---|---|
 | O01 | P3 | "Next" / "Back" / "Waiting for Health Connect…" / "Continue to Health Connect" / "Try with sample data instead" / "Open Health Connect settings" / "Try again" / "{n} of 3" / spoken "Step {n} of {total}" | keep | — | features/onboarding/onboarding_screen.dart:35-124,189,249 |

@@ -13,6 +13,7 @@
 // nothing when another route is already on top (e.g. a cold start on
 // /privacy from Health Connect).
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -25,6 +26,7 @@ import '../../app/route_names.dart';
 import '../../domain/models.dart' show UserProfile;
 import '../../domain/repositories.dart';
 import '../../app/platform_services.dart';
+import 'onboarding_copy.dart';
 
 abstract class OnboardingStore {
   Future<bool> seen();
@@ -108,13 +110,43 @@ void resetOnboardingGate() => _pushedThisProcess = false;
 // ── the flow ─────────────────────────────────────────────────────────────
 
 enum OnboardingStep {
+  /// 1 · Welcome: the sample Recovery tile and the three scores.
   what,
+
+  /// 2 · Works with your tracker: Health Connect and the privacy promises.
   privacy,
+
+  /// 3 · How do you want to start: birth year, then the two choices.
   choose,
-  rationale,
+
+  /// The system permission sheet is open ("Use my tracker" or "Try
+  /// again"): the page stays where it was, its choices disabled.
   requesting,
+
+  /// 3b · Not connected.
   denied,
   done,
+}
+
+/// The years the birth-year wheel offers: adults only, at most 100 years
+/// old, starting on [initial]. Built from the injected clock.
+class BirthYearRange {
+  const BirthYearRange({
+    required this.min,
+    required this.max,
+    required this.initial,
+  });
+
+  factory BirthYearRange.at(DateTime now) => BirthYearRange(
+    min: now.year - 100,
+    max: now.year - 18,
+    initial: now.year - 30,
+  );
+
+  final int min, max, initial;
+
+  int get count => max - min + 1;
+  bool contains(int y) => y >= min && y <= max;
 }
 
 class OnboardingState {
@@ -122,7 +154,7 @@ class OnboardingState {
     this.step = OnboardingStep.what,
     this.permissions,
     this.error,
-    this.birthYear = '',
+    this.birthYear,
     this.busy = false,
   });
   final OnboardingStep step;
@@ -130,7 +162,9 @@ class OnboardingState {
   /// Result of the last Health Connect request.
   final HcPermissionState? permissions;
   final String? error;
-  final String birthYear;
+
+  /// Picked on the choose step; written to the profile only with a choice.
+  final int? birthYear;
   final bool busy;
 
   int get page => switch (step) {
@@ -144,13 +178,14 @@ class OnboardingState {
     HcPermissionState? permissions,
     String? error,
     bool clearError = false,
-    String? birthYear,
+    int? birthYear,
+    bool clearBirthYear = false,
     bool? busy,
   }) => OnboardingState(
     step: step ?? this.step,
     permissions: permissions ?? this.permissions,
     error: clearError ? null : (error ?? this.error),
-    birthYear: birthYear ?? this.birthYear,
+    birthYear: clearBirthYear ? null : (birthYear ?? this.birthYear),
     busy: busy ?? this.busy,
   );
 }
@@ -159,26 +194,29 @@ class OnboardingController extends Notifier<OnboardingState> {
   @override
   OnboardingState build() => const OnboardingState();
 
-  /// The birth year typed on the choose step (asked once: it sets max HR).
-  void setBirthYear(String v) =>
-      state = state.copyWith(birthYear: v.trim(), clearError: true);
+  /// The years the wheel offers, from the injected clock.
+  BirthYearRange birthYearRange() =>
+      BirthYearRange.at(ref.read(clockProvider)());
 
+  /// The birth year picked on the choose step (asked once: it sets max HR).
+  /// Null clears it.
+  void setBirthYear(int? year) => state = year == null
+      ? state.copyWith(clearBirthYear: true, clearError: true)
+      : state.copyWith(birthYear: year, clearError: true);
+
+  /// A backstop: the wheel only offers valid years.
   bool _validBirthYear() {
-    if (state.birthYear.isEmpty) return true;
-    final y = int.tryParse(state.birthYear);
-    final year = ref.read(clockProvider)().year;
-    if (y != null && y >= year - 100 && y <= year - 18) return true;
-    state = state.copyWith(
-      error:
-          'Airlog is for adults. Enter a birth year between '
-          '${year - 100} and ${year - 18}, or leave it blank.',
-    );
+    final y = state.birthYear;
+    if (y == null) return true;
+    final r = birthYearRange();
+    if (r.contains(y)) return true;
+    state = state.copyWith(error: OnboardingCopy.adultsOnly(r.min, r.max));
     return false;
   }
 
-  /// Birth year is optional, but an entered value must be valid.
+  /// Birth year is optional; written with the choice, never before it.
   Future<void> _saveBirthYear() async {
-    final y = int.tryParse(state.birthYear);
+    final y = state.birthYear;
     if (y == null) return;
     final repo = ref.read(healthRepositoryProvider);
     final p = await repo.profile();
@@ -205,21 +243,18 @@ class OnboardingController extends Notifier<OnboardingState> {
     step: switch (state.step) {
       OnboardingStep.privacy => OnboardingStep.what,
       OnboardingStep.choose => OnboardingStep.privacy,
-      OnboardingStep.rationale ||
       OnboardingStep.denied => OnboardingStep.choose,
       final s => s,
     },
   );
 
-  /// "Connect Health Connect": explain each data type before the system sheet.
-  void showRationale() {
-    if (state.busy || !_validBirthYear()) return;
-    state = state.copyWith(step: OnboardingStep.rationale, clearError: true);
-  }
-
-  /// "Explore with demo data". Returns when the flag is stored.
+  /// "Try sample data". Returns when the flag is stored.
   Future<void> chooseDemo() async {
-    if (state.busy || !_validBirthYear()) return;
+    if (state.busy ||
+        state.step == OnboardingStep.requesting ||
+        !_validBirthYear()) {
+      return;
+    }
     state = state.copyWith(busy: true, clearError: true);
     final repo = ref.read(healthRepositoryProvider);
     try {
@@ -230,17 +265,20 @@ class OnboardingController extends Notifier<OnboardingState> {
       state = state.copyWith(step: OnboardingStep.done, busy: false);
     } catch (_) {
       if (!ref.mounted) return;
-      state = state.copyWith(
-        busy: false,
-        error: 'Could not start sample data. Your choice was not completed. Try again.',
-      );
+      state = state.copyWith(busy: false, error: OnboardingCopy.sampleFailed);
     }
   }
 
-  /// Opens the Health Connect permission sheet. On any grant the repository
-  /// switches itself to live mode (first successful grant).
+  /// "Use my tracker" (and "Try again"): opens Android's Health Connect
+  /// permission sheet directly. The sheet lists every data type with its own
+  /// switch, so there is no screen of our own before it. On any grant the
+  /// repository switches itself to live mode (first successful grant).
   Future<void> requestHealthConnect() async {
-    if (state.step == OnboardingStep.requesting || !_validBirthYear()) return;
+    if (state.busy ||
+        state.step == OnboardingStep.requesting ||
+        !_validBirthYear()) {
+      return;
+    }
     state = state.copyWith(step: OnboardingStep.requesting, clearError: true);
     HcPermissionState st;
     try {
@@ -257,6 +295,43 @@ class OnboardingController extends Notifier<OnboardingState> {
       state = state.copyWith(step: OnboardingStep.denied, permissions: st);
       return;
     }
+    await _finishWithGrant(st);
+  }
+
+  /// Back from Health Connect's settings (or the app store) while "Not
+  /// connected" shows: read the permissions again. A grant made there
+  /// finishes onboarding; otherwise the card and buttons follow the new
+  /// state (an install turns "isn't installed" into "Try again").
+  Future<void> recheckPermissions() async {
+    if (state.step != OnboardingStep.denied || state.busy) return;
+    final repo = ref.read(healthRepositoryProvider);
+    HcPermissionState st;
+    try {
+      st = await repo.healthConnectPermissions();
+    } catch (_) {
+      return;
+    }
+    if (!ref.mounted || state.step != OnboardingStep.denied) return;
+    if (st.granted.isEmpty) {
+      state = state.copyWith(permissions: st, clearError: true);
+      return;
+    }
+    // Granted outside the system sheet, so the repository's first-grant
+    // switch did not run: switch to live here (or sync, when already live).
+    try {
+      if (repo.mode != DataMode.live) {
+        await repo.setMode(DataMode.live);
+      } else {
+        unawaited(repo.syncNow().catchError((Object _) {}));
+      }
+    } catch (_) {}
+    if (!ref.mounted) return;
+    await _finishWithGrant(st);
+  }
+
+  /// Any grant (the system sheet, or settings then resume): save the birth
+  /// year and mark onboarding seen.
+  Future<void> _finishWithGrant(HcPermissionState st) async {
     try {
       await _saveBirthYear();
       await ref.read(onboardingStoreProvider).markSeen();
@@ -264,7 +339,7 @@ class OnboardingController extends Notifier<OnboardingState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         step: OnboardingStep.choose,
-        error: 'Access was granted, but setup could not finish. Try again.',
+        error: OnboardingCopy.setupFailed,
       );
       return;
     }

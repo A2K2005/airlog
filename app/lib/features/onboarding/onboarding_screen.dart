@@ -1,6 +1,17 @@
-// First launch, three calm steps: what Airlog is (and is not), where your
-// data lives, and how to start — demo data, or Health Connect with the
-// reason for each data type shown BEFORE the system permission sheet.
+// First launch, three short steps that show rather than tell:
+//
+//   1 · Welcome     a sample Recovery tile and the three scores (ⓘ each)
+//   2 · Works with  device types → Health Connect, and two privacy promises
+//   3 · Choose      birth year (optional, before the choices: they commit on
+//                   tap), then "Use my tracker" or "Try sample data"
+//   3b · Not connected, after a denial (still page 3 of 3)
+//
+// "Use my tracker" opens Android's Health Connect permission sheet directly
+// (it lists every data type with its own switch); a denial lands on "Not
+// connected" (3b). Health Connect's own "privacy policy" link opens the
+// in-app /privacy route (MainActivity), never an onboarding step.
+// Pages slide and fade in the direction of travel; tiles cascade in on the
+// way forward. Everything goes through the reduced-motion gate.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,14 +20,61 @@ import '../../app/platform_services.dart';
 import '../../app/route_names.dart';
 import '../../design/design.dart';
 import '../../domain/repositories.dart' show HcAvailability;
-import '../../app/hc_rationale.dart';
+import 'birth_year_sheet.dart';
+import 'onboarding_copy.dart';
 import 'onboarding_view_model.dart';
+import 'onboarding_widgets.dart';
 
-class OnboardingScreen extends ConsumerWidget {
+/// Android's Health Connect settings (after two denials the sheet no longer
+/// shows, so the user grants there; QA-06).
+final hcSettingsUri = Uri.parse(
+  'intent:#Intent;action=android.health.connect.action.HEALTH_HOME_SETTINGS;end',
+);
+
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+int _order(OnboardingStep s) => switch (s) {
+  OnboardingStep.what => 0,
+  OnboardingStep.privacy => 1,
+  OnboardingStep.choose ||
+  OnboardingStep.requesting ||
+  OnboardingStep.done => 2,
+  OnboardingStep.denied => 3,
+};
+
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  late final AppLifecycleListener _life;
+
+  /// The page on screen (done keeps the last one while the route pops).
+  OnboardingStep _shown = OnboardingStep.what;
+
+  /// +1 moving forward, −1 moving back: the slide's direction.
+  int _dir = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    // Back from Health Connect's settings or the app store: read the
+    // permissions again (a grant made there finishes onboarding).
+    _life = AppLifecycleListener(
+      onResume: () =>
+          ref.read(onboardingControllerProvider.notifier).recheckPermissions(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _life.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final s = ref.watch(onboardingControllerProvider);
     final c = ref.read(onboardingControllerProvider.notifier);
     ref.listen(onboardingControllerProvider, (prev, next) {
@@ -28,39 +86,44 @@ class OnboardingScreen extends ConsumerWidget {
         });
       }
     });
-    final p = P.of(context);
-    final (Widget body, Widget actions) = switch (s.step) {
+
+    final done = s.step == OnboardingStep.done;
+    // While the system sheet is open (requesting) or the route pops (done),
+    // the page on screen stays: choose, or Not connected for "Try again".
+    final requesting = s.step == OnboardingStep.requesting;
+    final view = done || requesting ? _shown : s.step;
+    if (view != _shown) {
+      _dir = _order(view) >= _order(_shown) ? 1 : -1;
+      _shown = view;
+    }
+    final forward = _dir > 0;
+
+    Future<void> editBirthYear() async {
+      final r = await showBirthYearSheet(
+        context,
+        range: c.birthYearRange(),
+        current: s.birthYear,
+      );
+      if (r != null) c.setBirthYear(r.year);
+    }
+
+    final locked = done || requesting;
+    final (Widget body, Widget actions) = switch (view) {
       OnboardingStep.what => (
-        const _What(),
-        AppButton(label: 'Next', expand: true, onTap: c.next),
+        _Welcome(stagger: forward),
+        AppButton(
+          label: OnboardingCopy.getStarted,
+          expand: true,
+          onTap: done ? null : c.next,
+        ),
       ),
       OnboardingStep.privacy => (
-        const _Privacy(),
-        _Pair(
-          primary: AppButton(label: 'Next', expand: true, onTap: c.next),
-          onBack: c.back,
-        ),
-      ),
-      OnboardingStep.choose || OnboardingStep.done => (
-        _Choose(
-          onDemo: s.busy ? null : c.chooseDemo,
-          onConnect: s.busy ? null : c.showRationale,
-          onBirthYear: c.setBirthYear,
-          state: s,
-        ),
-        _Pair(onBack: c.back),
-      ),
-      OnboardingStep.rationale || OnboardingStep.requesting => (
-        const _Rationale(),
+        _WorksWith(stagger: forward),
         _Pair(
           primary: AppButton(
-            label: s.step == OnboardingStep.requesting
-                ? 'Waiting for Health Connect…'
-                : 'Continue to Health Connect',
+            label: OnboardingCopy.next,
             expand: true,
-            onTap: s.step == OnboardingStep.requesting
-                ? null
-                : c.requestHealthConnect,
+            onTap: c.next,
           ),
           onBack: c.back,
         ),
@@ -69,41 +132,57 @@ class OnboardingScreen extends ConsumerWidget {
         _Denied(state: s),
         _Pair(
           primary: AppButton(
-            label: 'Try with sample data instead',
+            label: OnboardingCopy.trySampleInstead,
             expand: true,
-            onTap: c.chooseDemo,
+            onTap: locked ? null : c.chooseDemo,
           ),
           // After two denials Android stops showing the sheet: offer its
           // settings instead of a "Try again" that does nothing (QA-06).
           secondary: s.permissions?.deniedTwice == true
               ? AppButton(
-                  label: 'Open Health Connect settings',
+                  label: OnboardingCopy.openHcSettings,
                   kind: AppButtonKind.secondary,
                   expand: true,
-                  onTap: () => ref.read(linkOpenerProvider)(
-                    Uri.parse(
-                      'intent:#Intent;action=android.health.connect.action.HEALTH_HOME_SETTINGS;end',
-                    ),
-                  ),
+                  onTap: () => ref.read(linkOpenerProvider)(hcSettingsUri),
                 )
               : s.permissions?.availability == HcAvailability.available ||
                     s.permissions == null
               ? AppButton(
-                  label: 'Try again',
+                  label: requesting
+                      ? OnboardingCopy.waitingForHc
+                      : OnboardingCopy.tryAgain,
                   kind: AppButtonKind.secondary,
                   expand: true,
-                  onTap: c.requestHealthConnect,
+                  onTap: locked ? null : c.requestHealthConnect,
                 )
               : null,
           onBack: c.back,
         ),
       ),
+      OnboardingStep.choose ||
+      OnboardingStep.requesting ||
+      OnboardingStep.done => (
+        _Choose(
+          stagger: forward,
+          state: s,
+          waiting: requesting,
+          onDemo: s.busy || locked ? null : c.chooseDemo,
+          // Straight to Android's permission sheet: it lists each data type
+          // with its own switch.
+          onConnect: s.busy || locked ? null : c.requestHealthConnect,
+          onBirthYear: s.busy || locked ? null : editBirthYear,
+        ),
+        _Pair(onBack: c.back),
+      ),
     };
+
     // System Back steps back through onboarding (QA-05); from the first
     // step it leaves without a choice, so onboarding is offered again next
     // launch (it is marked seen only by a choice).
-    final first =
-        s.step == OnboardingStep.what || s.step == OnboardingStep.done;
+    final first = s.step == OnboardingStep.what || done;
+    final p = P.of(context);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final currentKey = ValueKey(view);
     return PopScope(
       canPop: first,
       onPopInvokedWithResult: (didPop, _) {
@@ -120,9 +199,11 @@ class OnboardingScreen extends ConsumerWidget {
                   children: [
                     _Dots(page: s.page),
                     const Spacer(),
-                    Text(
-                      '${s.page + 1} of 3',
-                      style: F.tab(F.cap).copyWith(color: p.ink3),
+                    ExcludeSemantics(
+                      child: Text(
+                        OnboardingCopy.counter(s.page + 1, _Dots.n),
+                        style: F.tab(F.cap).copyWith(color: p.ink3),
+                      ),
                     ),
                   ],
                 ),
@@ -132,27 +213,28 @@ class OnboardingScreen extends ConsumerWidget {
                   duration: motion(context, Motion.slow, fade: true),
                   reverseDuration: motion(context, Motion.exit, fade: true),
                   switchInCurve: Motion.enter,
+                  // The outgoing page runs its curve backwards: flipped, so
+                  // it leaves on an ease-out too.
                   switchOutCurve: Motion.enter.flipped,
-                  transitionBuilder: (child, a) => FadeTransition(
-                    opacity: a,
-                    child: Motion.enabled(context)
-                        ? SlideTransition(
-                            position: Tween(
-                              begin: const Offset(0, .02),
-                              end: Offset.zero,
-                            ).animate(a),
-                            child: child,
-                          )
-                        : child,
-                  ),
-                  child: KeyedSubtree(
-                    key: ValueKey(
-                      s.step == OnboardingStep.requesting
-                          ? OnboardingStep.rationale
-                          : s.step,
-                    ),
-                    child: body,
-                  ),
+                  transitionBuilder: (child, a) {
+                    final fade = FadeTransition(opacity: a, child: child);
+                    if (!Motion.enabled(context)) return fade;
+                    // Incoming slides in from the side of travel; outgoing
+                    // slides away to the other side. Mirrored in RTL.
+                    final d = .06 * _dir * (rtl ? -1 : 1);
+                    final incoming = child.key == currentKey;
+                    return FadeTransition(
+                      opacity: a,
+                      child: SlideTransition(
+                        position: Tween(
+                          begin: Offset(incoming ? d : -d, 0),
+                          end: Offset.zero,
+                        ).animate(a),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: KeyedSubtree(key: currentKey, child: body),
                 ),
               ),
               Padding(
@@ -246,7 +328,7 @@ class _Pair extends StatelessWidget {
       if (secondary != null) ...[const SizedBox(height: S.x2), secondary!],
       const SizedBox(height: S.x1),
       AppButton(
-        label: 'Back',
+        label: OnboardingCopy.back,
         kind: AppButtonKind.quiet,
         expand: true,
         onTap: onBack,
@@ -255,6 +337,7 @@ class _Pair extends StatelessWidget {
   );
 }
 
+/// A page: a title (a header), an optional lede, then its content.
 class _Page extends StatelessWidget {
   const _Page({required this.title, this.lede, required this.children});
   final String title;
@@ -265,7 +348,12 @@ class _Page extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = P.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(S.gutter, S.x8, S.gutter, S.x4),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        S.gutter,
+        S.x8,
+        S.gutter,
+        S.x4,
+      ),
       children: [
         Semantics(
           header: true,
@@ -282,205 +370,162 @@ class _Page extends StatelessWidget {
   }
 }
 
-class _What extends StatelessWidget {
-  const _What();
+/// A tile's entrance: slot 1, 2, 3… at [Motion.staggerTiles] apart, only on
+/// the way forward (going back shows the page at once).
+Widget _tile(bool stagger, int slot, Widget child) => EnterFade(
+  index: slot,
+  step: Motion.staggerTiles,
+  enabled: stagger,
+  child: child,
+);
 
-  @override
-  Widget build(BuildContext context) {
-    return const _Page(
-      title: 'Airlog',
-      lede:
-          'Recovery, strain and sleep from your tracker, computed on this '
-          'phone and explained in full.',
-      children: [
-        OverLabel('What it is'),
-        SizedBox(height: S.x3),
-        BulletLine(
-          'How ready you are, each morning, from HRV, resting heart '
-          'rate, sleep and breathing against your own baseline.',
-          icon: Icons.wb_twilight_rounded,
-          strong: 'Recovery.',
-        ),
-        BulletLine(
-          'How hard your heart worked across the day, by '
-          'heart-rate zone.',
-          icon: Icons.bolt_rounded,
-          strong: 'Strain.',
-        ),
-        BulletLine(
-          'What you needed, what you got, and the debt carried '
-          'forward.',
-          icon: Icons.bedtime_rounded,
-          strong: 'Sleep.',
-        ),
-        SizedBox(height: S.x5),
-        OverLabel('What it isn’t'),
-        SizedBox(height: S.x3),
-        BulletLine(
-          'It notices patterns against your own normal; it does not '
-          'diagnose anything.',
-          icon: Icons.medical_services_outlined,
-          strong: 'Not medical.',
-        ),
-        BulletLine(
-          'Published methods, every formula on view. Numbers will '
-          'differ from WHOOP’s and Fitbit’s.',
-          icon: Icons.functions_rounded,
-          strong: 'Not WHOOP’s formula.',
-        ),
-        BulletLine(
-          'Not affiliated with Google, Fitbit or WHOOP.',
-          icon: Icons.link_off_rounded,
-          strong: 'Independent.',
-        ),
-      ],
-    );
-  }
-}
+// ── 1 · welcome ─────────────────────────────────────────────────────────────
 
-class _Privacy extends StatelessWidget {
-  const _Privacy();
+/// The sample week behind the hero tile (oldest first).
+const _heroSteps = [
+  ReadinessStep(value: 64, label: '64', delta: '+3'),
+  ReadinessStep(value: 69, label: '69', delta: '+5'),
+  ReadinessStep(value: 66, label: '66', delta: '−3'),
+  ReadinessStep(value: 72, label: '72', delta: '+6'),
+  ReadinessStep(value: 71, label: '71', delta: '−1'),
+  ReadinessStep(value: 78, label: '78', delta: '+7'),
+];
 
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'It stays on this phone',
-      lede: 'Every score is computed here. There is nothing to sign up for.',
-      children: [
-        const BulletLine(
-          'Scores are computed on the phone, from data already '
-          'on the phone.',
-          icon: Icons.phone_android_rounded,
-        ),
-        const BulletLine(
-          'No Airlog server and no account.',
-          icon: Icons.cloud_off_rounded,
-        ),
-        const BulletLine(
-          'No analytics, no ads, no tracking.',
-          icon: Icons.visibility_off_outlined,
-        ),
-        const BulletLine(
-          'Export readings and scores, or delete local data, whenever you like.',
-          icon: Icons.ios_share_rounded,
-        ),
-        const BulletLine(
-          'If you opt in to a cloud coach, your questions and permitted '
-          'context are sent to the provider you choose. On-device coaching '
-          'does not send them.',
-          icon: Icons.chat_bubble_outline_rounded,
-        ),
-        const SizedBox(height: S.x4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: AppButton(
-            label: 'Read the privacy policy',
-            kind: AppButtonKind.quiet,
-            icon: Icons.lock_outline_rounded,
-            onTap: () => Navigator.of(context).pushNamed(Routes.privacy),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Choose extends StatelessWidget {
-  const _Choose({
-    required this.onDemo,
-    required this.onConnect,
-    required this.onBirthYear,
-    required this.state,
-  });
-  final VoidCallback? onDemo;
-  final VoidCallback? onConnect;
-  final ValueChanged<String> onBirthYear;
-  final OnboardingState state;
+class _Welcome extends StatelessWidget {
+  const _Welcome({required this.stagger});
+  final bool stagger;
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
-    Widget option(
-      IconData icon,
-      Color accent,
-      String title,
-      String body,
-      VoidCallback? onTap,
-    ) => AppCard(
-      onTap: onTap,
-      semanticLabel: '$title. $body',
-      child: ExcludeSemantics(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return _Page(
+      title: OnboardingCopy.welcomeTitle,
+      children: [
+        // One 348 column shares the tile's edges, and scales with the grid
+        // on a phone narrower than the design.
+        BentoGrid(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: p.wash(accent),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, size: 20, color: p.on(accent)),
-            ),
-            const SizedBox(width: S.x3),
-            Expanded(
+            SizedBox(
+              width: S.tileWideW,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: F.head.copyWith(color: p.ink)),
-                  const SizedBox(height: 2),
-                  Text(body, style: F.bodySm.copyWith(color: p.ink2)),
+                  _tile(
+                    stagger,
+                    1,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Explicit: a fresh install is live, so the scope's
+                        // chip would not show. This tile is always sample.
+                        Semantics(
+                          container: true,
+                          child: const SampleDataChip(),
+                        ),
+                        const SizedBox(height: S.x2),
+                        ReadinessTile(
+                          title: OnboardingCopy.heroTitle,
+                          score: OnboardingCopy.heroScore,
+                          status: OnboardingCopy.heroStatus,
+                          statA: OnboardingCopy.heroStatA,
+                          valueA: OnboardingCopy.heroValueA,
+                          statB: OnboardingCopy.heroStatB,
+                          valueB: OnboardingCopy.heroValueB,
+                          steps: _heroSteps,
+                          usual: 70,
+                          semanticLabel: OnboardingCopy.heroLabel,
+                          onTap: () =>
+                              showScoreSheet(context, ScoreKind.recovery),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: S.x4),
+                  _tile(
+                    stagger,
+                    2,
+                    const Wrap(
+                      spacing: S.x2,
+                      runSpacing: S.x2,
+                      children: [
+                        ScoreChip(ScoreKind.recovery),
+                        ScoreChip(ScoreKind.strain),
+                        ScoreChip(ScoreKind.sleep),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: S.x4),
+                  _tile(
+                    stagger,
+                    3,
+                    Text(
+                      OnboardingCopy.notMedical,
+                      style: F.cap.copyWith(color: p.ink3),
+                    ),
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: p.ink3),
           ],
         ),
-      ),
+      ],
     );
+  }
+}
+
+// ── 2 · works with ──────────────────────────────────────────────────────────
+
+class _WorksWith extends StatelessWidget {
+  const _WorksWith({required this.stagger});
+  final bool stagger;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
     return _Page(
-      title: 'How do you want to start?',
-      lede:
-          'You can switch at any time in Settings. Sample and real data are '
-          'kept apart.',
+      title: OnboardingCopy.worksTitle,
       children: [
-        if (state.error != null) ...[
-          StatusCard(
-            title: 'Check your setup',
-            body: state.error!,
-            tone: StatusTone.warning,
+        _tile(stagger, 1, const WorksWithPanel()),
+        const SizedBox(height: S.tileGap),
+        _tile(
+          stagger,
+          2,
+          SideBySide(
+            builder: (_) => const [
+              PromiseTile(
+                icon: Icons.phone_android_rounded,
+                title: OnboardingCopy.phoneTitle,
+                body: OnboardingCopy.phoneBody,
+                glow: GlowRecipes.s9,
+              ),
+              PromiseTile(
+                icon: Icons.visibility_outlined,
+                title: OnboardingCopy.readOnlyTitle,
+                body: OnboardingCopy.readOnlyBody,
+                glow: GlowRecipes.s8,
+              ),
+            ],
           ),
-          const SizedBox(height: S.x3),
-        ],
-        option(
-          Icons.favorite_border_rounded,
-          C.health,
-          'Connect Health Connect',
-          'We’ll find the apps you already use. You choose each data type.',
-          onConnect,
-        ),
-        const SizedBox(height: S.x3),
-        option(
-          Icons.science_outlined,
-          C.amber,
-          'Try with sample data',
-          '90 days of sample data, labelled “Sample data” everywhere. Good '
-              'for a look around first.',
-          onDemo,
         ),
         const SizedBox(height: S.x5),
-        TextFormField(
-          initialValue: state.birthYear,
-          enabled: !state.busy,
-          keyboardType: TextInputType.number,
-          maxLength: 4,
-          onChanged: onBirthYear,
-          decoration: const InputDecoration(
-            labelText: 'Birth year (optional)',
-            helperText: 'For adults 18+. Used to estimate maximum heart rate.',
-            helperMaxLines: 2,
-            counterText: '',
+        _tile(
+          stagger,
+          3,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                OnboardingCopy.coachCaveat,
+                style: F.cap.copyWith(color: p.ink3),
+              ),
+              const SizedBox(height: S.x1),
+              AppButton(
+                label: OnboardingCopy.privacyPolicy,
+                kind: AppButtonKind.quiet,
+                icon: Icons.lock_outline_rounded,
+                onTap: () => Navigator.of(context).pushNamed(Routes.privacy),
+              ),
+            ],
           ),
         ),
       ],
@@ -488,19 +533,102 @@ class _Choose extends StatelessWidget {
   }
 }
 
-class _Rationale extends StatelessWidget {
-  const _Rationale();
+// ── 3 · choose ──────────────────────────────────────────────────────────────
+
+class _Choose extends StatelessWidget {
+  const _Choose({
+    required this.stagger,
+    required this.state,
+    required this.waiting,
+    required this.onDemo,
+    required this.onConnect,
+    required this.onBirthYear,
+  });
+  final bool stagger;
+  final OnboardingState state;
+
+  /// Android's permission sheet is open.
+  final bool waiting;
+  final VoidCallback? onDemo;
+  final VoidCallback? onConnect;
+  final VoidCallback? onBirthYear;
 
   @override
-  Widget build(BuildContext context) => const _Page(
-    title: 'What Airlog will read',
-    lede:
-        'Health Connect asks you type by type next. Each one powers one '
-        'feature; anything you leave off shows as missing, never '
-        'guessed. Read only: Airlog writes nothing back.',
-    children: [HcRationaleList()],
-  );
+  Widget build(BuildContext context) {
+    final busy = state.busy;
+    return _Page(
+      title: OnboardingCopy.chooseTitle,
+      lede: OnboardingCopy.chooseLede,
+      children: [
+        if (state.error != null) ...[
+          EnterFade(
+            child: Semantics(
+              liveRegion: true,
+              child: StatusCard(
+                title: OnboardingCopy.errorTitle,
+                body: state.error!,
+                tone: StatusTone.warning,
+              ),
+            ),
+          ),
+          const SizedBox(height: S.x3),
+        ],
+        // Before the choices: they commit on tap.
+        _tile(
+          stagger,
+          1,
+          BirthYearRow(year: state.birthYear, onEdit: onBirthYear),
+        ),
+        const SizedBox(height: S.tileGap),
+        _tile(
+          stagger,
+          2,
+          SideBySide(
+            builder: (side) => [
+              ChoiceTile(
+                icon: Icons.favorite_rounded,
+                accent: C.health,
+                title: OnboardingCopy.trackerTitle,
+                body: waiting
+                    ? OnboardingCopy.waitingForHc
+                    : OnboardingCopy.trackerBody,
+                marker: const StatePill(
+                  label: OnboardingCopy.healthConnect,
+                  color: C.health,
+                ),
+                glow: GlowRecipes.m20,
+                onTap: onConnect,
+                semanticLabel: waiting
+                    ? OnboardingCopy.waitingForHc
+                    : '${OnboardingCopy.trackerTitle}. '
+                          '${OnboardingCopy.trackerBody}',
+                fill: side,
+              ),
+              ChoiceTile(
+                icon: Icons.science_outlined,
+                accent: C.amber,
+                title: OnboardingCopy.sampleTitle,
+                body: busy
+                    ? OnboardingCopy.sampleBusy
+                    : OnboardingCopy.sampleBody,
+                // The real chip: the exact label every screen will carry.
+                marker: const SampleDataChip(),
+                glow: GlowRecipes.m19,
+                onTap: onDemo,
+                semanticLabel: busy
+                    ? OnboardingCopy.sampleBusy
+                    : OnboardingCopy.sampleLabel,
+                fill: side,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
+
+// ── 3b · denied ─────────────────────────────────────────────────────────────
 
 class _Denied extends StatelessWidget {
   const _Denied({required this.state});
@@ -511,31 +639,37 @@ class _Denied extends StatelessWidget {
     final a = state.permissions?.availability;
     final (String title, String body) = switch (a) {
       HcAvailability.notInstalled => (
-        'Health Connect isn’t installed',
-        'Install Health Connect from Google Play, turn on sync in your '
-            'tracker’s app, then connect from Settings → Sources.',
+        OnboardingCopy.notInstalledTitle,
+        OnboardingCopy.notInstalledBody,
       ),
       HcAvailability.updateRequired => (
-        'Health Connect needs an update',
-        'Update it from Google Play, then connect from Settings → Sources.',
+        OnboardingCopy.updateTitle,
+        OnboardingCopy.updateBody,
       ),
       HcAvailability.unsupported => (
-        'Health Connect isn’t available here',
-        'This device cannot run Health Connect. You can still explore '
-            'everything with sample data.',
+        OnboardingCopy.unsupportedTitle,
+        OnboardingCopy.unsupportedBody,
+      ),
+      _ when state.error != null => (
+        OnboardingCopy.noAnswerTitle,
+        OnboardingCopy.noAnswerBody,
+      ),
+      _ when state.permissions?.deniedTwice == true => (
+        OnboardingCopy.nothingSharedTitle,
+        OnboardingCopy.deniedTwiceBody,
       ),
       _ => (
-        'No access granted',
-        state.error == null
-            ? 'Airlog cannot read your data without at least one data type. '
-                  'Nothing was changed.'
-            : 'Health Connect did not answer. Try again in a moment.',
+        OnboardingCopy.nothingSharedTitle,
+        OnboardingCopy.nothingSharedBody,
       ),
     };
     return _Page(
-      title: 'Not connected',
+      title: OnboardingCopy.deniedTitle,
       children: [
-        StatusCard(title: title, body: body, tone: StatusTone.warning),
+        Semantics(
+          liveRegion: true,
+          child: StatusCard(title: title, body: body, tone: StatusTone.warning),
+        ),
       ],
     );
   }

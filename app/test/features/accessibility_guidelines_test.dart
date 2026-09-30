@@ -3,8 +3,10 @@
 // every tap target ≥ 48 dp, every tappable node labelled, text contrast.
 
 import 'package:airlog/design/design.dart';
+import 'package:airlog/domain/repositories.dart';
 import 'package:airlog/features/journal/journal_screen.dart';
 import 'package:airlog/features/live/live_screen.dart';
+import 'package:airlog/features/onboarding/onboarding_copy.dart';
 import 'package:airlog/features/onboarding/onboarding_screen.dart';
 import 'package:airlog/features/settings/settings_screen.dart';
 import 'package:airlog/features/settings/sources_screen.dart';
@@ -56,4 +58,49 @@ void main() {
       });
     }
   }
+
+  // Onboarding past its first step: the glow panels, the birth-year sheet
+  // and "Not connected".
+  testWidgets('Onboarding steps 2–3b · dark: tap targets, labels, contrast', (
+    t,
+  ) async {
+    final handle = t.ensureSemantics();
+    final repo = ScreensBRepo.demo()
+      ..hcAfterRequest = const HcPermissionState(
+        availability: HcAvailability.available,
+        granted: [],
+        missing: ['HEART_RATE'],
+      );
+    await pumpB(t, const OnboardingScreen(), repo: repo);
+    await t.pumpAndSettle();
+    Future<void> check(String where) async {
+      await expectLater(
+        t,
+        meetsGuideline(androidTapTargetGuideline),
+        reason: where,
+      );
+      await expectLater(
+        t,
+        meetsGuideline(labeledTapTargetGuideline),
+        reason: where,
+      );
+      await expectLater(t, meetsGuideline(textContrastGuideline), reason: where);
+    }
+
+    await t.tap(find.text(OnboardingCopy.getStarted));
+    await t.pumpAndSettle();
+    await check('works with');
+    await t.tap(find.text(OnboardingCopy.next));
+    await t.pumpAndSettle();
+    await check('choose');
+    await t.tap(find.text(OnboardingCopy.birthYearAdd));
+    await t.pumpAndSettle();
+    await check('birth-year sheet');
+    await t.binding.handlePopRoute();
+    await t.pumpAndSettle();
+    await tapOn(t, find.text(OnboardingCopy.trackerTitle));
+    await t.pumpAndSettle();
+    await check('not connected');
+    handle.dispose();
+  });
 }

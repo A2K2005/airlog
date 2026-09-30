@@ -4,7 +4,8 @@
 //    values never read as two overlapping objects. Opacity + blur only, so it
 //    survives reduced motion (as a fade).
 //  * EnterFade: a one-time entrance (opacity + 8 px rise) with an optional
-//    stagger slot (≤ 30 ms per item, capped). It never blocks interaction and
+//    stagger slot (30 ms per item by default, capped; [EnterFade.step]
+//    widens it for a few large tiles). It never blocks interaction and
 //    runs once per mount; under reduced motion it is opacity only. Use it for
 //    rarely seen content (a sheet's sections, first load), never for things
 //    seen tens of times a day.
@@ -72,12 +73,17 @@ class EnterFade extends StatefulWidget {
     required this.child,
     this.index = 0,
     this.enabled = true,
+    this.step = Motion.stagger,
   });
 
   final Widget child;
 
   /// Stagger slot. Items past [Motion.staggerCap] enter with the cap.
   final int index;
+
+  /// Delay per stagger slot: [Motion.stagger], or [Motion.staggerTiles] for
+  /// a few large tiles.
+  final Duration step;
 
   /// False renders [child] immediately (e.g. already seen today).
   final bool enabled;
@@ -96,7 +102,7 @@ class _EnterFadeState extends State<EnterFade>
     super.didChangeDependencies();
     if (_c != null || !widget.enabled) return;
     final delay = Motion.enabled(context)
-        ? Motion.stagger * widget.index.clamp(0, Motion.staggerCap)
+        ? widget.step * widget.index.clamp(0, Motion.staggerCap)
         : Duration.zero;
     final body = motion(context, Motion.slow, fade: true);
     final total = delay + body;

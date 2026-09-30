@@ -40,6 +40,10 @@ abstract final class Motion {
   /// Per-item stagger for list entrances (cap 40 ms).
   static const stagger = Duration(milliseconds: 30);
 
+  /// Per-tile stagger for a few large tiles entering a rarely seen page
+  /// (onboarding): wider than [stagger] so 3–4 big tiles read as a cascade.
+  static const staggerTiles = Duration(milliseconds: 50);
+
   /// Most items a stagger ever delays; later items enter with the last one,
   /// so a long list never makes the user wait.
   static const staggerCap = 8;

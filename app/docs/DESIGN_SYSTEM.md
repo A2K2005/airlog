@@ -79,7 +79,7 @@ Also:
 | `ProvenanceChip` | `({required label, icon, onTap, plain})` |
 | `ProvenanceChip.of` | `(Provenance, {plain})`; `describe(p)` |
 | `NumberSwap` | `(text, {required style})`: for rare changes only (a sync), never for a number that ticks every second (Live) or changes on a day step |
-| `EnterFade` | `({required child, index, enabled})`: one-time 30 ms stagger, capped at 8 items |
+| `EnterFade` | `({required child, index, enabled, step = Motion.stagger})`: one-time stagger, 30 ms per item by default (`Motion.staggerTiles`, 50 ms, for a few large tiles), capped at 8 items |
 | `OverLabel` | `(text)`: an uppercase group label |
 | `KeyValueLine` | `(label, value, {valueColor})`: the value in tabular figures |
 | `BulletLine` | `(text, {icon, strong, large = false})`: a dot or icon line with an optional bold lead-in. `large` uses body size, for the privacy policy |
@@ -137,7 +137,7 @@ The look is a 1:1 copy of the user's own Figma widget PNGs (`Widget/{Small,Mediu
   - The app ramp, for screens without a PNG: `display`, `t1`, `t2`, `head`, `body`, `bodySm`, `cap`, `micro`, `over`.
   - `F.numerals` is **Subway Ticker Grid** (dot matrix): `dot72`, `dot48`, `dot40`, `dot36`, `dot32`, `dot28`, `dot24`. The old numeral names `n96`, `n64`, `n44`, `n32`, `n24` and `n18` map onto it.
 - **Motion:**
-  - Durations: press 120 ms, release 90 ms, 160, 200 and 280 ms, exit 180 ms, sweep 700 ms.
+  - Durations: press 120 ms, release 90 ms, 160, 200 and 280 ms, exit 180 ms, sweep 700 ms. Stagger 30 ms per item (`Motion.stagger`), 50 ms per large tile (`Motion.staggerTiles`).
   - Curves: enter (0.23,1,0.32,1), move (0.77,0,0.175,1), drawer (0.32,0.72,0,1).
   - `motion(c, d, {fade})` zeroes movement under reduced motion.
   - **Exits use the flipped curve.** A reverse runs its curve backwards, so an exit that reuses the enter curve plays as an ease-in. Every reverse or switch-out curve is `Motion.enter.flipped` or `Motion.drawer.flipped`.
