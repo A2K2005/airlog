@@ -6,7 +6,7 @@ Airlog is an Android app built in Flutter. It reads raw measurements from any we
 
 Built end to end. Next milestone: field validation on the Fitbit Air.
 
-![Airlog's Today, Recovery, Sleep and Trends screens for the same sample day: a plan headed "Ready to push", Recovery 78, 7 h 1 m of sleep against a 7 h 51 m target, and 30 days of recovery and strain](docs/readme/hero.png)
+![Airlog on one morning, Saturday 26 September: Today with a plan headed "Good for a normal day", Recovery 57 % and HRV 46 ms, 7 % below usual; Recovery 57, Fair, with the points HRV, resting heart rate, sleep and breathing rate each earned; Sleep with 7 h 4 m asleep against a 7 h 40 m goal and the night's stages; Trends with 30 days of recovery and strain](docs/readme/hero.png)
 
 **[Download the Android app (APK)](https://github.com/A2K2005/airlog/releases/latest)** · Android 8.0 or newer
 
@@ -77,19 +77,13 @@ For example, I asked for the UI to be a 1:1 copy of my Figma widget pack. Princi
 
 ## The product
 
-**Today, Recovery, Sleep and Trends** are in the hero above. Every score opens to its breakdown: the inputs, the points each one earned and your baseline.
+**Strain, Journal and Live.** Every score opens to its breakdown: the inputs, the points each one earned and your baseline. The Journal links evening habits to next-day Recovery, and a live workout reads heart rate straight from the band over Bluetooth.
 
-![Strain against today's target with heart-rate zones; the Journal with evening tags and an association between alcohol and next-day recovery; live heart rate over Bluetooth with zones and session strain](docs/readme/scores.png)
+![The same Saturday: Strain 13.8 against a goal of 11.4, most of it from a 1 h 32 m ride, with 828 kcal and 20 active minutes; the Journal with 3 of 7 evenings logged, the evening tags, and alcohol linked to 25 points lower Recovery the next day; a live workout from a Fitbit Air at 164 bpm in zone 4, 12:34 in, strain 4.0, average 157 bpm](docs/readme/scores.png)
 
 **Coach.** Opens straight to the chat: on-device answers work with no setup, and your own Claude or Gemini key makes them fuller. Every number is checked against your data before you see it, and the answer's ⋯ menu shows where each one came from. An answer that can't be checked becomes a plain facts table, and emergencies never reach a model.
 
-![Coach setup with on-device as the default; a verified answer with three cited numbers; a facts-only fallback when the answer couldn't be verified; a chest-pain question routed to fixed safety copy](docs/readme/coach.png)
-
-<sub>Each render uses its own fixed sample day, so the coach shows Recovery 64 while the hero shows 78.</sub>
-
-**Sources.** Onboarding says what the app is and isn't, then offers real data through Health Connect or clearly labelled sample data.
-
-![Onboarding "What it is / What it isn't"; the choice between Health Connect and sample data; the Sources screen explaining one source per metric](docs/readme/sources.png)
+![The coach's empty chat with four suggested questions; the on-device answer to "Why is my Recovery lower today?": Recovery 57 % in the yellow zone, HRV 46 ms against a usual 49 ms, resting heart rate 56 bpm against 55 bpm and 92 % of the sleep goal, with Recovery and HRV cards and today's plan](docs/readme/coach.png)
 
 **Home-screen widgets.** The day at a glance without opening the app: Recovery, Strain and Sleep side by side, today's plan with its one next step, and Recovery on a ring. They refresh after every sync.
 
