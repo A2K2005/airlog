@@ -36,6 +36,10 @@ migrate_working_dir/
 **/failures/
 /coverage/
 
+# Tests and evals stay local, out of the public repo
+/test/
+/tool/eval_live.dart
+
 # Symbolication related
 app.*.symbols
 
