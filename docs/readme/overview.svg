@@ -1,89 +1,108 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
-<defs><radialGradient id="g1" cx="120" cy="560" r="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#15B79E" stop-opacity="0.12"/><stop offset="1" stop-color="#15B79E" stop-opacity="0"/></radialGradient><radialGradient id="g2" cx="1100" cy="80" r="520" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#A3E635" stop-opacity="0.1"/><stop offset="1" stop-color="#A3E635" stop-opacity="0"/></radialGradient><marker id="ah6B6B74" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6B6B74"/></marker></defs>
-<rect x="0" y="0" width="1200" height="640" rx="28" fill="#0B0B0C"/>
-<rect x="0" y="0" width="1200" height="640" rx="28" fill="url(#g1)"/>
-<rect x="0" y="0" width="1200" height="640" rx="28" fill="url(#g2)"/>
-<rect x="0.75" y="0.75" width="1198.5" height="638.5" rx="27.5" fill="none" stroke="#1E1E22" stroke-width="1.5"/>
-<text x="48.0" y="62.0" font-size="26" font-weight="700" fill="#F4F4F5" text-anchor="start">How Airlog works</text>
-<text x="48.0" y="92.0" font-size="16" font-weight="400" fill="#A1A1AA" text-anchor="start">Any wearable app in, one explainable morning answer out, computed on the phone</text>
-<path d="M376,140 L376,128 L1150,128 L1150,140" fill="none" stroke="#71717A" stroke-width="1.5"/>
-<rect x="658.6" y="117" width="208.8" height="22" fill="#0B0B0C"/>
-<text x="763.0" y="132.5" font-size="12" font-weight="700" fill="#A1A1AA" text-anchor="middle" letter-spacing="1.0">AIRLOG, ON YOUR PHONE</text>
-<rect x="40" y="156" width="300" height="356" rx="16" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
-<text x="60.0" y="194.0" font-size="20" font-weight="700" fill="#F4F4F5" text-anchor="start">Your wearable app</text>
-<rect x="60.0" y="214" width="125.0" height="28" rx="14.0" fill="#16B364" fill-opacity="0.12" stroke="#16B364" stroke-opacity="0.5" stroke-width="1"/>
-<text x="122.5" y="232.7" font-size="13" font-weight="700" fill="#F4F4F5" text-anchor="middle">Google Health</text>
-<rect x="195.0" y="214" width="125.0" height="28" rx="14.0" fill="#1570EF" fill-opacity="0.12" stroke="#1570EF" stroke-opacity="0.5" stroke-width="1"/>
-<text x="257.5" y="232.7" font-size="13" font-weight="700" fill="#F4F4F5" text-anchor="middle">Samsung Health</text>
-<rect x="60.0" y="252" width="125.0" height="28" rx="14.0" fill="#9258E3" fill-opacity="0.12" stroke="#9258E3" stroke-opacity="0.5" stroke-width="1"/>
-<text x="122.5" y="270.7" font-size="13" font-weight="700" fill="#F4F4F5" text-anchor="middle">Oura</text>
-<rect x="195.0" y="252" width="125.0" height="28" rx="14.0" fill="#EF4444" fill-opacity="0.12" stroke="#EF4444" stroke-opacity="0.5" stroke-width="1"/>
-<text x="257.5" y="270.7" font-size="13" font-weight="700" fill="#F4F4F5" text-anchor="middle">WHOOP</text>
-<rect x="60.0" y="290" width="125.0" height="28" rx="14.0" fill="#2E90FA" fill-opacity="0.12" stroke="#2E90FA" stroke-opacity="0.5" stroke-width="1"/>
-<text x="122.5" y="308.7" font-size="13" font-weight="700" fill="#F4F4F5" text-anchor="middle">Garmin</text>
-<rect x="195.0" y="290" width="125.0" height="28" rx="14.0" fill="#71717A" fill-opacity="0.12" stroke="#71717A" stroke-opacity="0.5" stroke-width="1"/>
-<text x="257.5" y="308.7" font-size="13" font-weight="700" fill="#F4F4F5" text-anchor="middle">+ any app</text>
-<path d="M190.0,334 L190.0,356" fill="none" stroke="#6B6B74" stroke-width="2" marker-end="url(#ah6B6B74)"/>
-<rect x="56" y="362" width="268" height="114" rx="14" fill="#10201D" stroke="#15B79E" stroke-opacity="0.45" stroke-width="1.5"/>
-<text x="74.0" y="396.0" font-size="18" font-weight="700" fill="#F4F4F5" text-anchor="start">Health Connect</text>
-<text x="74.0" y="420.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">Android&#x27;s on-device</text>
-<text x="74.0" y="442.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">health store</text>
-<rect x="376" y="156" width="234" height="356" rx="16" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
-<rect x="396" y="174" width="28" height="4" rx="2" fill="#F79009"/>
-<text x="396.0" y="206.0" font-size="20" font-weight="700" fill="#F4F4F5" text-anchor="start">Source picker</text>
-<text x="396.0" y="232.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">one app per metric,</text>
-<text x="396.0" y="254.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">never summed</text>
-<text x="396.0" y="276.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">or averaged</text>
-<rect x="390" y="306" width="206" height="56" rx="10" fill="#1B1B1F" stroke="#2C2C31"/>
-<text x="404.0" y="329.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">New watch</text>
-<text x="404.0" y="350.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">starts a fresh baseline</text>
-<rect x="390" y="372" width="206" height="56" rx="10" fill="#1B1B1F" stroke="#2C2C31"/>
-<text x="404.0" y="395.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Switches apps</text>
-<text x="404.0" y="416.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">only after 4 silent days</text>
-<rect x="390" y="438" width="206" height="56" rx="10" fill="#1B1B1F" stroke="#2C2C31"/>
-<text x="404.0" y="461.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Missing signal</text>
-<text x="404.0" y="482.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">flagged, never guessed</text>
-<rect x="646" y="156" width="234" height="356" rx="16" fill="#151517" stroke="#2C2C31" stroke-width="1.5"/>
-<rect x="666" y="174" width="28" height="4" rx="2" fill="#16B364"/>
-<text x="666.0" y="206.0" font-size="20" font-weight="700" fill="#F4F4F5" text-anchor="start">Score engine</text>
-<text x="666.0" y="232.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">against your own baseline</text>
-<rect x="666.0" y="252" width="194.0" height="32" rx="16.0" fill="#16B364" fill-opacity="0.12" stroke="#16B364" stroke-opacity="0.5" stroke-width="1"/>
-<text x="763.0" y="273.4" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="middle">Recovery</text>
-<rect x="666.0" y="294" width="194.0" height="32" rx="16.0" fill="#EF6820" fill-opacity="0.12" stroke="#EF6820" stroke-opacity="0.5" stroke-width="1"/>
-<text x="763.0" y="315.4" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="middle">Strain</text>
-<rect x="666.0" y="336" width="194.0" height="32" rx="16.0" fill="#1570EF" fill-opacity="0.12" stroke="#1570EF" stroke-opacity="0.5" stroke-width="1"/>
-<text x="763.0" y="357.4" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="middle">Sleep</text>
-<rect x="666.0" y="378" width="194.0" height="32" rx="16.0" fill="#15B79E" fill-opacity="0.12" stroke="#15B79E" stroke-opacity="0.5" stroke-width="1"/>
-<text x="763.0" y="399.4" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="middle">Health Monitor</text>
-<rect x="666.0" y="436" width="95.4" height="24" rx="7" fill="#16B364" fill-opacity="0.16" stroke="#16B364" stroke-opacity="0.35" stroke-width="1"/>
-<text x="675.0" y="452.5" font-size="12" font-weight="700" fill="#16B364" text-anchor="start" letter-spacing="0.6">PURE DART</text>
-<rect x="666.0" y="468" width="186.7" height="24" rx="7" fill="#16B364" fill-opacity="0.16" stroke="#16B364" stroke-opacity="0.35" stroke-width="1"/>
-<text x="675.0" y="484.5" font-size="12" font-weight="700" fill="#16B364" text-anchor="start" letter-spacing="0.6">ALGORITHM-VERSIONED</text>
-<rect x="916" y="156" width="234" height="356" rx="16" fill="#101A12" stroke="#16B364" stroke-opacity="0.45" stroke-width="1.5"/>
-<rect x="936" y="174" width="28" height="4" rx="2" fill="#A3E635"/>
-<text x="936.0" y="206.0" font-size="20" font-weight="700" fill="#F4F4F5" text-anchor="start">TodayPlan</text>
-<text x="936.0" y="240.0" font-size="22" font-weight="700" fill="#A3E635" text-anchor="start">How am I +</text>
-<text x="936.0" y="268.0" font-size="22" font-weight="700" fill="#A3E635" text-anchor="start">what to do</text>
-<circle cx="944" cy="301" r="4" fill="#A3E635"/>
-<text x="958.0" y="306.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">state in plain words</text>
-<circle cx="944" cy="333" r="4" fill="#A3E635"/>
-<text x="958.0" y="338.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">why, with the numbers</text>
-<circle cx="944" cy="365" r="4" fill="#A3E635"/>
-<text x="958.0" y="370.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">0–3 actions</text>
-<circle cx="944" cy="397" r="4" fill="#A3E635"/>
-<text x="958.0" y="402.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">what it&#x27;s based on</text>
-<rect x="936.0" y="436" width="124.5" height="24" rx="7" fill="#A3E635" fill-opacity="0.16" stroke="#A3E635" stroke-opacity="0.35" stroke-width="1"/>
-<text x="945.0" y="452.5" font-size="12" font-weight="700" fill="#A3E635" text-anchor="start" letter-spacing="0.6">DETERMINISTIC</text>
-<path d="M344,334.0 L370,334.0" fill="none" stroke="#6B6B74" stroke-width="2" marker-end="url(#ah6B6B74)"/>
-<path d="M614,334.0 L640,334.0" fill="none" stroke="#6B6B74" stroke-width="2" marker-end="url(#ah6B6B74)"/>
-<path d="M884,334.0 L910,334.0" fill="none" stroke="#6B6B74" stroke-width="2" marker-end="url(#ah6B6B74)"/>
-<rect x="40.0" y="540" width="362.6666666666667" height="58" rx="14" fill="#131315" stroke="#2C2C31" stroke-width="1.5"/>
-<text x="58.0" y="565.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Clean Architecture</text>
-<text x="58.0" y="586.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">screens never import the data layer</text>
-<rect x="418.6666666666667" y="540" width="362.6666666666667" height="58" rx="14" fill="#131315" stroke="#2C2C31" stroke-width="1.5"/>
-<text x="436.7" y="565.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Pure-Dart score engine</text>
-<text x="436.7" y="586.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">runs without a device, versioned formulas</text>
-<rect x="797.3333333333334" y="540" width="362.6666666666667" height="58" rx="14" fill="#131315" stroke="#2C2C31" stroke-width="1.5"/>
-<text x="815.3" y="565.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Private by default</text>
-<text x="815.3" y="586.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">no Airlog server, no account, no analytics</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="648" viewBox="0 0 1200 648">
+<style>
+.serif{font-family:Georgia,'Times New Roman',serif}
+.sans{font-family:'Inter','Segoe UI',Helvetica,Arial,sans-serif;font-variant-numeric:tabular-nums}
+.ink{fill:#1E1C18}.ink2{fill:#5F594F}.ochre{fill:#8B5E12}
+.b{font-weight:600}
+.hair{stroke:#D6CDBD;stroke-width:1}
+.flow{stroke:#1E1C18;stroke-width:1.5;fill:none}
+</style>
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+<path d="M1,1 L9,5 L1,9" fill="none" stroke="#1E1C18" stroke-width="1.5"/>
+</marker>
+</defs>
+<rect width="1200" height="648" fill="#F5F0E6"/>
+
+<text class="serif ink" x="56" y="74" font-size="30">How Airlog works</text>
+<text class="sans ink2" x="56" y="106" font-size="17">Any wearable app in, one explainable morning answer out, computed on the phone</text>
+<line x1="56" y1="132" x2="1144" y2="132" stroke="#1E1C18" stroke-width="1.5"/>
+
+<!-- The phone boundary: Airlog's part of the flow -->
+<rect x="288" y="152" width="856" height="374" fill="#ECE5D6"/>
+<text class="sans ink2 b" x="312" y="182" font-size="17">Airlog, on your phone</text>
+
+<!-- Column rules; the answer column carries the accent -->
+<g stroke="#1E1C18" stroke-width="1">
+<line x1="56" y1="204" x2="256" y2="204"/>
+<line x1="312" y1="204" x2="544" y2="204"/>
+<line x1="600" y1="204" x2="832" y2="204"/>
+</g>
+<line x1="888" y1="204.5" x2="1120" y2="204.5" stroke="#B7822A" stroke-width="3"/>
+
+<!-- Flow between stages -->
+<path class="flow" d="M264,231 H304" marker-end="url(#arr)"/>
+<path class="flow" d="M552,231 H592" marker-end="url(#arr)"/>
+<path class="flow" d="M840,231 H880" marker-end="url(#arr)"/>
+
+<!-- 1. Health Connect, fed by any wearable app -->
+<text class="serif ink" x="56" y="238" font-size="22">Health Connect</text>
+<text class="sans ink2" font-size="17"><tspan x="56" y="266">Android’s on-device</tspan><tspan x="56" y="290">health store</tspan></text>
+<path class="flow" d="M62,500 V304" marker-end="url(#arr)"/>
+<path class="flow" d="M62,360 H72 M62,388 H72 M62,416 H72 M62,444 H72 M62,472 H72 M62,500 H72"/>
+<text class="sans ink b" x="80" y="336" font-size="17">Your wearable app</text>
+<text class="sans ink" font-size="17">
+<tspan x="80" y="366">Google Health</tspan>
+<tspan x="80" y="394">Samsung Health</tspan>
+<tspan x="80" y="422">Oura</tspan>
+<tspan x="80" y="450">WHOOP</tspan>
+<tspan x="80" y="478">Garmin</tspan>
+<tspan x="80" y="506" class="ink2">+ any app</tspan>
+</text>
+
+<!-- 2. Source picker -->
+<text class="serif ink" x="312" y="238" font-size="22">Source picker</text>
+<text class="sans ink2" font-size="17"><tspan x="312" y="266">one app per metric, never</tspan><tspan x="312" y="290">summed or averaged</tspan></text>
+<line class="hair" x1="312" y1="310" x2="544" y2="310"/>
+<text class="sans ink b" x="312" y="340" font-size="17">New watch</text>
+<text class="sans ink2" x="312" y="364" font-size="17">starts a fresh baseline</text>
+<line class="hair" x1="312" y1="382" x2="544" y2="382"/>
+<text class="sans ink b" x="312" y="408" font-size="17">Switches apps</text>
+<text class="sans ink2" x="312" y="432" font-size="17">only after 4 silent days</text>
+<line class="hair" x1="312" y1="450" x2="544" y2="450"/>
+<text class="sans ink b" x="312" y="476" font-size="17">Missing signal</text>
+<text class="sans ink2" x="312" y="500" font-size="17">flagged, never guessed</text>
+
+<!-- 3. Score engine -->
+<text class="serif ink" x="600" y="238" font-size="22">Score engine</text>
+<text class="sans ink2" x="600" y="266" font-size="17">against your own baseline</text>
+<line class="hair" x1="600" y1="310" x2="832" y2="310"/>
+<text class="sans ink" x="600" y="340" font-size="19">Recovery</text>
+<line class="hair" x1="600" y1="352" x2="832" y2="352"/>
+<text class="sans ink" x="600" y="374" font-size="19">Strain</text>
+<line class="hair" x1="600" y1="386" x2="832" y2="386"/>
+<text class="sans ink" x="600" y="408" font-size="19">Sleep</text>
+<line class="hair" x1="600" y1="420" x2="832" y2="420"/>
+<text class="sans ink" x="600" y="442" font-size="19">Health Monitor</text>
+<line class="hair" x1="600" y1="454" x2="832" y2="454"/>
+<text class="sans ink2" font-size="17"><tspan x="600" y="476">Pure Dart</tspan><tspan x="600" y="500">Algorithm-versioned</tspan></text>
+
+<!-- 4. TodayPlan: the answer -->
+<text class="serif ink" x="888" y="238" font-size="22">TodayPlan</text>
+<text class="serif ochre" x="888" y="268" font-size="20" font-style="italic">How am I + what to do</text>
+<line class="hair" x1="888" y1="310" x2="1120" y2="310"/>
+<g fill="#B7822A">
+<rect x="888" y="328" width="7" height="7"/>
+<rect x="888" y="362" width="7" height="7"/>
+<rect x="888" y="396" width="7" height="7"/>
+<rect x="888" y="430" width="7" height="7"/>
+</g>
+<text class="sans ink" x="906" y="340" font-size="18">state in plain words</text>
+<line class="hair" x1="888" y1="352" x2="1120" y2="352"/>
+<text class="sans ink" x="906" y="374" font-size="18">why, with the numbers</text>
+<line class="hair" x1="888" y1="386" x2="1120" y2="386"/>
+<text class="sans ink" x="906" y="408" font-size="18">0–3 actions</text>
+<line class="hair" x1="888" y1="420" x2="1120" y2="420"/>
+<text class="sans ink" x="906" y="442" font-size="18">what it’s based on</text>
+<line class="hair" x1="888" y1="454" x2="1120" y2="454"/>
+<text class="sans ink2" x="888" y="476" font-size="17">Deterministic</text>
+
+<!-- How it's built -->
+<line class="hair" x1="56" y1="560" x2="1144" y2="560"/>
+<text class="sans ink b" x="56" y="592" font-size="17">Clean Architecture</text>
+<text class="sans ink2" x="56" y="616" font-size="17">screens never import the data layer</text>
+<text class="sans ink b" x="420" y="592" font-size="17">Pure-Dart score engine</text>
+<text class="sans ink2" x="420" y="616" font-size="17">runs without a device, versioned formulas</text>
+<text class="sans ink b" x="784" y="592" font-size="17">Private by default</text>
+<text class="sans ink2" x="784" y="616" font-size="17">no Airlog server, no account, no analytics</text>
 </svg>

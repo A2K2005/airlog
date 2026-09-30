@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="566" viewBox="0 0 1200 566">
+<style>
+.serif{font-family:Georgia,'Times New Roman',serif}
+.sans{font-family:'Inter','Segoe UI',Helvetica,Arial,sans-serif;font-variant-numeric:tabular-nums}
+.ink{fill:#1E1C18}.ink2{fill:#5F594F}
+.num{font-weight:600}
+</style>
+<rect width="1200" height="566" fill="#F5F0E6"/>
+
+<text class="serif ink" x="56" y="74" font-size="30">What reviewers said after the switch</text>
+<text class="sans ink2" x="56" y="106" font-size="17">Reviews and a reader survey from the months after Google Health replaced the Fitbit app</text>
+<line x1="56" y1="132" x2="1144" y2="132" stroke="#1E1C18" stroke-width="1.5"/>
+
+<!-- Left: review findings. One zero-based scale, 20 px per percentage point.
+     Categories can overlap, so each is its own bar, never stacked. -->
+<text class="sans ink2" x="56" y="176" font-size="17">Share of one- to three-star Play reviews</text>
+
+<text class="sans ink" x="56" y="222" font-size="18">About the switch itself, not a bug</text>
+<rect x="56" y="234" width="558" height="26" fill="#B7822A"/>
+<text class="sans ink num" x="628" y="255" font-size="21">27.9 %</text>
+
+<text class="sans ink" x="56" y="306" font-size="18">Sleep tracking was inaccurate</text>
+<rect x="56" y="318" width="256" height="26" fill="#B7822A"/>
+<text class="sans ink num" x="326" y="339" font-size="21">12.8 %</text>
+
+<text class="sans ink" x="56" y="390" font-size="18">A feature they used was gone or moved</text>
+<rect x="56" y="402" width="226" height="26" fill="#B7822A"/>
+<text class="sans ink num" x="296" y="423" font-size="21">11.3 %</text>
+
+<line x1="56" y1="452" x2="720" y2="452" stroke="#D6CDBD" stroke-width="1"/>
+<text class="sans ink2" x="56" y="484" font-size="17">Also: 252 reviews mentioned the AI features</text>
+
+<line x1="760" y1="158" x2="760" y2="494" stroke="#D6CDBD" stroke-width="1"/>
+
+<!-- Right top: willingness to pay. Different survey and base, so its own figure: 2 of 10 dots. -->
+<text class="sans ink2" x="800" y="176" font-size="17">TechRadar reader survey</text>
+<text class="sans ink" x="800" y="222" font-size="18">Would pay for the AI coach</text>
+<circle cx="811" cy="247" r="10" fill="#B7822A"/>
+<circle cx="839" cy="247" r="10" fill="#B7822A"/>
+<g fill="none" stroke="#B3A994" stroke-width="1.5">
+<circle cx="867" cy="247" r="9.25"/>
+<circle cx="895" cy="247" r="9.25"/>
+<circle cx="923" cy="247" r="9.25"/>
+<circle cx="951" cy="247" r="9.25"/>
+<circle cx="979" cy="247" r="9.25"/>
+<circle cx="1007" cy="247" r="9.25"/>
+<circle cx="1035" cy="247" r="9.25"/>
+<circle cx="1063" cy="247" r="9.25"/>
+</g>
+<text class="sans ink num" x="1087" y="255" font-size="21">20 %</text>
+
+<!-- Right bottom: Android alternatives. Listed, not scaled: monthly and one-time prices don't compare. -->
+<text class="sans ink2" x="800" y="342" font-size="17">Android alternatives, September 2026</text>
+<text class="sans ink" x="800" y="390" font-size="18">Welltory</text>
+<text class="sans ink" x="1144" y="390" font-size="18" text-anchor="end">$12.99 / month</text>
+<line x1="800" y1="406" x2="1144" y2="406" stroke="#D6CDBD" stroke-width="1"/>
+<text class="sans ink" x="800" y="436" font-size="18">Sonar</text>
+<text class="sans ink" x="1144" y="436" font-size="18" text-anchor="end">$5.99 / month</text>
+<line x1="800" y1="452" x2="1144" y2="452" stroke="#D6CDBD" stroke-width="1"/>
+<text class="sans ink" x="800" y="484" font-size="18">Tawen<tspan class="ink2" font-size="16" dx="10">readiness only</tspan></text>
+<text class="sans ink" x="1144" y="484" font-size="18" text-anchor="end">$4.99 once</text>
+
+<text class="sans ink2" x="56" y="530" font-size="16">Source: 3,349 one- to three-star Play reviews, Jun–mid-Aug 2026 · unstar.app</text>
+</svg>

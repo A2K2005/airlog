@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="778" viewBox="0 0 1200 778">
+<style>
+.serif{font-family:Georgia,'Times New Roman',serif}
+.sans{font-family:'Inter','Segoe UI',Helvetica,Arial,sans-serif;font-variant-numeric:tabular-nums}
+.ink{fill:#1E1C18}.ink2{fill:#5F594F}.ochre{fill:#8B5E12}.oxblood{fill:#7E2A33}
+.b{font-weight:600}.m{font-weight:500}
+.hair{stroke:#D6CDBD;stroke-width:1}
+.spine{stroke:#1E1C18;stroke-width:1.25;fill:none}
+</style>
+<rect width="1200" height="778" fill="#F5F0E6"/>
+
+<text class="serif ink" x="56" y="74" font-size="30">One North Star, five inputs, five guardrails</text>
+<rect x="882" y="50" width="262" height="36" fill="none" stroke="#1E1C18" stroke-width="1" stroke-dasharray="4 3"/>
+<text class="sans ink b" x="1013" y="74" font-size="17" text-anchor="middle">Planned targets, not results</text>
+<line x1="56" y1="108" x2="1144" y2="108" stroke="#1E1C18" stroke-width="1.5"/>
+
+<!-- North Star -->
+<text class="sans ochre b" x="56" y="146" font-size="17">North Star</text>
+<text class="serif ink" x="56" y="196" font-size="30">Mornings answered</text>
+<text class="sans ink2" font-size="17">
+<tspan x="56" y="234">Mornings per user per week where</tspan>
+<tspan x="56" y="258">the TodayPlan is built from the user’s</tspan>
+<tspan x="56" y="282">own data, not sample data and not</tspan>
+<tspan x="56" y="306">“waiting for data”.</tspan>
+</text>
+
+<!-- Tree: root node, spine, one tick per input -->
+<circle cx="356" cy="188" r="5" fill="#B7822A"/>
+<path class="spine" d="M361,188 H424 M424,188 V436 M424,188 H440 M424,250 H440 M424,312 H440 M424,374 H440 M424,436 H440"/>
+
+<!-- Inputs -->
+<text class="sans ink2" x="452" y="146" font-size="17">Input metrics</text>
+<text class="sans ink2" x="1144" y="146" font-size="17" text-anchor="end">Planned target</text>
+<line class="hair" x1="452" y1="160" x2="1144" y2="160"/>
+
+<text class="sans ink b" x="452" y="194" font-size="18">Install → first real plan</text>
+<text class="sans ink2" x="1144" y="194" font-size="17" text-anchor="end">Set from the first two weeks of beta data</text>
+<text class="sans ink2" x="452" y="217" font-size="17">Activation</text>
+<line class="hair" x1="452" y1="233" x2="1144" y2="233"/>
+
+<text class="sans ink b" x="452" y="256" font-size="18">Users reaching a full 14-night baseline</text>
+<text class="sans ink2" x="1144" y="256" font-size="17" text-anchor="end">Set from beta data</text>
+<text class="sans ink2" x="452" y="279" font-size="17">Scores stop being provisional</text>
+<line class="hair" x1="452" y1="295" x2="1144" y2="295"/>
+
+<text class="sans ink b" x="452" y="318" font-size="18">Mornings with every score input present</text>
+<text class="sans ink2" x="1144" y="318" font-size="17" text-anchor="end">Tracked per app</text>
+<text class="sans ink2" x="452" y="341" font-size="17">Data quality, per source app</text>
+<line class="hair" x1="452" y1="357" x2="1144" y2="357"/>
+
+<text class="sans ink b" x="452" y="380" font-size="18">Plan actions opened</text>
+<text class="sans ink2" x="1144" y="380" font-size="17" text-anchor="end">Set from beta data</text>
+<text class="sans ink2" x="452" y="403" font-size="17">The plan is used, not just read</text>
+<line class="hair" x1="452" y1="419" x2="1144" y2="419"/>
+
+<text class="sans ink b" x="452" y="442" font-size="18">Coach answers verified without repair</text>
+<text class="sans ink2" x="1144" y="442" font-size="17" text-anchor="end">Live benchmark first, then the field</text>
+<text class="sans ink2" x="452" y="465" font-size="17">Grounding quality with a real model</text>
+
+<line x1="56" y1="500" x2="1144" y2="500" stroke="#1E1C18" stroke-width="1"/>
+
+<!-- Guardrails: an oxblood rail instead of a spine -->
+<text class="sans oxblood b" x="56" y="540" font-size="17">Guardrails</text>
+<text class="sans ink2" x="56" y="566" font-size="17">Must hold while the inputs move</text>
+<line x1="424" y1="572" x2="424" y2="750" stroke="#7E2A33" stroke-width="3"/>
+
+<text class="sans ink2" x="452" y="540" font-size="17">Guardrail</text>
+<text class="sans ink2" x="1144" y="540" font-size="17" text-anchor="end">Threshold</text>
+<line class="hair" x1="452" y1="554" x2="1144" y2="554"/>
+
+<text class="sans ink" x="452" y="590" font-size="18">Red-flag questions routed to safety copy</text>
+<text class="sans oxblood m" x="1144" y="590" font-size="18" text-anchor="end">100 % recall, false positives ≤ 2 %</text>
+<line class="hair" x1="452" y1="603" x2="1144" y2="603"/>
+<text class="sans ink" x="452" y="628" font-size="18">Cloud sends without consent, or Google Health API data sent to a model</text>
+<text class="sans oxblood m" x="1144" y="628" font-size="18" text-anchor="end">Zero</text>
+<line class="hair" x1="452" y1="641" x2="1144" y2="641"/>
+<text class="sans ink" x="452" y="666" font-size="18">Demo mornings counted toward the North Star</text>
+<text class="sans oxblood m" x="1144" y="666" font-size="18" text-anchor="end">Zero</text>
+<line class="hair" x1="452" y1="679" x2="1144" y2="679"/>
+<text class="sans ink" x="452" y="704" font-size="18">First frame after launch</text>
+<text class="sans oxblood m" x="1144" y="704" font-size="18" text-anchor="end">About 500 ms on a phone (QA target)</text>
+<line class="hair" x1="452" y1="717" x2="1144" y2="717"/>
+<text class="sans ink" x="452" y="742" font-size="18">Crash and ANR rates</text>
+<text class="sans oxblood m" x="1144" y="742" font-size="18" text-anchor="end">Play Console vitals, no worse than the category</text>
+</svg>

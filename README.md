@@ -14,16 +14,11 @@ Built end to end on 90 days of sample data. Next milestone: field validation on 
 
 ## The problem
 
-In May 2026 Google replaced the Fitbit app with Google Health, and the reviews turned. A third-party analysis by [unstar.app](https://unstar.app/blog/fitbit-app-google-health-switch-sleep-sync-reviews-2026) read 3,349 one- to three-star Play reviews from June to mid-August 2026:
+In May 2026 Google replaced the Fitbit app with Google Health, and the reviews turned, according to a third-party analysis by [unstar.app](https://unstar.app/blog/fitbit-app-google-health-switch-sleep-sync-reviews-2026). The AI coach drew some of the most repeated complaints: one r/fitbit post was titled "Nonstop lies from the AI", and users reported invented 5 am runs, a walk logged as a swim, and "sleep" during hours the band was off.
 
-- 27.9 % were about the switch itself, not a bug.
-- 11.3 % said a feature they used was gone or moved.
-- 12.8 % said sleep tracking was inaccurate.
-- 252 mentioned the AI features.
+<img src="docs/readme/problem.svg" width="100%" alt="What reviewers said after the switch. Share of 3,349 one- to three-star Play reviews from June to mid-August 2026 (unstar.app): 27.9 % were about the switch itself, not a bug; 12.8 % said sleep tracking was inaccurate; 11.3 % said a feature they used was gone or moved; 252 reviews mentioned the AI features. In a TechRadar reader survey, 20 % would pay for the AI coach. Android alternatives in September 2026: Welltory $12.99 a month, Sonar $5.99 a month, Tawen $4.99 once, readiness only.">
 
-The AI coach drew some of the most repeated complaints. One r/fitbit post was titled "Nonstop lies from the AI". Users reported invented 5 am runs, a walk logged as a swim, and "sleep" during hours the band was off. In a TechRadar reader survey, only 20 % said they'd pay for the coach.
-
-Android has few alternatives. As of September 2026, Welltory costs $12.99 a month, Sonar costs $5.99 a month, and Tawen is a $4.99 one-time, readiness-only app. The best-designed recovery apps (Bevel, Athlytic, Gentler Streak) are iOS-only. Sources and caveats: [research/04](research/04-user-sentiment.md) and [research/05](research/05-competitors.md).
+Android has few alternatives, and the best-designed recovery apps (Bevel, Athlytic, Gentler Streak) are iOS-only. Sources and caveats: [research/04](research/04-user-sentiment.md) and [research/05](research/05-competitors.md).
 
 **Who it's for**
 - **Fitbit Air and Pixel Watch owners** who want a WHOOP-style morning read without Google Health's clutter or a subscription.
@@ -118,25 +113,9 @@ Each provider also gets a daily budget (50 requests and 300k tokens by default) 
 
 ## How I'd measure success
 
-Everything here is a plan: targets and instrumentation, not results. Airlog has no analytics by design, so measurement relies on on-device counters the user can see, an opt-in usage summary, Play Console vitals and beta interviews.
+Airlog has no analytics by design, so measurement relies on on-device counters the user can see, an opt-in usage summary, Play Console vitals and beta interviews.
 
-**North Star: mornings answered.** Mornings per user per week where the TodayPlan is built from the user's own data, not sample data and not "waiting for data".
-
-| Input metric | Why it matters | Planned target |
-|---|---|---|
-| Install → first real plan | Activation | Set from the first two weeks of beta data |
-| Users reaching a full 14-night baseline | Scores stop being provisional | Set from beta data |
-| Mornings with every score input present | Data quality, per source app | Tracked per app |
-| Plan actions opened | The plan is used, not just read | Set from beta data |
-| Coach answers verified without repair | Grounding quality with a real model | Live benchmark first, then the field |
-
-| Guardrail | Threshold |
-|---|---|
-| Red-flag questions routed to safety copy | 100 % recall, false positives ≤ 2 % |
-| Cloud sends without consent, or Google Health API data sent to a model | Zero |
-| Sample data shown without its label | Zero |
-| First frame after launch | About 500 ms on a phone (QA target) |
-| Crash and ANR rates | Play Console vitals, no worse than the category |
+<img src="docs/readme/success.svg" width="100%" alt="Metric tree, planned targets, not results. North Star: mornings answered, the mornings per user per week where the TodayPlan is built from the user's own data, not sample data and not waiting for data. Five input metrics feed it. Install to first real plan (activation; target set from the first two weeks of beta data). Users reaching a full 14-night baseline (scores stop being provisional; set from beta data). Mornings with every score input present (data quality per source app; tracked per app). Plan actions opened (the plan is used, not just read; set from beta data). Coach answers verified without repair (grounding quality with a real model; live benchmark first, then the field). Guardrails: red-flag questions routed to safety copy at 100 % recall with false positives at or below 2 %; zero cloud sends without consent or Google Health API data sent to a model; zero demo mornings counted toward the North Star; first frame after launch about 500 ms on a phone (QA target); crash and ANR rates in Play Console vitals no worse than the category.">
 
 Release exit criteria come from the roadmap: stable, explainable scores on 2+ weeks of real data, and 2 weeks of my own daily use.
 
