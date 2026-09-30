@@ -13,6 +13,9 @@ abstract final class Routes {
   static const syncLog = '/settings/sync-log';
   static const methodology = '/methodology';
   static const licenses = '/licenses';
+
+  /// Every licence text (Flutter's licence page), from Licences and credits.
+  static const licensesAll = '/licenses/all';
   static const diagnostics = '/diagnostics';
   static const onboarding = '/onboarding';
 

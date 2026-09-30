@@ -55,7 +55,7 @@ class ProfileDraft {
     if (maxHr.trim().isEmpty) return null;
     final v = maxHrValue;
     if (v == null || !v.isFinite || v < 100 || v > 240) {
-      return 'Between 100 and 240 bpm';
+      return 'Enter 100 to 240 bpm';
     }
     return null;
   }
@@ -64,7 +64,7 @@ class ProfileDraft {
     if (weight.trim().isEmpty) return null;
     final v = weightValue;
     if (v == null || !v.isFinite || v < 30 || v > 300) {
-      return 'Between 30 and 300 kg';
+      return 'Enter 30 to 300 kg';
     }
     return null;
   }

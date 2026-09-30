@@ -48,7 +48,7 @@ This table, the manifest's `health.READ_*` list, the in-app privacy policy and t
 - `BLUETOOTH_CONNECT` is used only while the Live screen is open.
 
 ## 5. Enhanced mode (Google Health API) constraints
-- Restricted scopes. An unverified client is limited to **100 users for the project's lifetime**, shows a warning screen, and needs an in-app disclosure (the Settings → Sources copy).
+- Restricted scopes. An unverified client is limited to **100 users for the project's lifetime**, shows a warning screen, and needs an in-app disclosure: the Enhanced mode ⓘ sheet in Settings → Data sources and the "Before you sign in" dialog (`kEnhancedDisclosure`). The 100-user cap is a project limit, not user-facing copy. A build without an OAuth client hides Enhanced mode entirely.
 - Going public beyond 100 users requires OAuth verification (demo video, domain, privacy policy) **plus an annual CASA assessment** ($500–$4,500, 2–6 weeks). Until that's worth paying for, ship Enhanced mode as an opt-in beta.
 
 ## 6. Pre-submission checklist

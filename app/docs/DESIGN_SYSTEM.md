@@ -80,10 +80,22 @@ Also:
 | `ProvenanceChip.of` | `(Provenance, {plain})`; `describe(p)` |
 | `NumberSwap` | `(text, {required style})`: for rare changes only (a sync), never for a number that ticks every second (Live) or changes on a day step |
 | `EnterFade` | `({required child, index, enabled, step = Motion.stagger})`: one-time stagger, 30 ms per item by default (`Motion.staggerTiles`, 50 ms, for a few large tiles), capped at 8 items |
+| `FadeSwap` | `({required swapKey, required child})`: a status that changes in place (a pill after coming back from Health Connect) crossfades in 160 ms, enter curve in, flipped out; a short fade under reduced motion. `DotStat(swap: true)` uses it for a number that changes on the same screen |
 | `OverLabel` | `(text)`: an uppercase group label |
 | `KeyValueLine` | `(label, value, {valueColor})`: the value in tabular figures |
 | `BulletLine` | `(text, {icon, strong, large = false})`: a dot or icon line with an optional bold lead-in. `large` uses body size, for the privacy policy |
 | `snack` | `(context, message)`: replaces any visible snack bar; uses `snackMotion` |
+| `InfoButton` | `({required title, lede, children, semanticLabel, footnote, color})`: the 48 dp ⓘ that opens `showExplainSheet`. Long explanations live there, never as paragraphs. Import it from `app/screen_kit.dart` (it re-exports `design/components/info_button.dart`). Never type the ⓘ character in copy: DM Sans has no glyph for it |
+| `IconBadge` | `({required icon, accent, size = 36})`: an icon in a tinted circle; neutral without an accent. Same import as `InfoButton` |
+| `StatePill.tone` | `(PillTone, label)`: `good` (health), `off` (neutral), `beta` (lavender), `attention` (amber), `locked` (neutral, lock icon). The label is always required |
+| `SettingsTile` | `({required children, title, icon, accent, status, info, glow, dividers = true, semanticLabel})`: a flat card (or a glow panel for a screen's hero tile) with an optional header: badge, title, pill, ⓘ |
+| `SettingsRow` | `({required icon, required title, subtitle, pill, trailing, onTap, semanticLabel, accent})`: the subtitle wraps, never truncates; a chevron when tappable |
+| `SettingsSwitchRow` | `({required title, required value, onChanged, icon, subtitle, pill, accent})`: the whole row toggles; spoken as one switch |
+| `SettingsValueRow` / `SettingsBlock` | `(title, value)` read-only line · `({required child, indent, top, bottom})` any other content, inset to the tile |
+| `MetricChip` | `({required label, icon, count, style = used\|available\|add\|penalty\|muted})`: a small non-interactive chip naming a measurement ("HRV 14/14") |
+| `NavTile` | `({required icon, required title, accent, status, caption, onTap, selected, semanticLabel})`: a bento tile that navigates (chevron), chooses (`selected`: a radio in a group) or just states (no `onTap`) |
+| `NavTileGrid` | `({required children, oneColumnBelow = 296})`: two per row at equal height, one per row at large text; never scaled (unlike `BentoGrid`, it holds controls) |
+| `DotStat` | `({required value, unit, caption, color, style = F.dot32, semanticsLabel})`: a dot-matrix number with its unit and caption. The number scales down to fit. Values are unsigned: say the direction in the unit ("pts lower") |
 
 ## Charts (`lib/design/charts/`)
 
@@ -104,6 +116,9 @@ Every chart:
 | `AcwrGauge.fromLoad` | `(TrainingLoad?, {title = 'Training load'})`. The title is printed in both the empty and the measured state whenever it is non-null |
 | `Sparkline` | `({required values, required color, height = 28, width, lower, upper, showLast, semanticsLabel})`. Either band edge may be null on its own (a one-sided band) |
 | `HypnogramChart` | `({required stages, start, end, title, height = 132, semanticsLabel})` |
+| `InputWeightBar` | `({required parts, semanticsLabel})`, `WeightPart(label, value, color, {valueText, hatched})`: one bar split by share or amount; hatched parts are "up to" amounts. Static |
+| `WeightStepBars` | `({required steps ((label, from, weight)), required color, weightText, semanticsLabel})`: multiplier columns; rows at large text |
+| `BandScale` | `({required bands (ScaleBand), semanticsLabel})`: equal bands with ranges (the Medium/20 scale without a marker) |
 
 Ported painters: `LineChart`, `Bars`, `Ring`, `DashedRing`, `Hypnogram`, `ZoneBar`, `Actogram`, `HeatMap`, `NightStack`, `DayLanes`.
 
@@ -115,6 +130,7 @@ Axis helpers: `AxisSpec.of`, `axisInt`, `axisHm`, `axisFixed`, `clockHm`, `clock
 |---|---|
 | `signed(v, decimals, {plus = true})` | `"+0.1"`, `"−0.3"`, `"0.0"`. Rounds first, then signs; U+2212 minus |
 | `numText(v)` | A constant as prose: `8`, `0.03`, `1.65` |
+| `sourceName(kind)` | A source as the UI names it: "Enhanced mode" for the cloud source, "Bluetooth", else `SourceKind.label` |
 | `durationWords(minutes)` | `"37 min"`, `"1h 05m"` |
 | `clockSeconds(seconds)` | `"0:42"`, `"1:02:33"` |
 | `dayTime(t)` | `"28 Sep 07:12"` |

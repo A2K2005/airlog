@@ -202,6 +202,28 @@ class AppIconButton extends StatelessWidget {
   }
 }
 
+/// The status tones a pill can take. Each keeps its word: a pill never
+/// carries meaning by colour alone.
+enum PillTone {
+  /// Connected, allowed, on.
+  good(C.health),
+
+  /// Off, not connected, not available.
+  off(C.neutral),
+
+  /// Beta features.
+  beta(C.lavender),
+
+  /// Needs the user: not installed, needs a fix, sample data.
+  attention(C.amber),
+
+  /// Locked until something else happens (a lock icon replaces the dot).
+  locked(C.neutral);
+
+  const PillTone(this.color);
+  final Color color;
+}
+
 /// A small state chip: a dot and a word ("In range", "Provisional").
 /// Never carries a number that changes.
 class StatePill extends StatelessWidget {
@@ -212,6 +234,15 @@ class StatePill extends StatelessWidget {
     this.icon,
     this.tinted = true,
   });
+
+  /// A status pill in one of the [PillTone]s ("Connected", "Off", "Beta").
+  factory StatePill.tone(PillTone tone, String label, {Key? key}) =>
+      StatePill(
+        key: key,
+        label: label,
+        color: tone.color,
+        icon: tone == PillTone.locked ? Icons.lock_outline_rounded : null,
+      );
 
   final String label;
 

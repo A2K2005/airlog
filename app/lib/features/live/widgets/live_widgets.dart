@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../app/screen_kit.dart' show InfoButton;
 import '../../../design/design.dart';
 import '../../../domain/engine/strain.dart' show StrainEngine;
 import '../../../domain/results.dart' show StrainMethod;
@@ -77,11 +78,14 @@ class ZoneBand extends StatelessWidget {
     withRest: true,
   );
 
+  /// The glossary's zone words (COPY_REVIEW §2).
+  static const _names = ['Very light', 'Light', 'Moderate', 'Hard', 'Max'];
+
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
     final z = zone.clamp(0, 5);
-    final name = z == 0 ? 'Below zone 1' : 'Zone $z';
+    final name = z == 0 ? 'Resting' : 'Zone $z · ${_names[z - 1]}';
     final range = floors.length < 5
         ? ''
         : z == 0
@@ -93,8 +97,8 @@ class ZoneBand extends StatelessWidget {
     return Semantics(
       label: active
           ? zonesFromMaxHr
-                ? '$name, $range, estimated from maximum heart rate'
-                : '$name, ${_pct[z]} of heart-rate reserve'
+                ? '$name, $range, based on your max heart rate'
+                : '$name, ${range.isEmpty ? _pct[z] : range}'
           : 'Zone unknown',
       child: ExcludeSemantics(
         child: Column(
@@ -138,8 +142,8 @@ class ZoneBand extends StatelessWidget {
             const SizedBox(height: S.x2),
             Text(
               active
-                  ? '$name${zonesFromMaxHr ? '' : ' · ${_pct[z]} HRR'}${range.isEmpty ? '' : ' · $range'}'
-                  : 'Zone appears with the first reading',
+                  ? '$name${range.isEmpty ? '' : ' · $range'}'
+                  : 'Your zone shows with the first reading',
               textAlign: TextAlign.center,
               style: F
                   .tab(F.bodySm)
@@ -212,10 +216,10 @@ class LiveDashboard extends StatelessWidget {
           StatusCard(
             title: 'Connection lost',
             body: recording || cooling
-                ? 'Your session so far is kept. Move the phone closer to the '
-                      'tracker; it reconnects when you tap below.'
-                : 'Your tracker stopped sending. Move the phone closer and '
-                      'reconnect.',
+                ? 'Your workout so far is safe. Move your phone closer to '
+                      'your tracker, then tap Reconnect.'
+                : 'Your tracker stopped sending. Move your phone closer, '
+                      'then reconnect.',
             tone: StatusTone.warning,
             icon: Icons.bluetooth_disabled_rounded,
             actionLabel: 'Reconnect',
@@ -268,7 +272,8 @@ class LiveDashboard extends StatelessWidget {
           )
         else
           Text(
-            'Heart rate is available. Zones and strain need a usable maximum heart rate.',
+            'Heart rate is coming in. Add your birth year in Profile to see '
+            'zones and Strain.',
             style: F.bodySm.copyWith(color: p.ink2),
           ),
         const SizedBox(height: S.x6),
@@ -279,7 +284,7 @@ class LiveDashboard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(child: _Stat('Elapsed', clockSeconds(s.elapsed))),
+                    Expanded(child: _Stat('Time', clockSeconds(s.elapsed))),
                     Expanded(
                       child: _Stat(
                         'Strain',
@@ -363,8 +368,8 @@ class LiveDashboard extends StatelessWidget {
         if (recording) ...[
           const SizedBox(height: S.x3),
           Text(
-            'After Stop, keep still for 60 seconds: the drop in heart rate '
-            'over that minute is your heart-rate recovery.',
+            'After you tap Stop, stay still for 1 minute. Airlog measures how '
+            'fast your heart rate drops.',
             textAlign: TextAlign.center,
             style: F.cap.copyWith(color: p.ink3),
           ),
@@ -412,7 +417,7 @@ class CoolDownCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Measuring heart-rate recovery (HRR-60).',
+                  'Measuring how fast your heart rate drops.',
                   style: F.cap.copyWith(color: p.ink2),
                 ),
                 const SizedBox(height: S.x2),
@@ -447,28 +452,21 @@ class HrvCheckCard extends StatelessWidget {
     final (String title, String body) = unlocked
         ? (
             'HRV check',
-            'Two minutes sitting still. RMSSD from the time between '
-                'individual beats.',
+            'Sit still for 2 minutes while Airlog measures your HRV.',
           )
         : missing
         ? (
-            'HRV check unavailable',
-            'Your tracker sends heart rate but not the time between beats '
-                '(RR intervals), and HRV is computed from those. Its '
-                'broadcast may simply not include them. Your '
-                'nightly HRV from sleep is unaffected.',
+            'HRV check isn’t available',
+            'Your tracker shares heart rate, but not the timing of each beat, '
+                'which HRV needs. Your nightly HRV isn’t affected.',
           )
         : s == null
         ? (
             'HRV check',
-            'Unlocks after you connect, if your tracker sends '
-                'beat-to-beat (RR) intervals.',
+            'Works after you connect, if your tracker shares the timing of '
+                'each beat.',
           )
-        : (
-            'HRV check',
-            'Checking whether your tracker sends beat-to-beat '
-                'intervals…',
-          );
+        : ('HRV check', 'Checking if your tracker shares beat timing…');
     return AppCard(
       tone: unlocked ? CardTone.base : CardTone.inset,
       child: Column(
@@ -486,10 +484,28 @@ class HrvCheckCard extends StatelessWidget {
                 child: Text(title, style: F.head.copyWith(color: p.ink)),
               ),
               if (!unlocked)
-                StatePill(
-                  label: missing ? 'No RR data' : 'Locked',
-                  color: C.neutral,
+                StatePill.tone(
+                  missing ? PillTone.off : PillTone.locked,
+                  missing ? 'Not available' : 'Locked',
                 ),
+              const InfoButton(
+                title: 'HRV check',
+                children: [
+                  ExplainSection(
+                    title: 'What it measures',
+                    body:
+                        'The tiny changes in time between heartbeats, while '
+                        'you sit still for 2 minutes.',
+                  ),
+                  ExplainSection(
+                    title: 'Why it can be locked',
+                    body:
+                        'It needs the timing of each beat. Some trackers share '
+                        'heart rate without it. Your nightly HRV isn’t '
+                        'affected.',
+                  ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: S.x2),
@@ -532,39 +548,27 @@ class WorkoutSummary extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x10),
       children: [
-        AppCard(
+        GlowPanel(
+          glow: GlowRecipes.l6,
+          width: double.infinity,
+          padding: const EdgeInsets.all(S.x5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    w == null || w.method == StrainMethod.none
-                        ? '–'
-                        : w.strain.toStringAsFixed(1),
-                    style: F.n64.copyWith(color: p.on(DomainColors.strain)),
-                  ),
-                  const SizedBox(width: S.x2),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      'STRAIN',
-                      style: F.over.copyWith(color: p.ink3),
-                    ),
-                  ),
-                ],
+              const OverLabel('Strain'),
+              const SizedBox(height: S.x2),
+              DotStat(
+                value: w == null || w.method == StrainMethod.none
+                    ? DotMatrixNumber.missing
+                    : w.strain.toStringAsFixed(1),
+                style: F.dot48,
+                color: p.on(DomainColors.strain),
+                semanticsLabel: w == null || w.method == StrainMethod.none
+                    ? 'Strain not measured'
+                    : 'Strain ${w.strain.toStringAsFixed(1)}',
               ),
-              const SizedBox(height: S.x4),
-              KeyValueLine('Duration', clockSeconds(s.elapsed)),
-              if (w?.avgHr != null)
-                KeyValueLine('Average', '${w!.avgHr!.round()} bpm'),
-              if (w?.peakHr != null)
-                KeyValueLine('Peak', '${w!.peakHr!.round()} bpm'),
-              if (w?.trimp != null)
-                KeyValueLine('TRIMP (cross-check)', '${w!.trimp!.round()}'),
               if (zt > 0) ...[
-                const SizedBox(height: S.x3),
+                const SizedBox(height: S.x4),
                 SizedBox(
                   height: 12,
                   child: CustomPaint(
@@ -573,72 +577,86 @@ class WorkoutSummary extends StatelessWidget {
                   ),
                 ),
               ],
+              const SizedBox(height: S.x4),
+              _Plates([
+                ('Time', clockSeconds(s.elapsed), null),
+                if (w?.avgHr != null) ('Average', '${w!.avgHr!.round()}', 'bpm'),
+                if (w?.peakHr != null) ('Peak', '${w!.peakHr!.round()}', 'bpm'),
+              ]),
             ],
           ),
         ),
         const SizedBox(height: S.x4),
-        AppCard(
-          semanticLabel: hrr == null
-              ? 'Heart-rate recovery not measured'
-              : 'Heart-rate recovery ${hrr.round()} beats per minute in the first minute',
-          child: ExcludeSemantics(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Heart-rate recovery',
-                  style: F.bodySm.copyWith(
-                    color: p.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: S.x3),
-                if (hrr != null) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '${hrr >= 0 ? '−' : '+'}${hrr.abs().round()}',
-                        style: F.n44.copyWith(color: p.ink),
-                      ),
-                      const SizedBox(width: S.x2),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 5),
-                        child: Text(
-                          'bpm in the first minute',
-                          style: F.cap.copyWith(color: p.ink3),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: S.x2),
-                  Text(
-                    'How fast your heart rate falls after effort (HRR-60, Cole '
-                    'et al. 1999). A bigger drop generally means a fitter '
-                    'recovery; compare it with your own past sessions rather '
-                    'than a chart.',
-                    style: F.bodySm.copyWith(color: p.ink2),
-                  ),
-                ] else
-                  Text(
-                    s.coolDownSkipped
-                        ? 'Not measured: the 60-second cool-down was skipped.'
-                        : 'Not measured: no reading at Stop and 60 s later '
-                              '(within 10 s). Keep your tracker connected through the '
-                              'cool-down next time.',
-                    style: F.bodySm.copyWith(color: p.ink2),
-                  ),
-              ],
-            ),
+        SettingsTile(
+          glow: GlowRecipes.m16,
+          title: 'Heart-rate recovery',
+          icon: Icons.trending_down_rounded,
+          accent: C.recRed,
+          dividers: false,
+          info: const InfoButton(
+            title: 'Heart-rate recovery',
+            lede:
+                'How far your heart rate drops in the first minute after you '
+                'stop.',
+            children: [
+              ExplainSection(
+                title: 'How it’s measured',
+                body:
+                    'Airlog takes your heart rate when you tap Stop, and again '
+                    '60 seconds later (each within 10 seconds). This is HRR-60 '
+                    '(Cole et al. 1999).',
+              ),
+              ExplainSection(
+                title: 'Reading it',
+                body:
+                    'Compare it with your own past workouts, not with a chart.',
+              ),
+            ],
           ),
+          children: [
+            if (hrr != null) ...[
+              SettingsBlock(
+                child: DotStat(
+                  value: '${hrr.abs().round()}',
+                  unit: hrr >= 0
+                      ? 'bpm drop in the first minute'
+                      : 'bpm rise in the first minute',
+                  style: F.dot40,
+                  semanticsLabel:
+                      'Heart-rate recovery: your heart rate '
+                      '${hrr >= 0 ? 'dropped' : 'rose'} ${hrr.abs().round()} '
+                      'beats per minute in the first minute',
+                ),
+              ),
+              SettingsBlock(
+                top: 0,
+                child: Text(
+                  'A bigger drop usually means better fitness.',
+                  style: F.bodySm.copyWith(color: p.ink2),
+                ),
+              ),
+            ] else
+              SettingsBlock(
+                child: Text(
+                  s.coolDownSkipped
+                      ? 'Not measured: you skipped the 1-minute cool-down.'
+                      : 'Not measured: your tracker didn’t send a reading '
+                            'during the cool-down. Keep it connected until the '
+                            'minute is up next time.',
+                  style: F.bodySm.copyWith(color: p.ink2),
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: S.x5),
         if (s.saved)
           StatusCard(
             title: 'Saved',
-            body: 'The workout is in today’s strain and workouts list.',
+            body:
+                'It now counts toward today’s Strain and shows in your '
+                'workouts.',
             icon: Icons.check_circle_outline_rounded,
-            actionLabel: 'Back to live',
+            actionLabel: 'Back to live heart rate',
             onAction: controller.backToLive,
           )
         else ...[
@@ -652,7 +670,7 @@ class WorkoutSummary extends StatelessWidget {
           if (s.elapsed < 60) ...[
             const SizedBox(height: S.x2),
             Text(
-              'Workouts under a minute are not saved.',
+              'Workouts under 1 minute aren’t saved.',
               textAlign: TextAlign.center,
               style: F.cap.copyWith(color: p.ink3),
             ),
@@ -660,7 +678,7 @@ class WorkoutSummary extends StatelessWidget {
           if (s.saveError != null) ...[
             const SizedBox(height: S.x2),
             Text(
-              'Could not save: ${s.saveError}',
+              'Couldn’t save: ${s.saveError}',
               textAlign: TextAlign.center,
               style: F.cap.copyWith(color: p.on(C.recRed)),
             ),
@@ -668,13 +686,64 @@ class WorkoutSummary extends StatelessWidget {
           const SizedBox(height: S.x2),
           Center(
             child: AppButton(
-              label: 'Discard',
+              label: 'Delete',
               kind: AppButtonKind.quiet,
               onTap: controller.backToLive,
             ),
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The summary's facts as Medium/19 plates (label, dot-matrix value, unit):
+/// side by side, stacked at large text.
+class _Plates extends StatelessWidget {
+  const _Plates(this.items);
+  final List<(String, String, String?)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
+    Widget plate((String, String, String?) it) => Container(
+      padding: const EdgeInsets.all(S.x3),
+      decoration: const BoxDecoration(color: C.plate, borderRadius: R.rPanel),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(it.$1, style: F.cap.copyWith(color: p.ink2)),
+          const SizedBox(height: S.x1),
+          DotStat(
+            value: it.$2,
+            unit: it.$3,
+            style: F.dot24,
+            semanticsLabel: '${it.$1} ${it.$2}${it.$3 == null ? '' : ' ${it.$3}'}',
+          ),
+        ],
+      ),
+    );
+    if (bigText(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) const SizedBox(height: S.x2),
+            plate(items[i]),
+          ],
+        ],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) const SizedBox(width: S.x2),
+            Expanded(child: plate(items[i])),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -700,8 +769,8 @@ class HrvRunning extends StatelessWidget {
           const StatusCard(
             title: 'Connection lost',
             body:
-                'Beats stopped arriving. Cancel and try again with the phone '
-                'closer to your tracker.',
+                'Your tracker stopped sending. Cancel, move your phone '
+                'closer, and try again.',
             tone: StatusTone.warning,
           ),
           const SizedBox(height: S.x4),
@@ -743,9 +812,8 @@ class HrvRunning extends StatelessWidget {
         ),
         const SizedBox(height: S.x2),
         Text(
-          'Rest your arm, keep quiet, and breathe the way you usually do. '
-          'Paced or deep breathing raises RMSSD, so natural breathing keeps '
-          'checks comparable with each other.',
+          'Rest your arm, stay quiet, and breathe the way you normally do. '
+          'Deep breathing changes the result.',
           textAlign: TextAlign.center,
           style: F.bodySm.copyWith(color: p.ink2),
         ),
@@ -783,56 +851,61 @@ class HrvResult extends StatelessWidget {
       children: [
         if (!ok)
           StatusCard(
-            title: 'Not enough clean beats',
+            title: 'Not enough clear beats',
             body:
-                'RMSSD needs at least 30 clean beat-to-beat intervals '
-                '(${s.rrCount} arrived; movement and missed beats are '
-                'filtered out). No number is shown rather than a guess.',
+                'Airlog needs at least 30 clear beats and got ${s.rrCount}. '
+                'Moving can blur beats. Airlog shows no number rather than a '
+                'guess.',
             fix: 'Sit still with your tracker snug, then try again.',
-            actionLabel: 'Back to live',
+            actionLabel: 'Back to live heart rate',
             onAction: controller.backToLive,
           )
         else ...[
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          SettingsTile(
+            glow: GlowRecipes.m12,
+            title: 'HRV',
+            icon: Icons.monitor_heart_outlined,
+            accent: C.health,
+            dividers: false,
+            info: const InfoButton(
+              title: 'Your HRV check',
               children: [
-                Text('RMSSD', style: F.over.copyWith(color: p.ink3)),
-                const SizedBox(height: S.x2),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      s.rmssd!.round().toString(),
-                      style: F.n64.copyWith(color: p.on(C.health)),
-                    ),
-                    const SizedBox(width: S.x2),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text('ms', style: F.head.copyWith(color: p.ink3)),
-                    ),
-                  ],
+                ExplainSection(
+                  title: 'Reading it',
+                  body:
+                      'Higher usually means more relaxed, for you. A daytime '
+                      'check reads differently from your overnight HRV, so '
+                      'compare checks with each other, not with Recovery.',
                 ),
-                const SizedBox(height: S.x4),
-                KeyValueLine('Beats analysed', '${s.rrCount}'),
-                const SizedBox(height: S.x3),
-                Text(
-                  'RMSSD is the beat-to-beat variation your vagus nerve '
-                  'drives: higher is more relaxed, for you. A spot check '
-                  'while awake reads differently from your overnight HRV, '
-                  'so compare checks with each other, not with Recovery.',
-                  style: F.bodySm.copyWith(color: p.ink2),
+                ExplainSection(
+                  title: 'Breathing',
+                  body: 'Deep breathing changes the result.',
                 ),
               ],
             ),
+            children: [
+              SettingsBlock(
+                child: DotStat(
+                  value: s.rmssd!.round().toString(),
+                  unit: 'ms',
+                  style: F.dot48,
+                  color: p.on(C.health),
+                  semanticsLabel: 'HRV ${s.rmssd!.round()} milliseconds',
+                ),
+              ),
+              SettingsBlock(
+                top: 0,
+                child: KeyValueLine('Beats checked', '${s.rrCount}'),
+              ),
+            ],
           ),
           const SizedBox(height: S.x5),
           if (s.saved)
             StatusCard(
               title: 'Saved',
-              body: 'The check is stored with today’s data.',
+              body: 'Saved with today’s data.',
               icon: Icons.check_circle_outline_rounded,
-              actionLabel: 'Back to live',
+              actionLabel: 'Back to live heart rate',
               onAction: controller.backToLive,
             )
           else ...[
@@ -846,7 +919,7 @@ class HrvResult extends StatelessWidget {
             const SizedBox(height: S.x2),
             Center(
               child: AppButton(
-                label: 'Discard',
+                label: 'Delete',
                 kind: AppButtonKind.quiet,
                 onTap: controller.backToLive,
               ),

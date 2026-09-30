@@ -10,4 +10,5 @@ export 'hypnogram_chart.dart';
 export 'painters.dart';
 export 'scatter_consistency.dart';
 export 'sparkline.dart';
+export 'weight_bars.dart';
 export 'zone_timeline.dart';

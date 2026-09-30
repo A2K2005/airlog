@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/screen_kit.dart' show IconBadge, InfoButton;
 import '../../design/design.dart';
 import '../../domain/repositories.dart' show BleDevice;
 import 'live_view_model.dart';
@@ -55,10 +56,9 @@ class LiveScreen extends ConsumerWidget {
           context: context,
           animationStyle: dialogMotion(context),
           builder: (d) => AlertDialog(
-            title: const Text('Leave this session?'),
+            title: const Text('Leave this workout?'),
             content: const Text(
-              'The heart rate recorded so far is not saved yet. Leaving '
-              'discards it.',
+              'Your workout isn’t saved yet. If you leave, it’s deleted.',
             ),
             actions: [
               TextButton(
@@ -67,7 +67,7 @@ class LiveScreen extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.of(d).pop(true),
-                child: const Text('Discard and leave'),
+                child: const Text('Delete and leave'),
               ),
             ],
           ),
@@ -96,61 +96,73 @@ class _Intro extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x10),
       children: [
-        Center(
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: p.wash(C.recRed),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.monitor_heart_outlined,
-              size: 34,
-              color: p.on(C.recRed),
-            ),
-          ),
-        ),
-        const SizedBox(height: S.x5),
-        Text(
-          'Heart rate, live',
-          textAlign: TextAlign.center,
-          style: F.t1.copyWith(color: p.ink),
-        ),
-        const SizedBox(height: S.x2),
-        Text(
-          'See your heart rate, zone and strain as you train, straight from '
-          'your tracker over Bluetooth. Nothing leaves this phone.',
-          textAlign: TextAlign.center,
-          style: F.body.copyWith(color: p.ink2),
-        ),
-        const SizedBox(height: S.x6),
-        AppCard(
-          tone: CardTone.inset,
+        GlowPanel(
+          glow: GlowRecipes.m10,
+          width: double.infinity,
+          padding: const EdgeInsets.all(S.x5),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const OverLabel('Before you start'),
-              const SizedBox(height: S.x3),
-              const BulletLine(
-                'Turn on heart-rate broadcast on your tracker (on a Fitbit: '
-                'Google Health → ‘Share heart rate’). It costs some battery, '
-                'so turn it off afterwards.',
-                icon: Icons.bluetooth_searching_rounded,
+              const IconBadge(
+                icon: Icons.monitor_heart_outlined,
+                accent: C.recRed,
+                size: 44,
               ),
-              const BulletLine(
-                'Keep your tracker snug on your wrist and the phone within a few '
-                'metres.',
-                icon: Icons.watch_outlined,
-              ),
-              if (state.demo)
-                const BulletLine(
-                  'Demo mode: a simulated tracker stands in for yours.',
-                  icon: Icons.science_outlined,
+              const SizedBox(height: S.x4),
+              Semantics(
+                header: true,
+                child: Text(
+                  'Live heart rate',
+                  style: F.t1.copyWith(color: p.ink),
                 ),
+              ),
+              const SizedBox(height: S.x2),
+              Text(
+                'See your heart rate and effort as you train.',
+                style: F.body.copyWith(color: p.ink),
+              ),
+              const SizedBox(height: S.x3),
+              Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 14, color: p.ink2),
+                  const SizedBox(width: S.x2),
+                  Expanded(
+                    child: Text(
+                      'Stays on this phone.',
+                      style: F.cap.copyWith(color: p.ink2),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
+        ),
+        const SizedBox(height: S.x6),
+        const OverLabel('Before you start'),
+        const SizedBox(height: S.x3),
+        SettingsTile(
+          children: [
+            const SettingsRow(
+              icon: Icons.looks_one_outlined,
+              accent: DomainColors.strain,
+              title: 'Turn on “Share heart rate”',
+              subtitle: 'In your tracker’s app. Turn it off after.',
+              trailing: _ShareInfo(),
+            ),
+            const SettingsRow(
+              icon: Icons.looks_two_outlined,
+              accent: DomainColors.strain,
+              title: 'Wear your tracker snug',
+              subtitle: 'Keep your phone close.',
+            ),
+            if (state.demo)
+              const SettingsRow(
+                icon: Icons.science_outlined,
+                accent: C.amber,
+                title: 'Sample data',
+                subtitle: 'A pretend tracker stands in for yours.',
+              ),
+          ],
         ),
         const SizedBox(height: S.x6),
         AppButton(
@@ -165,6 +177,29 @@ class _Intro extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The ⓘ on the first step: how to turn sharing on, brand-free.
+class _ShareInfo extends StatelessWidget {
+  const _ShareInfo();
+
+  @override
+  Widget build(BuildContext context) => const InfoButton(
+    title: 'Turn on heart-rate sharing',
+    lede: 'Most trackers only send live heart rate while sharing is on.',
+    children: [
+      ExplainSection(
+        title: 'Where to find it',
+        body:
+            'Open your tracker’s app and look for “Share heart rate” or '
+            '“Heart-rate broadcast”.',
+      ),
+      ExplainSection(
+        title: 'Battery',
+        body: 'Sharing uses battery, so turn it off when you’re done.',
+      ),
+    ],
+  );
 }
 
 String signalWords(int rssi) => rssi >= -60
@@ -192,10 +227,10 @@ class _Devices extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x10),
       children: [
         SectionHeader(
-          title: 'Nearby heart-rate sensors',
+          title: 'Trackers nearby',
           subtitle: scanning
-              ? 'Scanning for the Heart Rate service (0x180D)…'
-              : 'Devices broadcasting the Heart Rate service (0x180D)',
+              ? 'Looking for trackers…'
+              : 'Trackers sharing heart rate',
         ),
         const SizedBox(height: S.x4),
         for (final d in state.devices)
@@ -245,20 +280,20 @@ class _Devices extends StatelessWidget {
           ),
         if (none)
           StatusCard(
-            title: 'No heart-rate sensors found',
+            title: 'No trackers found',
             body:
-                'Most trackers broadcast heart rate only while sharing is on. '
-                'Turn it on (on a Fitbit: Google Health → ‘Share heart '
-                'rate’), keep the tracker close, then scan again.',
-            actionLabel: 'Scan again',
+                'Most trackers only share heart rate while sharing is on. '
+                'Turn on “Share heart rate” in your tracker’s app, keep it '
+                'close, then look again.',
+            actionLabel: 'Look again',
             onAction: onScan,
             icon: Icons.bluetooth_disabled_rounded,
           )
         else ...[
           const SizedBox(height: S.x2),
           Text(
-            'Don’t see your tracker? Turn on heart-rate broadcast (on a '
-            'Fitbit: Google Health → ‘Share heart rate’), then scan again.',
+            'Don’t see your tracker? Turn on “Share heart rate” in your '
+            'tracker’s app, then look again.',
             style: F.cap.copyWith(color: p.ink3),
           ),
           if (!scanning) ...[
@@ -266,7 +301,7 @@ class _Devices extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: AppButton(
-                label: 'Scan again',
+                label: 'Look again',
                 icon: Icons.refresh_rounded,
                 kind: AppButtonKind.secondary,
                 compact: true,
@@ -323,8 +358,8 @@ class _Failure extends StatelessWidget {
     final (String title, String body, String? fix) = switch (state.error) {
       LiveError.permission => (
         'Bluetooth permission needed',
-        'Airlog needs “Nearby devices” permission to find your tracker. It is '
-            'used only while this screen is open, never for location.',
+        'Airlog needs the “Nearby devices” permission to find your tracker. '
+            'It’s used only while this screen is open, never for location.',
         'Allow it when Android asks, or in Android Settings → Apps → '
             'Airlog → Permissions.',
       ),
@@ -334,33 +369,32 @@ class _Failure extends StatelessWidget {
         'Swipe down for Quick Settings and tap Bluetooth.',
       ),
       LiveError.unsupported => (
-        'Bluetooth LE isn’t available',
-        'This phone does not support Bluetooth Low Energy, which heart-rate '
-            'straps and trackers use.',
+        'This phone can’t connect to trackers',
+        'It doesn’t support the kind of Bluetooth that heart-rate trackers '
+            'use.',
         null,
       ),
       LiveError.unavailable => (
         'Live heart rate isn’t available',
-        'This build has no Bluetooth service wired in.',
+        'This version of Airlog can’t use Bluetooth.',
         null,
       ),
       LiveError.noHeartRateService => (
         'Your tracker isn’t sharing heart rate',
-        'It connected, but it is not broadcasting heart rate, so there is '
-            'nothing to read.',
-        'Turn on heart-rate broadcast on your tracker (on a Fitbit: '
-            'Google Health → ‘Share heart rate’), then try again.',
+        'It connected, but it isn’t sharing heart rate, so there’s nothing to '
+            'read.',
+        'Turn on “Share heart rate” in your tracker’s app, then try again.',
       ),
       LiveError.connectFailed => (
         'Couldn’t connect',
-        'Your tracker did not accept the connection. It may have stopped '
+        'Your tracker didn’t accept the connection. It may have stopped '
             'sharing heart rate, or another app is connected to it.',
-        'Check that heart-rate broadcast is on (on a Fitbit: ‘Share heart '
-            'rate’ in Google Health), then try again.',
+        'Check that “Share heart rate” is on in your tracker’s app, then try '
+            'again.',
       ),
       _ => (
         'Something went wrong',
-        'The Bluetooth scan stopped unexpectedly.',
+        'The search for trackers stopped. Try again.',
         null,
       ),
     };

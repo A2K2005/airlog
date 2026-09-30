@@ -150,10 +150,11 @@ class HealthConnectPluginSource implements HealthConnectSource {
         HealthConnectSdkStatus.sdkUnavailableProviderUpdateRequired =>
           HcAvailability.updateRequired,
         HealthConnectSdkStatus.sdkUnavailable => HcAvailability.notInstalled,
-        null => HcAvailability.unsupported,
+        // No answer is not "can't run here": Health Connect may be installed.
+        null => HcAvailability.checkFailed,
       };
     } catch (_) {
-      return HcAvailability.unsupported;
+      return HcAvailability.checkFailed;
     }
   }
 

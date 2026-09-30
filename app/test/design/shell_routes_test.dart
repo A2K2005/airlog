@@ -36,7 +36,15 @@ void main() {
     await t.pumpWidget(_app());
     await t.pumpAndSettle();
     expect(find.byType(PrivacyScreen), findsOneWidget);
-    expect(find.textContaining('Health Connect'), findsWidgets);
+    expect(
+      find.text('Private by default. Cloud only by choice.'),
+      findsOneWidget,
+    );
+    await t.scrollUntilVisible(
+      find.text('What Airlog reads from Health Connect'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
     await t.scrollUntilVisible(
       find.text('Not medical advice'),
       300,

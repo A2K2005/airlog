@@ -15,6 +15,7 @@ import 'package:airlog/domain/models.dart';
 import 'package:airlog/domain/engine/engine.dart' show SleepConfig;
 import 'package:airlog/domain/results.dart';
 import 'package:airlog/features/methodology/methodology_screen.dart';
+import 'package:flutter/material.dart' show Navigator, NavigatorState, Size;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fonts.dart';
@@ -82,29 +83,56 @@ void main() {
     expect(c.baseline!.mean, closeTo(raw, 1e-9));
   });
 
-  testWidgets('Methodology prints the engine constants', (t) async {
-    await pumpB(t, const MethodologyScreen(), repo: ScreensBRepo.demo());
+  testWidgets('Methodology prints the engine constants (in its ⓘ sheets)', (
+    t,
+  ) async {
+    // A tall view: every tile is built and on screen, so each ⓘ is tappable.
+    await pumpB(
+      t,
+      const MethodologyScreen(),
+      repo: ScreensBRepo.demo(),
+      size: const Size(412, 6000),
+    );
     await t.pumpAndSettle();
     String n(num v) => numText(v);
-    for (final s in [
-      'minimum SD of ${n(RecoveryEngine.hrvMinSd)} on the log scale',
-      'resting HR ${n(RecoveryEngine.rhrMinSd)} bpm',
-      'respiratory rate ${n(RecoveryEngine.respMinSd)} /min',
-      'logistic(${n(RecoveryEngine.hrvLogisticSlope)} × z)',
-      'below ${n(RecoveryEngine.spo2PenaltyBelow)} % costs '
-          '${n(RecoveryEngine.spo2Penalty)} points',
-      'more than ${n(RecoveryEngine.skinTempPenaltyZ)} SD above',
-      'green from ${RecoveryEngine.greenFrom}',
-      'strain above ${n(SleepEngine.strainBoostFrom)}',
-      '÷ ${n(SleepEngine.strainBoostSpan)}, 0, 1)',
-      'shift of ${n(SleepEngine.consistencyZeroMinutes)} minutes',
-      '${n(StrainEngine.tanakaIntercept)} − ${n(StrainEngine.tanakaSlope)} × age',
-      'Target: ${n(StrainEngine.targetFactor)} × the morning',
-      'fewer than ${StrainDay.minSamples} samples',
-      'never below ${n(HealthMonitor.spo2HardFloor)} %',
-      'Below ${n(TrainingLoadEngine.optimalFrom)} detraining',
-    ]) {
-      expect(find.textContaining(s), findsWidgets, reason: s);
+    final sheets = <String, List<String>>{
+      'About How Recovery works': [
+        'minimum SD of ${n(RecoveryEngine.hrvMinSd)} on the log scale',
+        'resting heart rate ${n(RecoveryEngine.rhrMinSd)} bpm',
+        'breathing rate ${n(RecoveryEngine.respMinSd)} /min',
+        'logistic(${n(RecoveryEngine.hrvLogisticSlope)} × z)',
+        'below ${n(RecoveryEngine.spo2PenaltyBelow)}% costs '
+            '${n(RecoveryEngine.spo2Penalty)} points',
+        'more than ${n(RecoveryEngine.skinTempPenaltyZ)} SD above',
+        'Good (green) from ${RecoveryEngine.greenFrom}',
+      ],
+      'About How your sleep goal is set': [
+        'Strain above ${n(SleepEngine.strainBoostFrom)}',
+        '÷ ${n(SleepEngine.strainBoostSpan)}, 0, 1)',
+        '0% means ${n(SleepEngine.consistencyZeroMinutes)} minutes off',
+      ],
+      'About How Strain works': [
+        '${n(StrainEngine.tanakaIntercept)} − ${n(StrainEngine.tanakaSlope)} × age',
+        'Effort goal: ${n(StrainEngine.targetFactor)} × the morning',
+        'fewer than ${StrainDay.minSamples} readings',
+      ],
+      'About Overnight signals': [
+        'never below ${n(HealthMonitor.spo2HardFloor)}%',
+      ],
+      'About Training load and trends': [
+        'Below ${n(TrainingLoadEngine.optimalFrom)}: less than usual',
+      ],
+    };
+    for (final MapEntry(key: label, value: strings) in sheets.entries) {
+      final f = find.bySemanticsLabel(label);
+      expect(f, findsOneWidget, reason: label);
+      await t.tap(f);
+      await t.pumpAndSettle();
+      for (final s in strings) {
+        expect(find.textContaining(s), findsWidgets, reason: '$label: $s');
+      }
+      t.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await t.pumpAndSettle();
     }
   });
 }

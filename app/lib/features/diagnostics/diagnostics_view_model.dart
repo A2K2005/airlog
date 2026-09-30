@@ -153,10 +153,11 @@ class DiagnosticsController extends Notifier<DiagnosticsState> {
           .read(fileSharerProvider)
           .share(
             [path],
-            subject: 'Airlog probe (${state.windowDays} days)',
+            subject: 'Airlog data check (${state.windowDays} days)',
             text: state.demo
-                ? 'Airlog Phase 0 probe — SYNTHETIC demo data, not a real band.'
-                : 'Airlog Phase 0 probe: what reaches the phone from the band.',
+                ? 'Airlog data check: SAMPLE data, not a real tracker.'
+                : 'Airlog data check: what reaches the phone from your '
+                      'tracker.',
           );
       return true;
     } catch (_) {

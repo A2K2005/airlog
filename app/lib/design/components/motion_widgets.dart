@@ -1,4 +1,4 @@
-// Two motion primitives the components share.
+// Three motion primitives the components share.
 //
 //  * NumberSwap: a changing number crossfades through a slight blur, so two
 //    values never read as two overlapping objects. Opacity + blur only, so it
@@ -9,12 +9,40 @@
 //    runs once per mount; under reduced motion it is opacity only. Use it for
 //    rarely seen content (a sheet's sections, first load), never for things
 //    seen tens of times a day.
+//  * FadeSwap: a status that changes in place (a pill going from "Not
+//    connected" to "Connected" when you come back from Health Connect)
+//    crossfades in 160 ms on the strong ease-out, the outgoing one on the
+//    flipped curve. Opacity only, so it stays (short) under reduced motion.
 
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
 import '../tokens/tokens.dart';
+
+class FadeSwap extends StatelessWidget {
+  const FadeSwap({super.key, required this.swapKey, required this.child});
+
+  /// A new key crossfades [child] in; the same key never animates.
+  final Object swapKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = motion(context, Motion.fast, fade: true);
+    return AnimatedSwitcher(
+      duration: d,
+      reverseDuration: d,
+      switchInCurve: Motion.enter,
+      switchOutCurve: Motion.enter.flipped,
+      layoutBuilder: (current, previous) => Stack(
+        alignment: AlignmentDirectional.centerStart,
+        children: [...previous, ?current],
+      ),
+      child: KeyedSubtree(key: ValueKey(swapKey), child: child),
+    );
+  }
+}
 
 class NumberSwap extends StatelessWidget {
   const NumberSwap(

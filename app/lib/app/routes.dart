@@ -23,6 +23,7 @@ import '../features/methodology/methodology_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/privacy/privacy_screen.dart';
 import '../features/recovery/recovery_screen.dart';
+import '../features/settings/licences_screen.dart';
 import '../features/settings/profile_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/settings/sources_screen.dart';
@@ -48,12 +49,13 @@ final Map<String, WidgetBuilder> routeTable = {
   Routes.profile: (_) => const ProfileScreen(),
   Routes.syncLog: (_) => const SyncLogScreen(),
   Routes.methodology: (_) => const MethodologyScreen(),
-  Routes.licenses: (_) {
+  Routes.licenses: (_) => const LicencesScreen(),
+  Routes.licensesAll: (_) {
     registerAirlogLicenses();
     return const LicensePage(
       applicationName: 'Airlog',
       applicationLegalese:
-          'Computed on your phone. Not medical advice.\n'
+          'Worked out on your phone. Not medical advice.\n'
           'Not affiliated with Google, Fitbit or WHOOP.',
     );
   },

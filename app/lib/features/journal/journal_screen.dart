@@ -1,10 +1,13 @@
 // Journal (pushed; owns its Scaffold). Tag the evening in a few taps (saved
-// immediately), then see which factors move the next morning's Recovery in
-// your own data, with how sure the numbers are.
+// immediately), then see which habits are associated with the next
+// morning's Recovery in your own data: clear links as tiles with the gap in
+// dot matrix, maybes as rows, and the habits that need more days as chips.
+// The caveat and the method live behind ⓘ.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/screen_kit.dart' show IconBadge, InfoButton;
 import '../../design/design.dart';
 import '../../domain/day_key.dart';
 import '../../domain/models.dart';
@@ -28,8 +31,8 @@ class JournalScreen extends ConsumerWidget {
       body = [
         EmptyState(
           icon: Icons.error_outline_rounded,
-          title: 'Could not open the journal',
-          body: 'The stored entries could not be read. Nothing was changed.',
+          title: 'Couldn’t open the journal',
+          body: 'Airlog couldn’t open your saved entries. Nothing was changed.',
           actionLabel: 'Try again',
           onAction: () => ref.invalidate(journalViewModelProvider),
         ),
@@ -67,6 +70,8 @@ class JournalScreen extends ConsumerWidget {
     JournalFactor.meditation => Icons.self_improvement_outlined,
   };
 
+  static const _min = JournalViewModel.minDays;
+
   List<Widget> _content(
     BuildContext context,
     JournalState s,
@@ -74,9 +79,27 @@ class JournalScreen extends ConsumerWidget {
   ) {
     final p = P.of(context);
     final n = s.entry.factors.length;
-    Widget section(String title, String? subtitle) => Padding(
-      padding: const EdgeInsets.only(top: S.x8, bottom: S.x3),
-      child: SectionHeader(title: title, subtitle: subtitle),
+    const caveat = InfoButton(
+      title: 'A link, not a cause',
+      lede:
+          'These are differences in your own data, not proof that one thing '
+          'causes another. Other things often change on the same days.',
+      footnote: ExplainSheet.defaultFootnote,
+      children: [
+        ExplainSection(
+          title: 'Clear and Maybe',
+          body:
+              '“Clear” means the gap is more than twice its likely error '
+              '(Welch’s test). “Maybe” has enough days, but the gap could '
+              'still be chance.',
+        ),
+        ExplainSection(
+          title: 'How many days',
+          body:
+              'Each habit needs $_min tagged days with it and $_min without, '
+              'each followed by a Recovery score.',
+        ),
+      ],
     );
     return [
       Center(
@@ -97,16 +120,40 @@ class JournalScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              s.isToday
-                  ? 'What applies this evening?'
-                  : 'What applied that evening?',
-              style: F.t2.copyWith(color: p.ink),
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      s.isToday
+                          ? 'What happened this evening?'
+                          : 'What happened that evening?',
+                      style: F.t2.copyWith(color: p.ink),
+                    ),
+                  ),
+                ),
+                const InfoButton(
+                  title: 'Tagging your evening',
+                  children: [
+                    ExplainSection(
+                      title: 'How it works',
+                      body:
+                          'Tap all that fit. Airlog checks each one against '
+                          'your Recovery the next morning.',
+                    ),
+                    ExplainSection(
+                      title: 'Ordinary evenings count',
+                      body:
+                          'Tag the ordinary evenings too. Patterns need days '
+                          'with and without each habit.',
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: S.x1),
             Text(
-              'Tap everything that fits. Airlog compares it with the next '
-              'morning\'s Recovery.',
+              'Tap all that fit.',
               style: F.bodySm.copyWith(color: p.ink2),
             ),
             const SizedBox(height: S.x4),
@@ -138,7 +185,7 @@ class JournalScreen extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     s.saveError
-                        ? 'Could not save the last change. Tap again to retry.'
+                        ? 'Couldn’t save that. Tap it again.'
                         : n == 0
                         ? 'Saved on this phone as you tap.'
                         : '$n tagged · saved on this phone',
@@ -152,100 +199,81 @@ class JournalScreen extends ConsumerWidget {
           ],
         ),
       ),
-      if (!s.hasInsights) ...[
-        section('What moves your recovery', null),
+      const SizedBox(height: S.x8),
+      const Row(
+        children: [
+          Expanded(child: SectionHeader(title: 'What moves your Recovery')),
+          caveat,
+        ],
+      ),
+      Text(
+        'A link, not a cause.',
+        style: F.bodySm.copyWith(color: p.ink2),
+      ),
+      const SizedBox(height: S.x3),
+      if (!s.hasInsights)
         const AppCard(
           child: EmptyState(
             icon: Icons.insights_outlined,
             title: 'Patterns take a few weeks',
             body:
-                'Each factor needs at least ${JournalViewModel.minDays} tagged '
-                'days with it and ${JournalViewModel.minDays} without, each '
-                'followed by a Recovery score. Keep tagging your evenings, '
-                'including the ordinary ones.',
+                'Each habit needs $_min tagged days with it and $_min without, '
+                'each followed by a Recovery score. Keep tagging your '
+                'evenings, even the ordinary ones.',
           ),
-        ),
-      ] else ...[
-        section(
-          'What moves your recovery',
-          'Next-morning Recovery, days with a factor vs days without',
-        ),
+        )
+      else ...[
         if (s.solid.isEmpty)
           Text(
-            'No clear effects yet: every difference so far is within day-to-day '
-            'noise.',
+            'No clear links yet. So far, every difference could be chance.',
             style: F.bodySm.copyWith(color: p.ink2),
           )
         else
-          AppCard(
-            child: Column(
-              children: [
-                for (var i = 0; i < s.solid.length; i++) ...[
-                  if (i > 0) Divider(height: S.x6, color: p.line),
-                  InsightRow(insight: s.solid[i]),
-                ],
-              ],
-            ),
-          ),
+          for (var i = 0; i < s.solid.length; i++) ...[
+            if (i > 0) const SizedBox(height: S.x3),
+            InsightTile(insight: s.solid[i]),
+          ],
         if (s.emerging.isNotEmpty) ...[
-          section(
-            'Emerging',
-            'Enough days, but the difference is still within noise',
+          const SizedBox(height: S.x6),
+          const SectionHeader(
+            title: 'Maybe',
+            subtitle: 'Enough days, but it could still be chance',
           ),
+          const SizedBox(height: S.x3),
           AppCard(
             child: Column(
               children: [
                 for (var i = 0; i < s.emerging.length; i++) ...[
                   if (i > 0) Divider(height: S.x5, color: p.line),
-                  InsightRow(insight: s.emerging[i], compact: true),
+                  InsightRow(insight: s.emerging[i]),
                 ],
               ],
             ),
           ),
         ],
-        if (s.missing.isNotEmpty) ...[
-          const SizedBox(height: S.x4),
-          Text(
-            'Not enough days yet: ${s.missing.map((f) => f.label).join(', ')}. '
-            'Each needs ${JournalViewModel.minDays} days with it and '
-            '${JournalViewModel.minDays} without.',
-            style: F.cap.copyWith(color: p.ink3),
-          ),
-        ],
       ],
-      const SizedBox(height: S.x6),
-      AppCard(
-        tone: CardTone.inset,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      if (s.hasInsights && s.missing.isNotEmpty) ...[
+        const SizedBox(height: S.x6),
+        const OverLabel('Not enough days yet'),
+        const SizedBox(height: S.x2),
+        Wrap(
+          spacing: S.x2,
+          runSpacing: S.x2,
           children: [
-            Icon(Icons.balance_rounded, size: 18, color: p.ink2),
-            const SizedBox(width: S.x3),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Correlation, not causation',
-                    style: F.bodySm.copyWith(
-                      color: p.ink,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'These are differences in your own data, not proof of '
-                    'cause: other things often change on the same days. '
-                    '"Solid" means the gap is more than twice its standard '
-                    'error (Welch).',
-                    style: F.cap.copyWith(color: p.ink2),
-                  ),
-                ],
+            for (final f in s.missing)
+              MetricChip(
+                label: f.label,
+                icon: iconFor(f),
+                style: MetricChipStyle.muted,
               ),
-            ),
           ],
         ),
-      ),
+        const SizedBox(height: S.x2),
+        Text(
+          'Each needs $_min days with it and $_min without.',
+          style: F.cap.copyWith(color: p.ink3),
+        ),
+      ],
     ];
   }
 }
@@ -309,34 +337,55 @@ class FactorChip extends StatelessWidget {
   }
 }
 
-/// "Alcohol is associated with 24 points lower recovery the next day", its confidence and group sizes,
-/// and the two averages as bars on one 0–100 scale.
-class InsightRow extends StatelessWidget {
-  const InsightRow({super.key, required this.insight, this.compact = false});
-  final FactorInsight insight;
+/// The sentence for an insight, with the gap in the tone's ink.
+Widget _sentence(BuildContext context, FactorInsight i, Color? tone) {
+  final p = P.of(context);
+  final d = i.delta.round();
+  if (d == 0) {
+    return Text(
+      JournalMapper.headline(i),
+      style: F.head.copyWith(color: p.ink),
+    );
+  }
+  return Text.rich(
+    TextSpan(
+      children: [
+        TextSpan(text: '${i.factor.label} is associated with '),
+        TextSpan(
+          text:
+              '${d.abs()} ${d.abs() == 1 ? 'point' : 'points'} '
+              '${d > 0 ? 'higher' : 'lower'}',
+          style: TextStyle(color: tone ?? p.ink),
+        ),
+        const TextSpan(text: ' Recovery the next day.'),
+      ],
+    ),
+    style: F.tab(F.head).copyWith(color: p.ink),
+  );
+}
 
-  /// Emerging rows: no bars (the difference is within noise anyway).
-  final bool compact;
+/// A clear link as its own tile: the gap in dot matrix, the sentence, and
+/// the two averages as bars on one 0–100 scale.
+class InsightTile extends StatelessWidget {
+  const InsightTile({super.key, required this.insight});
+  final FactorInsight insight;
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
     final i = insight;
-    final solid = i.confidence == InsightConfidence.solid;
-    final down = i.delta < 0;
-    final tone = !solid ? C.neutral : (down ? C.amber : C.health);
     final d = i.delta.round();
+    final tone = d < 0 ? C.amber : C.health;
     Widget bar(String label, double v, Color c) => Row(
       children: [
-        const SizedBox(width: 36 + S.x3),
         SizedBox(
-          width: 58,
+          width: 64,
           child: Text(label, style: F.cap.copyWith(color: p.ink3)),
         ),
         Expanded(
           child: LayoutBuilder(
             builder: (context, box) => Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: Container(
                 width: box.maxWidth * (v / 100).clamp(.02, 1.0),
                 height: 6,
@@ -347,20 +396,18 @@ class InsightRow extends StatelessWidget {
         ),
         const SizedBox(width: S.x2),
         SizedBox(
-          width: 36,
+          width: 40,
           child: Text(
-            '${v.round()} %',
+            '${v.round()}%',
             textAlign: TextAlign.end,
             style: F.tab(F.cap).copyWith(color: p.ink2),
           ),
         ),
       ],
     );
-    return Semantics(
-      container: true,
-      label:
-          '${JournalMapper.headline(i)}. ${solid ? 'Solid' : 'Emerging'}. '
-          '${JournalMapper.detail(i)}.',
+    return AppCard(
+      semanticLabel:
+          '${JournalMapper.headline(i)}. Clear. ${JournalMapper.detail(i)}.',
       child: ExcludeSemantics(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -368,71 +415,80 @@ class InsightRow extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: solid ? p.wash(tone) : p.card2,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    JournalScreen.iconFor(i.factor),
-                    size: 18,
-                    color: solid ? p.on(tone) : p.ink2,
-                  ),
-                ),
+                IconBadge(icon: JournalScreen.iconFor(i.factor), accent: tone),
                 const SizedBox(width: S.x3),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: DotStat(
+                    value: '${d.abs()}',
+                    unit: d == 0
+                        ? 'pts'
+                        : (d > 0 ? 'pts higher' : 'pts lower'),
+                    color: p.on(tone),
+                    style: F.dot36,
+                  ),
+                ),
+                const SizedBox(width: S.x2),
+                StatePill(label: 'Clear', color: tone),
+              ],
+            ),
+            const SizedBox(height: S.x3),
+            _sentence(context, i, p.on(tone)),
+            const SizedBox(height: S.x3),
+            bar('With', i.avgWith, p.mark(tone)),
+            const SizedBox(height: S.x2),
+            bar('Without', i.avgWithout, p.ink3),
+            const SizedBox(height: S.x3),
+            Text(
+              '${i.daysWith} days with · ${i.daysWithout} without',
+              style: F.tab(F.cap).copyWith(color: p.ink3),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A maybe: the sentence, its pill and group sizes, no bars (the gap could
+/// still be chance).
+class InsightRow extends StatelessWidget {
+  const InsightRow({super.key, required this.insight});
+  final FactorInsight insight;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
+    final i = insight;
+    return Semantics(
+      container: true,
+      label: '${JournalMapper.headline(i)}. Maybe. ${JournalMapper.detail(i)}.',
+      child: ExcludeSemantics(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            IconBadge(icon: JournalScreen.iconFor(i.factor), size: 32),
+            const SizedBox(width: S.x3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sentence(context, i, null),
+                  const SizedBox(height: S.x1),
+                  Wrap(
+                    spacing: S.x2,
+                    runSpacing: S.x1,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '${i.factor.label} is associated with ',
-                            ),
-                            TextSpan(
-                              text:
-                                  '${d.abs()} ${d.abs() == 1 ? 'point' : 'points'} '
-                                  '${d >= 0 ? 'higher' : 'lower'}',
-                              style: TextStyle(
-                                color: solid ? p.on(tone) : p.ink,
-                              ),
-                            ),
-                            const TextSpan(text: ' recovery the next day'),
-                          ],
-                        ),
-                        style: F.tab(F.head).copyWith(color: p.ink),
-                      ),
-                      const SizedBox(height: S.x1),
-                      Wrap(
-                        spacing: S.x2,
-                        runSpacing: S.x1,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          StatePill(
-                            label: solid ? 'Solid' : 'Emerging',
-                            color: tone,
-                          ),
-                          Text(
-                            '${i.daysWith} vs ${i.daysWithout} days',
-                            style: F.tab(F.cap).copyWith(color: p.ink3),
-                          ),
-                        ],
+                      StatePill.tone(PillTone.off, 'Maybe'),
+                      Text(
+                        '${i.daysWith} days with · ${i.daysWithout} without',
+                        style: F.tab(F.cap).copyWith(color: p.ink3),
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-            if (!compact) ...[
-              const SizedBox(height: S.x3),
-              bar('With', i.avgWith, p.mark(solid ? tone : C.neutral)),
-              const SizedBox(height: S.x2),
-              bar('Without', i.avgWithout, p.ink3),
-            ],
           ],
         ),
       ),

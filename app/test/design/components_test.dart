@@ -467,7 +467,7 @@ void main() {
       expect(find.text('59'), findsOneWidget);
       expect(find.text('Above your range'), findsOneWidget);
       expect(find.text('+12 vs usual 47'), findsOneWidget);
-      expect(find.text('Deep-sleep RMSSD · Google Health API'), findsOneWidget);
+      expect(find.text('Deep-sleep RMSSD · Enhanced mode'), findsOneWidget);
     });
 
     testWidgets('skin temperature is signed; no value says No data', (t) async {
@@ -588,7 +588,7 @@ void main() {
             'ghapi_deep_sleep_rmssd',
           ),
         ),
-        'Deep-sleep RMSSD · Google Health API',
+        'Deep-sleep RMSSD · Enhanced mode',
       );
       expect(
         ProvenanceChip.describe(

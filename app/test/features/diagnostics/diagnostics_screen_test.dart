@@ -30,20 +30,23 @@ void main() {
       final repo = ScreensBRepo.demo();
       await pumpB(t, const DiagnosticsScreen(), repo: repo);
       await t.pumpAndSettle();
-      expect(find.text('Synthetic data'), findsOneWidget);
+      expect(
+        find.text('This checks the sample data, not a tracker.'),
+        findsOneWidget,
+      );
       await t.tap(find.text('14 days'));
       await t.pumpAndSettle();
-      await t.tap(find.text('Run probe (14 days)'));
+      await t.tap(find.text('Check the last 14 days'));
       await t.pumpAndSettle();
       expect(repo.calls, contains('diagnostics:14'));
-      expect(find.text('Decisions'), findsOneWidget);
+      expect(find.text('What this means'), findsOneWidget);
       expect(find.textContaining('full zone-based strain'), findsOneWidget);
       await t.scrollUntilVisible(
         find.text('Heart rate'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('Synthetic'), findsWidgets);
+      expect(find.text('Sample'), findsWidgets);
     },
   );
 
@@ -55,8 +58,11 @@ void main() {
       final sharer = RecordingSharer();
       await pumpB(t, const DiagnosticsScreen(), repo: repo, sharer: sharer);
       await t.pumpAndSettle();
-      expect(find.text('Synthetic data'), findsNothing);
-      await t.tap(find.text('Run probe (7 days)'));
+      expect(
+        find.text('This checks the sample data, not a tracker.'),
+        findsNothing,
+      );
+      await t.tap(find.text('Check the last 7 days'));
       await t.pumpAndSettle();
       await t.scrollUntilVisible(
         find.text('com.fitbit.FitbitMobile').first,
@@ -67,24 +73,27 @@ void main() {
       // reads is "Available".
       expect(find.text('Fitbit'), findsNothing);
       expect(find.text('Available'), findsWidgets);
-      await tapOn(t, find.text('Share JSON dump'));
+      await tapOn(t, find.text('Share raw report (JSON)'));
       await t.pumpAndSettle();
       expect(sharer.shared.single, ['/tmp/airlog-probe.json']);
     },
   );
 
-  testWidgets('no overflow at 320 px and text scale 1.3', (t) async {
-    await pumpB(
-      t,
-      const DiagnosticsScreen(),
-      repo: ScreensBRepo.demo(),
-      size: kSmall,
-      textScale: 1.3,
-    );
-    await t.pumpAndSettle();
-    await tapOn(t, find.text('Run probe (7 days)'));
-    await t.pumpAndSettle();
-    await scrollThrough(t);
+  testWidgets('no overflow at 320 px and text scale 1.3 and 2.0', (t) async {
+    for (final scale in const [1.3, 2.0]) {
+      await t.pumpWidget(const SizedBox());
+      await pumpB(
+        t,
+        const DiagnosticsScreen(),
+        repo: ScreensBRepo.demo(),
+        size: kSmall,
+        textScale: scale,
+      );
+      await t.pumpAndSettle();
+      await tapOn(t, find.text('Check the last 7 days'));
+      await t.pumpAndSettle();
+      await scrollThrough(t);
+    }
   });
 
   for (final b in const [Brightness.dark]) { // dark only
@@ -96,7 +105,7 @@ void main() {
         brightness: b,
       );
       await t.pumpAndSettle();
-      await t.tap(find.text('Run probe (7 days)'));
+      await t.tap(find.text('Check the last 7 days'));
       await t.pumpAndSettle();
       await expectLater(
         find.byType(MaterialApp),
@@ -109,7 +118,7 @@ void main() {
       await repo.setMode(DataMode.live);
       await pumpB(t, const DiagnosticsScreen(), repo: repo, brightness: b);
       await t.pumpAndSettle();
-      await t.tap(find.text('Run probe (7 days)'));
+      await t.tap(find.text('Check the last 7 days'));
       await t.pumpAndSettle();
       await t.drag(find.byType(Scrollable).first, const Offset(0, -760));
       await t.pumpAndSettle();

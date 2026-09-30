@@ -158,7 +158,7 @@ void main() {
     await _workout(t, clock, live, 30);
     await t.binding.handlePopRoute();
     await t.pumpAndSettle();
-    expect(find.text('Leave this session?'), findsOneWidget);
+    expect(find.text('Leave this workout?'), findsOneWidget);
     await t.tap(find.text('Stay'));
     await t.pumpAndSettle();
     expect(find.text('Recording'), findsOneWidget);
@@ -186,7 +186,10 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Workout summary'), findsOneWidget);
     expect(find.text('Heart-rate recovery'), findsOneWidget);
-    expect(find.text('−41'), findsOneWidget);
+    // Unsigned, with the direction in words (COPY_REVIEW L35); no TRIMP.
+    expect(find.text('41'), findsOneWidget);
+    expect(find.text('bpm drop in the first minute'), findsOneWidget);
+    expect(find.textContaining('TRIMP'), findsNothing);
 
     await t.tap(find.text('Save workout'));
     await t.pumpAndSettle();
@@ -204,7 +207,10 @@ void main() {
     await t.pump();
     await t.tap(find.text('Skip'));
     await t.pumpAndSettle();
-    expect(find.textContaining('cool-down was skipped'), findsOneWidget);
+    expect(
+      find.textContaining('skipped the 1-minute cool-down'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('HRV check is locked before connecting and without RR', (
@@ -220,7 +226,10 @@ void main() {
       clock: clock.call,
     );
     await t.pumpAndSettle();
-    expect(find.textContaining('Unlocks after you connect'), findsOneWidget);
+    expect(find.textContaining('Works after you connect'), findsOneWidget);
+    // No brand path anywhere on the intro (B5).
+    expect(find.textContaining('Fitbit'), findsNothing);
+    expect(find.textContaining('Google'), findsNothing);
     expect(find.text('Start HRV check'), findsNothing);
 
     await t.tap(find.text('Find my tracker'));
@@ -231,8 +240,8 @@ void main() {
       await _second(t, clock, live, 62);
     }
     await t.pumpAndSettle();
-    expect(find.text('HRV check unavailable'), findsOneWidget);
-    expect(find.textContaining('RR intervals'), findsOneWidget);
+    expect(find.text('HRV check isn’t available'), findsOneWidget);
+    expect(find.textContaining('timing of each beat'), findsOneWidget);
     expect(find.text('Start HRV check'), findsNothing);
   });
 
@@ -255,11 +264,11 @@ void main() {
       await _second(t, clock, live, 62, rr: true, i: s);
     }
     await t.pumpAndSettle();
-    expect(find.text('RMSSD'), findsOneWidget);
+    expect(find.text('HRV'), findsOneWidget);
     // The Baevsky stress number is cut (product-critic review, 2026-09-29).
     expect(find.textContaining('Stress'), findsNothing);
     expect(find.textContaining('Baevsky'), findsNothing);
-    expect(find.text('Beats analysed'), findsOneWidget);
+    expect(find.text('Beats checked'), findsOneWidget);
     await t.tap(find.text('Save HRV check'));
     await t.pumpAndSettle();
     expect(live.saved.single.$1, 'hrv_check');
@@ -293,7 +302,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('Find my tracker'));
     await t.pumpAndSettle();
-    expect(find.text('No heart-rate sensors found'), findsOneWidget);
+    expect(find.text('No trackers found'), findsOneWidget);
     expect(find.textContaining('Share heart rate'), findsWidgets);
   });
 
@@ -356,6 +365,31 @@ void main() {
     final clock = await _connect(t, live, size: kSmall, textScale: 1.3);
     await _workout(t, clock, live, 20);
     await t.pumpAndSettle();
+    await scrollThrough(t);
+  });
+
+  testWidgets('no overflow at 320 px and 2× text: intro and summary', (
+    t,
+  ) async {
+    await pumpB(
+      t,
+      const LiveScreen(),
+      repo: ScreensBRepo.demo(),
+      live: FakeLiveHr(),
+      size: kSmall,
+      textScale: 2,
+    );
+    await t.pumpAndSettle();
+    await scrollThrough(t);
+    await t.pumpWidget(const SizedBox());
+    final live = FakeLiveHr();
+    final clock = await _connect(t, live, size: kSmall, textScale: 2);
+    await _workout(t, clock, live, 20);
+    await tapOn(t, find.text('Stop'));
+    await t.pumpAndSettle();
+    await tapOn(t, find.text('Skip'));
+    await t.pumpAndSettle();
+    expect(find.text('Workout summary'), findsOneWidget);
     await scrollThrough(t);
   });
 

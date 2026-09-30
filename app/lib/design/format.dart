@@ -2,6 +2,7 @@
 // axisHm / clockOf live in charts/axis.dart; day names in
 // components/navigation_bits.dart).
 
+import '../domain/models.dart' show SourceKind;
 import 'charts/axis.dart' show clockOf;
 
 /// "1h 05m", "37 min", "0 min".
@@ -79,3 +80,12 @@ String signed(double v, int decimals, {bool plus = true}) {
   if (zero) return text;
   return v < 0 ? '−$text' : (plus ? '+$text' : text);
 }
+
+/// A source's name as the app shows it. The optional cloud source is
+/// "Enhanced mode" everywhere in the UI (never a provider's API name);
+/// SourceKind.label stays as the data layer's and the coach's name.
+String sourceName(SourceKind k) => switch (k) {
+  SourceKind.googleHealthApi => 'Enhanced mode',
+  SourceKind.ble => 'Bluetooth',
+  _ => k.label,
+};

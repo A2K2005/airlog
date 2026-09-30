@@ -628,6 +628,7 @@ class HealthRepositoryImpl implements HealthRepository {
           HcAvailability.updateRequired => 'Update Health Connect to continue',
           HcAvailability.unsupported =>
             'Health Connect is not available on this device',
+          HcAvailability.checkFailed => 'Airlog couldn’t check Health Connect',
         },
         lastSyncAt: _mode == DataMode.live ? _lastSync : null,
       ),

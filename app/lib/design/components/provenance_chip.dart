@@ -1,10 +1,11 @@
-// ProvenanceChip — where a number came from: "Deep-sleep RMSSD · Google
-// Health API". Shown next to every metric so a source switch (which starts a
+// ProvenanceChip — where a number came from: "Deep-sleep RMSSD · Enhanced
+// mode". Shown next to every metric so a source switch (which starts a
 // new baseline) is never invisible.
 
 import 'package:flutter/material.dart';
 
 import '../../domain/models.dart' show Provenance, SourceKind;
+import '../format.dart' show sourceName;
 import '../tokens/tokens.dart';
 import 'pressable.dart';
 
@@ -59,7 +60,9 @@ class ProvenanceChip extends StatelessWidget {
   static String describe(Provenance p) {
     final known = _known[p.definition];
     final name = known ?? _pretty(p.definition);
-    return '$name · ${p.source.label}';
+    // The UI's name for the source: the cloud source is "Enhanced mode",
+    // never its API name (B9). SourceKind.label stays for data and coach.
+    return '$name · ${sourceName(p.source)}';
   }
 
   static String _pretty(String d) {

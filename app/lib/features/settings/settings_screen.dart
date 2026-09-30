@@ -1,17 +1,19 @@
-// Settings: data mode, sources, profile, sync log; export and delete; how
-// the scores work, diagnostics, privacy, licences and versions.
+// Settings: sample data or my data, sources, profile, sync log and coach;
+// export and delete; how the scores work, diagnostics, privacy, licences and
+// versions. Tiles and rows, one idea each; the explanations live behind ⓘ.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/copy.dart';
+import '../../app/providers.dart';
 import '../../app/route_names.dart';
+import '../../app/screen_kit.dart' show InfoButton;
 import '../../design/design.dart';
 import '../../domain/repositories.dart';
 import '../../domain/results.dart' show kAlgoVersion;
 import 'settings_view_model.dart';
 import 'widgets/hold_to_confirm.dart';
-import 'widgets/settings_rows.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -21,8 +23,11 @@ class SettingsScreen extends ConsumerWidget {
     final async = ref.watch(settingsControllerProvider);
     final s = async.value;
     final c = ref.read(settingsControllerProvider.notifier);
+    final now = ref.watch(currentTimeProvider);
     final p = P.of(context);
     void go(String r) => Navigator.of(context).pushNamed(r);
+    final idle = s != null && s.busy == null;
+    final mode = s?.mode ?? DataMode.demo;
 
     Future<void> export() async {
       final out = await c.export();
@@ -31,7 +36,7 @@ class SettingsScreen extends ConsumerWidget {
         context,
         out.ok
             ? 'Exported ${out.files} files. Choose where to keep them.'
-            : 'Export failed: ${out.error}',
+            : 'Couldn’t export: ${out.error}',
       );
     }
 
@@ -41,8 +46,8 @@ class SettingsScreen extends ConsumerWidget {
       snack(
         context,
         ok
-            ? 'Stored records deleted. Settings and keys kept.'
-            : 'Deletion did not finish. Some records may already be removed.',
+            ? 'Your data was deleted. Settings and keys are kept.'
+            : 'Delete didn’t finish. Some data may already be gone.',
       );
     }
 
@@ -54,11 +59,12 @@ class SettingsScreen extends ConsumerWidget {
         builder: (d) => AlertDialog(
           title: const Text('${SettingsCopy.deleteTitle}?'),
           content: const Text(
-            'Deletes stored readings, scores, journal entries, live sessions, '
-            'coach chats and memories, and exports held by Airlog. Settings, '
-            'profile, cloud keys and source sign-ins stay. Copies already shared '
-            'elsewhere and records in Health Connect or Google stay. Demo data '
-            'is regenerated in Demo mode. This cannot be undone.',
+            'This deletes your readings, scores, journal, workouts, coach '
+            'chats and memories, and any exports Airlog stored. Your '
+            'settings, profile, keys and sign-ins stay. Data in Health '
+            'Connect or your Enhanced mode account, and copies you already '
+            'shared, stay too. With sample data on, fresh sample data is '
+            'made. This can’t be undone.',
           ),
           actions: [
             TextButton(
@@ -68,7 +74,7 @@ class SettingsScreen extends ConsumerWidget {
             TextButton(
               onPressed: () => Navigator.of(d).pop(true),
               child: Text(
-                'Delete',
+                SettingsCopy.deleteTitle,
                 style: F.head.copyWith(color: P.of(d).on(C.recRed)),
               ),
             ),
@@ -79,6 +85,10 @@ class SettingsScreen extends ConsumerWidget {
       await wipe();
     }
 
+    final (pillLabel, pillTone) =
+        s?.sourcesPill ?? ('Health Connect', PillTone.off);
+    final lastSync = s?.lastSyncAt;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -87,8 +97,33 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: [
-          const OverLabel('Data'),
-          const SizedBox(height: S.x3),
+          const _Label(
+            'Data',
+            info: InfoButton(
+              title: 'Sample data and my data',
+              children: [
+                ExplainSection(
+                  title: 'Sample data',
+                  body:
+                      '90 days of made-up data, made on this phone, so you '
+                      'can look around. None of it is yours.',
+                ),
+                ExplainSection(
+                  title: 'My data',
+                  body:
+                      'Your tracker’s data from Health Connect (and Enhanced '
+                      'mode, if it’s on).',
+                ),
+                ExplainSection(
+                  title: 'Kept apart',
+                  body:
+                      'Sample data and your data are stored apart. Switching '
+                      'never mixes them.',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: S.x2),
           if (s?.error != null) ...[
             Semantics(
               liveRegion: true,
@@ -99,62 +134,59 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: S.x3),
           ],
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Data mode', style: F.head.copyWith(color: p.ink)),
-                const SizedBox(height: S.x3),
-                ExcludeFocus(
-                  excluding: s == null || s.busy != null,
-                  child: AbsorbPointer(
-                    absorbing: s == null || s.busy != null,
-                    child: SegmentedControl<DataMode>(
-                      values: DataMode.values,
-                      selected: s?.mode ?? DataMode.demo,
-                      label: (m) => m == DataMode.demo ? 'Demo' : 'Live',
-                      semanticsLabel: 'Data mode',
-                      onChanged: s == null || s.busy != null
-                          ? (_) {}
-                          : c.setMode,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: S.x3),
-                Text(
-                  (s?.mode ?? DataMode.demo) == DataMode.demo
-                      ? 'Sample data: 90 days generated on this phone, so you '
-                            'can explore every screen. Nothing here is your data.'
-                      : 'Live: your tracker’s data from Health Connect (and '
-                            'Enhanced mode, if on). Demo and live data are kept '
-                            'apart; switching never mixes them.',
-                  style: F.bodySm.copyWith(color: p.ink2),
-                ),
-              ],
-            ),
+          NavTileGrid(
+            children: [
+              NavTile(
+                icon: Icons.science_outlined,
+                accent: C.amber,
+                title: 'Sample data',
+                caption: 'Made on this phone',
+                selected: mode == DataMode.demo,
+                onTap: idle ? () => c.setMode(DataMode.demo) : null,
+              ),
+              NavTile(
+                icon: Icons.favorite_border_rounded,
+                accent: C.health,
+                title: 'My data',
+                caption: 'From your tracker',
+                selected: mode == DataMode.live,
+                onTap: idle ? () => c.setMode(DataMode.live) : null,
+              ),
+            ],
           ),
           const SizedBox(height: S.x3),
-          SettingsGroup(
+          NavTileGrid(
             children: [
-              SettingsRow(
+              NavTile(
                 icon: Icons.hub_outlined,
-                title: 'Sources',
-                subtitle:
-                    s?.sourcesSummary ??
-                    'Health Connect, Enhanced mode, Bluetooth',
+                accent: C.health,
+                title: 'Data sources',
+                status: FadeSwap(
+                  swapKey: pillLabel,
+                  child: StatePill.tone(pillTone, pillLabel),
+                ),
+                semanticLabel: 'Data sources. $pillLabel.',
                 onTap: () => go(Routes.sources),
               ),
-              SettingsRow(
+              NavTile(
                 icon: Icons.person_outline_rounded,
+                accent: C.sky,
                 title: 'Profile',
-                subtitle:
+                caption:
                     s?.profileSummary ?? 'Birth year, sex, max heart rate',
                 onTap: () => go(Routes.profile),
               ),
+            ],
+          ),
+          const SizedBox(height: S.x3),
+          SettingsTile(
+            children: [
               SettingsRow(
                 icon: Icons.receipt_long_outlined,
                 title: 'Sync log',
-                subtitle: 'Every sync, per data type',
+                subtitle: lastSync == null
+                    ? 'Nothing synced yet'
+                    : 'Last sync ${ago(lastSync, now)}',
                 onTap: () => go(Routes.syncLog),
               ),
               // Never gated: this is where "Show coach" is turned back on.
@@ -169,108 +201,131 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: S.x6),
           const OverLabel('Your data'),
           const SizedBox(height: S.x3),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  SettingsCopy.exportTitle,
-                  style: F.head.copyWith(color: p.ink),
+          SettingsTile(
+            dividers: false,
+            children: [
+              const SettingsRow(
+                icon: Icons.ios_share_rounded,
+                accent: C.sky,
+                title: SettingsCopy.exportTitle,
+                subtitle: 'CSV and JSON files. A copy, not a backup.',
+                trailing: InfoButton(
+                  title: SettingsCopy.exportTitle,
+                  children: [
+                    ExplainSection(
+                      title: 'What’s in it',
+                      body:
+                          'Your readings, scores and journal for the data '
+                          'you’re looking at now, as CSV and JSON files you '
+                          'can open in a spreadsheet.',
+                    ),
+                    ExplainSection(
+                      title: 'What’s not',
+                      body:
+                          'Coach chats, memories and settings aren’t '
+                          'included. It’s a copy to read, not a backup to '
+                          'restore.',
+                    ),
+                  ],
                 ),
-                const SizedBox(height: S.x1),
-                Text(
-                  'Readings, scores and journal entries for the current data '
-                  'mode and enabled sources, as CSV and JSON. This is a '
-                  'readable export, not a restorable backup. Coach chats, '
-                  'memory and settings are not included.',
-                  style: F.bodySm.copyWith(color: p.ink2),
-                ),
-                const SizedBox(height: S.x3),
-                Align(
-                  alignment: Alignment.centerLeft,
+              ),
+              SettingsBlock(
+                indent: true,
+                top: 0,
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
                   child: AppButton(
                     label: s?.busy == 'export' ? 'Exporting…' : 'Export',
                     icon: Icons.ios_share_rounded,
                     kind: AppButtonKind.secondary,
-                    onTap: s == null || s.busy != null ? null : export,
+                    compact: true,
+                    onTap: idle ? export : null,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: S.x3),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  SettingsCopy.deleteTitle,
-                  style: F.head.copyWith(color: p.ink),
+          SettingsTile(
+            dividers: false,
+            children: [
+              const SettingsRow(
+                icon: Icons.delete_outline_rounded,
+                accent: C.recRed,
+                title: SettingsCopy.deleteTitle,
+                subtitle:
+                    'Deletes your readings, scores, journal and chats. '
+                    'Settings and keys stay.',
+                trailing: InfoButton(
+                  title: SettingsCopy.deleteTitle,
+                  children: [
+                    ExplainSection(
+                      title: 'What’s deleted',
+                      body:
+                          'Your readings, scores, journal, workouts, coach '
+                          'chats and memories, and any exports Airlog stored.',
+                    ),
+                    ExplainSection(
+                      title: 'What stays',
+                      body:
+                          'Your settings, profile, keys and sign-ins. Data in '
+                          'Health Connect or your Enhanced mode account. '
+                          'Copies you already shared.',
+                    ),
+                    ExplainSection(
+                      title: 'With sample data on',
+                      body: 'Fresh sample data is made again.',
+                    ),
+                  ],
                 ),
-                const SizedBox(height: S.x1),
-                Text(
-                  'Deletes health records, journal entries, live sessions, '
-                  'coach chats and memories, and exports held by Airlog. '
-                  'Settings, profile, cloud keys and source sign-ins stay. '
-                  'Shared copies stay elsewhere. Demo data is regenerated '
-                  'in Demo mode.',
-                  style: F.bodySm.copyWith(color: p.ink2),
-                ),
-                const SizedBox(height: S.x3),
-                HoldToConfirm(
+              ),
+              SettingsBlock(
+                top: 0,
+                child: HoldToConfirm(
                   label: s?.busy == 'wipe' ? 'Deleting…' : 'Hold to delete',
                   hint: 'Press and hold for two seconds to delete',
-                  enabled: s != null && s.busy == null,
+                  enabled: idle,
                   onConfirmed: wipe,
                   onAccessibleConfirm: confirmWipe,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: S.x6),
           const OverLabel('About'),
           const SizedBox(height: S.x3),
-          SettingsGroup(
+          SettingsTile(
             children: [
               SettingsRow(
                 icon: Icons.functions_rounded,
                 title: 'How scores work',
-                subtitle: 'Every formula, constant and source',
                 onTap: () => go(Routes.methodology),
               ),
               SettingsRow(
                 icon: Icons.troubleshoot_rounded,
                 title: 'Diagnostics',
-                subtitle: 'What reaches this phone, per data type',
                 onTap: () => go(Routes.diagnostics),
               ),
               SettingsRow(
                 icon: Icons.lock_outline_rounded,
                 title: 'Privacy',
-                subtitle: 'Local by default. Optional cloud coach explained',
                 onTap: () => go(Routes.privacy),
               ),
               SettingsRow(
                 icon: Icons.gavel_rounded,
-                title: 'Licences',
-                subtitle: 'Pulse (Apache-2.0), Edge (MIT), DM Sans (OFL)',
+                title: 'Licences and credits',
                 onTap: () => go(Routes.licenses),
               ),
-            ],
-          ),
-          const SizedBox(height: S.x3),
-          const SettingsGroup(
-            children: [
-              SettingsValueRow(
-                title: 'Algorithm version',
-                value: 'v$kAlgoVersion',
+              const SettingsValueRow(
+                title: 'Score formula version',
+                value: '$kAlgoVersion',
               ),
-              SettingsValueRow(title: 'App version', value: kAppVersion),
+              const SettingsValueRow(title: 'App version', value: kAppVersion),
             ],
           ),
           const SizedBox(height: S.x5),
           Text(
-            'Not medical advice. Not affiliated with Google, Fitbit or WHOOP.',
+            'Not medical advice.',
             textAlign: TextAlign.center,
             style: F.cap.copyWith(color: p.ink3),
           ),
@@ -278,4 +333,19 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// An over-label with an ⓘ at its end.
+class _Label extends StatelessWidget {
+  const _Label(this.text, {required this.info});
+  final String text;
+  final Widget info;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(child: OverLabel(text)),
+      info,
+    ],
+  );
 }

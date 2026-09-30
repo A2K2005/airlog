@@ -1,11 +1,15 @@
-// How scores work: every formula, constant, input, provenance rule and
-// citation. Constants are read from the engine itself (RecoveryEngine,
-// StrainEngine, HealthMonitor, Readiness, TrendEngine, HrvTools, SleepConfig,
-// EngineConfig), so this page cannot drift from the maths it describes.
+// How scores work: every score as a tile that shows what goes into it (the
+// weights, the multipliers, the minutes, the bands), with the maths one ⓘ
+// away. The formulas, constants and tables in the sheets are read from the
+// engine itself (RecoveryEngine, StrainEngine, HealthMonitor, Readiness,
+// TrendEngine, HrvTools, SleepConfig, EngineConfig), so the page cannot
+// drift from the maths it describes. Method names and citations live in
+// the sheets, never on the page.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/route_names.dart';
+import '../../app/screen_kit.dart' show IconBadge, InfoButton;
 import '../../design/design.dart';
 import '../../domain/engine/engine.dart' show EngineConfig, SleepConfig;
 import '../../domain/engine/health_monitor.dart' show HealthMonitor;
@@ -15,257 +19,148 @@ import '../../domain/engine/load_and_trends.dart'
 import '../../domain/engine/readiness.dart' show Readiness;
 import '../../domain/engine/recovery.dart' show RecoveryEngine;
 import '../../domain/engine/sleep.dart' show SleepEngine;
-import '../../domain/engine/strain.dart' show StrainEngine;
 import '../../domain/engine/stats.dart' show Stats;
+import '../../domain/engine/strain.dart' show StrainEngine;
 import '../../domain/engine/strain_fallback.dart' show StrainDay;
 import '../../domain/engine/trimp.dart' show Trimp;
 import '../../domain/results.dart';
-import '../../app/platform_services.dart';
 
 typedef _R = RecoveryEngine;
+typedef _L = TrainingLoadEngine;
 
-String _pct(double f) => '${(f * 100).round()} %';
+String _pct(double f) => '${(f * 100).round()}%';
 String _n(double v) => numText(v);
-String _hm(double minutes) {
-  final m = minutes.round(), h = m ~/ 60, r = m % 60;
-  return r == 0 ? '$h h' : '$h h ${r.toString().padLeft(2, '0')} min';
-}
 
-class MethodologyScreen extends ConsumerStatefulWidget {
+String _signal(HealthMetricKind k) => switch (k) {
+  HealthMetricKind.restingHr => 'Resting HR',
+  HealthMetricKind.hrv => 'HRV',
+  HealthMetricKind.respiratoryRate => 'Breathing rate',
+  HealthMetricKind.spo2 => 'Blood oxygen',
+  HealthMetricKind.skinTemp => 'Skin temperature',
+};
+
+class MethodologyScreen extends StatelessWidget {
   const MethodologyScreen({super.key});
-
-  @override
-  ConsumerState<MethodologyScreen> createState() => _MethodologyScreenState();
-}
-
-class _MethodologyScreenState extends ConsumerState<MethodologyScreen> {
-  static const _sections = [
-    'Honesty rules',
-    'Recovery',
-    'Strain',
-    'Sleep',
-    'Health Monitor',
-    'HRV readiness',
-    'Load and trends',
-    'Live sessions',
-    'Sources and baselines',
-    'Other apps’ scores',
-    'Citations',
-    'Credits',
-  ];
-  final _keys = {for (final s in _sections) s: GlobalKey()};
-
-  void _jump(String s) {
-    final c = _keys[s]?.currentContext;
-    if (c == null) return;
-    Scrollable.ensureVisible(
-      c,
-      duration: motion(context, Motion.slow),
-      curve: Motion.move,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
-    final open = ref.read(linkOpenerProvider);
     const sleep = SleepConfig();
     const cfg = EngineConfig();
     final w = RecoveryEngine.weights;
 
-    Widget section(String title, List<Widget> children) => Padding(
-      key: _keys[title],
-      padding: const EdgeInsets.only(top: S.x8),
+    Widget line(String s) => SettingsBlock(
+      bottom: 0,
+      child: Text(s, style: F.bodySm.copyWith(color: p.ink2)),
+    );
+    Widget labelled(String over, Widget child) => SettingsBlock(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Semantics(
-            header: true,
-            child: Text(title, style: F.t1.copyWith(color: p.ink)),
-          ),
-          const SizedBox(height: S.x3),
-          ...children,
-        ],
+        children: [OverLabel(over), const SizedBox(height: S.x2), child],
       ),
     );
-    Widget para(String s) => Padding(
-      padding: const EdgeInsets.only(bottom: S.x3),
-      child: Text(s, style: F.body.copyWith(color: p.ink2)),
+    InfoButton info(
+      String title,
+      String lede,
+      List<Widget> sections, {
+      String? semanticLabel,
+    }) => InfoButton(
+      title: title,
+      lede: lede,
+      footnote: ExplainSheet.defaultFootnote,
+      semanticLabel: semanticLabel,
+      children: sections,
     );
-    Widget formula(String s) => Container(
-      margin: const EdgeInsets.only(bottom: S.x3),
-      padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
-      decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
-      child: Text(
-        s,
-        style: F
-            .tab(F.bodySm)
-            .copyWith(color: p.ink, fontWeight: FontWeight.w600),
-      ),
-    );
-    Widget table(
-      List<String> head,
-      List<List<String>> rows, {
-      List<int>? flex,
-    }) {
-      final fl = flex ?? List.filled(head.length, 1);
-      return Container(
-        margin: const EdgeInsets.only(bottom: S.x3),
-        padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
-        decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                for (var i = 0; i < head.length; i++)
-                  Expanded(
-                    flex: fl[i],
-                    child: Text(
-                      head[i].toUpperCase(),
-                      textAlign: i == 0 ? TextAlign.start : TextAlign.end,
-                      style: F.over.copyWith(color: p.ink3),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: S.x2),
-            for (final r in rows)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < r.length; i++)
-                      Expanded(
-                        flex: fl[i],
-                        child: Text(
-                          r[i],
-                          textAlign: i == 0 ? TextAlign.start : TextAlign.end,
-                          style: F
-                              .tab(F.bodySm)
-                              .copyWith(
-                                color: i == 0 ? p.ink : p.ink2,
-                                fontWeight: i == 0
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                              ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      );
-    }
 
-    final floors = {
-      for (final k in HealthMetricKind.values)
-        k: HealthMonitor.minimumHalfWidth(k),
-    };
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('How scores work'),
-        actions: SampleDataChip.action(context),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Every number, explained',
-              style: F.display.copyWith(color: p.ink),
-            ),
-            const SizedBox(height: S.x3),
-            Text(
-              'Each score comes from a published method and your own '
-              'baseline, computed on this phone. This page lists all of it: '
-              'formulas, constants, inputs and sources. The constants are read '
-              'from the engine itself, so the page and the maths cannot '
-              'disagree.',
-              style: F.body.copyWith(color: p.ink2),
-            ),
-            const SizedBox(height: S.x3),
-            const Wrap(
-              spacing: S.x2,
-              runSpacing: S.x2,
-              children: [
-                StatePill(label: 'Algorithm v$kAlgoVersion', color: C.health),
-                StatePill(label: 'Not medical advice', color: C.neutral),
-                StatePill(label: 'Not WHOOP’s formula', color: C.neutral),
-              ],
-            ),
-            const SizedBox(height: S.x5),
-            AppCard(
-              tone: CardTone.inset,
+    final tiles = <Widget>[
+      // ── Honesty rules ─────────────────────────────────────────────────
+      SettingsTile(
+        title: 'Honesty rules',
+        icon: Icons.verified_outlined,
+        accent: C.health,
+        dividers: false,
+        info: info(
+          'Honesty rules',
+          'Every score uses a published method and your own usual, worked '
+              'out on this phone. The numbers in these sheets come straight '
+              'from the app’s code, so they always match what you see.',
+          [
+            ExplainSection(
+              title: 'The rules',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const OverLabel('Contents'),
-                  const SizedBox(height: S.x2),
-                  Wrap(
-                    spacing: S.x4,
-                    children: [
-                      for (final s in _sections)
-                        AppButton(
-                          label: s,
-                          kind: AppButtonKind.quiet,
-                          compact: true,
-                          onTap: () => _jump(s),
-                        ),
-                    ],
+                  const BulletLine(
+                    'When something is missing, a card says what, why, and '
+                    'how to fix it. Airlog never shows a guessed number.',
+                    strong: 'No guesses.',
+                  ),
+                  BulletLine(
+                    'Scores say “Learning” for the first ${_R.reliableNights} '
+                    'nights and “early estimate” until night '
+                    '${cfg.calibrationNeedNights}. The banner on Today says '
+                    'which.',
+                    strong: 'Learning is shown.',
+                  ),
+                  const BulletLine(
+                    'A trend arrow shows only for a real change, tested with '
+                    'statistics. No arrow means no clear change.',
+                    strong: 'Arrows are earned.',
+                  ),
+                  const BulletLine(
+                    'Each measurement comes from one app at a time, never an '
+                    'average. A new app means Airlog learns your usual again.',
+                    strong: 'One app per measurement.',
+                  ),
+                  const BulletLine(
+                    'Every saved score records its formula version, so your '
+                    'history can be worked out again if the formula changes.',
+                    strong: 'Versioned.',
                   ),
                 ],
               ),
             ),
-
-            section('Honesty rules', [
-              const BulletLine(
-                'A missing input shows a card that says what is '
-                'missing, why, and how to fix it. Airlog never shows a '
-                'guessed number.',
-                strong: 'No guesses.',
-              ),
-              BulletLine(
-                'Scores are “calibrating” for the first '
-                '${_R.reliableNights} nights and “provisional” until '
-                '${cfg.calibrationNeedNights}; the baseline banner says '
-                'which.',
-                strong: 'Calibration is visible.',
-              ),
-              const BulletLine(
-                'A trend arrow appears only for a statistically '
-                'significant change. No arrow means no reliable change.',
-                strong: 'Arrows are earned.',
-              ),
-              const BulletLine(
-                'Each metric comes from one source at a time, never '
-                'an average. A new source starts a new baseline.',
-                strong: 'One source per metric.',
-              ),
-              const BulletLine(
-                'Every stored result carries the algorithm version, so '
-                'history can be recomputed when a constant changes.',
-                strong: 'Versioned.',
-              ),
+          ],
+        ),
+        children: const [
+          SettingsBlock(
+            child: _RuleGrid([
+              (Icons.help_outline_rounded, 'No guesses'),
+              (Icons.hourglass_top_rounded, 'Learning is shown'),
+              (Icons.trending_up_rounded, 'Arrows are earned'),
+              (Icons.looks_one_outlined, 'One app per measurement'),
+              (Icons.history_rounded, 'Versioned'),
             ]),
+          ),
+        ],
+      ),
 
-            section('Recovery', [
-              para(
-                'How ready you are today, from last night against your own '
-                'baseline: the ${cfg.baselineWindowDays} most recent nights '
-                'measured the same way. Each input becomes a 0–1 sub-score; '
-                'the weighted sum is the score. Missing inputs are left out '
-                'and the other weights re-normalised. No score at all without '
-                'HRV or resting heart rate.',
-              ),
-              formula(
-                'recovery = 100 × Σ weightᵢ × sub-scoreᵢ − penalties   '
-                '(${_n(_R.minScore)} … ${_n(_R.maxScore)})',
-              ),
-              table(
-                ['Input', 'Weight', 'Sub-score'],
+      // ── Recovery ──────────────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.l5,
+        title: 'Recovery',
+        icon: Icons.wb_twilight_rounded,
+        accent: C.recGreen,
+        dividers: false,
+        info: info(
+          'How Recovery works',
+          'In short: how ready you are today, from last night compared with '
+              'your usual. Your usual is your ${cfg.baselineWindowDays} most '
+              'recent nights, measured the same way. Each signal gets a score '
+              'from 0 to 1, and the weighted total is your Recovery. If a '
+              'signal is missing, the others count for more. There’s no score '
+              'at all without HRV or resting heart rate.',
+          [
+            ExplainSection(
+              title: 'Formula',
+              formula:
+                  'recovery = 100 × Σ weightᵢ × sub-scoreᵢ − penalties   '
+                  '(${_n(_R.minScore)} … ${_n(_R.maxScore)})',
+            ),
+            ExplainSection(
+              title: 'Signals',
+              child: _Table(
+                ['Signal', 'Weight', 'Sub-score'],
                 [
                   [
                     'HRV',
@@ -283,48 +178,139 @@ class _MethodologyScreenState extends ConsumerState<MethodologyScreen> {
                     'performance, ${_n(_R.sleepMinScore)} … 1',
                   ],
                   [
-                    'Respiratory rate',
+                    'Breathing rate',
                     _pct(w['resp']!),
-                    'only a raised rate costs',
+                    'only a raised rate costs points',
                   ],
                 ],
-                flex: [4, 3, 6],
+                flex: const [4, 3, 6],
               ),
-              para(
-                'Penalties after weighting: overnight SpO₂ minimum below '
-                '${_n(_R.spo2PenaltyBelow)} % costs ${_n(_R.spo2Penalty)} '
-                'points; skin temperature more than '
-                '${_n(_R.skinTempPenaltyZ)} SD above your baseline (minimum '
-                'SD ${_n(_R.skinTempMinSd)} °C) costs '
-                '${_n(_R.skinTempPenalty)}. Zones: green from '
-                '${_R.greenFrom}, yellow ${_R.yellowFrom}–${_R.greenFrom - 1}, '
-                'red below ${_R.yellowFrom}. HRV uses a minimum SD of '
-                '${_n(_R.hrvMinSd)} on the log scale, resting HR '
-                '${_n(_R.rhrMinSd)} bpm and respiratory rate '
-                '${_n(_R.respMinSd)} /min, so a very steady baseline cannot '
-                'make one night look dramatic. Respiratory rate scores '
-                '${_n(_R.respMaxScore)} until it is '
-                '${_n(_R.respZAllowance)} SD above your mean, then loses '
-                '${_n(_R.respSlope)} per SD (never below '
-                '${_n(_R.respMinScore)}). An input without a baseline yet '
-                'scores a neutral ${_n(_R.neutralScore)}.',
-              ),
-            ]),
+            ),
+            ExplainSection(
+              title: 'Penalties and limits',
+              body:
+                  'Penalties after weighting: overnight blood oxygen (SpO₂) '
+                  'below ${_n(_R.spo2PenaltyBelow)}% costs '
+                  '${_n(_R.spo2Penalty)} points; skin temperature more than '
+                  '${_n(_R.skinTempPenaltyZ)} SD above your usual (minimum SD '
+                  '${_n(_R.skinTempMinSd)} °C) costs '
+                  '${_n(_R.skinTempPenalty)}. Levels: Good (green) from '
+                  '${_R.greenFrom}, Fair (yellow) '
+                  '${_R.yellowFrom}–${_R.greenFrom - 1}, Low (red) below '
+                  '${_R.yellowFrom}. HRV uses a minimum SD of '
+                  '${_n(_R.hrvMinSd)} on the log scale, resting heart rate '
+                  '${_n(_R.rhrMinSd)} bpm and breathing rate '
+                  '${_n(_R.respMinSd)} /min, so a very steady usual can’t make '
+                  'one night look dramatic. Breathing rate scores '
+                  '${_n(_R.respMaxScore)} until it’s '
+                  '${_n(_R.respZAllowance)} SD above your usual, then loses '
+                  '${_n(_R.respSlope)} per SD (never below '
+                  '${_n(_R.respMinScore)}). A signal Airlog hasn’t learned yet '
+                  'scores a neutral ${_n(_R.neutralScore)}.',
+            ),
+          ],
+        ),
+        children: [
+          line('How ready your body is today, from 1 to 99%.'),
+          labelled(
+            'What counts',
+            InputWeightBar(
+              parts: [
+                WeightPart(
+                  'HRV',
+                  w['hrv']!,
+                  C.recGreen,
+                  valueText: _pct(w['hrv']!),
+                ),
+                WeightPart(
+                  'Resting heart rate',
+                  w['rhr']!,
+                  C.health,
+                  valueText: _pct(w['rhr']!),
+                ),
+                WeightPart(
+                  'Sleep',
+                  w['sleep']!,
+                  C.sleep,
+                  valueText: _pct(w['sleep']!),
+                ),
+                WeightPart(
+                  'Breathing rate',
+                  w['resp']!,
+                  C.sky,
+                  valueText: _pct(w['resp']!),
+                ),
+              ],
+            ),
+          ),
+          labelled(
+            'Can take points off',
+            Wrap(
+              spacing: S.x2,
+              runSpacing: S.x2,
+              children: [
+                MetricChip(
+                  label: 'Blood oxygen below ${_n(_R.spo2PenaltyBelow)}%',
+                  style: MetricChipStyle.penalty,
+                ),
+                const MetricChip(
+                  label: 'Skin temperature well above usual',
+                  style: MetricChipStyle.penalty,
+                ),
+              ],
+            ),
+          ),
+          labelled(
+            'Levels',
+            BandScale(
+              bands: [
+                ScaleBand(
+                  'Low',
+                  '${_n(_R.minScore)}–${_R.yellowFrom - 1}',
+                  C.recRed,
+                ),
+                const ScaleBand(
+                  'Fair',
+                  '${_R.yellowFrom}–${_R.greenFrom - 1}',
+                  C.recYellow,
+                ),
+                ScaleBand(
+                  'Good',
+                  '${_R.greenFrom}–${_n(_R.maxScore)}',
+                  C.recGreen,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
 
-            section('Strain', [
-              para(
-                'How hard your heart worked, on a 0–21 scale. Each minute '
-                'of heart rate is placed by its share of your heart-rate '
-                'reserve (Karvonen); harder minutes weigh much more.',
-              ),
-              formula(
-                '%HRR = (HR − resting) ÷ (max − resting)\n'
-                'max = your override, else '
-                '${_n(StrainEngine.tanakaIntercept)} − '
-                '${_n(StrainEngine.tanakaSlope)} × age (Tanaka)',
-              ),
-              table(
-                ['Load zone', 'From', 'Weight'],
+      // ── Strain ────────────────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.l6,
+        title: 'Strain',
+        icon: Icons.bolt_rounded,
+        accent: DomainColors.strain,
+        dividers: false,
+        info: info(
+          'How Strain works',
+          'In short: how hard your heart worked today, from 0 to 21. Each '
+              'minute of heart rate is placed by how close it was to your max, '
+              'counting up from your resting heart rate (Karvonen). Harder '
+              'minutes count for much more.',
+          [
+            ExplainSection(
+              title: 'Heart-rate reserve',
+              formula:
+                  '%HRR = (HR − resting) ÷ (max − resting)\n'
+                  'max = your override, else '
+                  '${_n(StrainEngine.tanakaIntercept)} − '
+                  '${_n(StrainEngine.tanakaSlope)} × age (Tanaka)',
+            ),
+            ExplainSection(
+              title: 'Scoring bands',
+              child: _Table(
+                ['Scoring band', 'From', 'Weight'],
                 [
                   for (var i = 0; i < StrainEngine.zoneLowerBounds.length; i++)
                     [
@@ -333,322 +319,672 @@ class _MethodologyScreenState extends ConsumerState<MethodologyScreen> {
                       '× ${_n(StrainEngine.zoneWeights[i])}',
                     ],
                 ],
-                flex: [5, 3, 3],
+                flex: const [5, 3, 3],
               ),
-              formula(
-                'strain = ${_n(StrainEngine.scaleMax)} × '
-                '(1 − e^(−load ÷ ${_n(cfg.strainTau)}))',
-              ),
-              para(
-                'The zones on the charts are the familiar display bands: '
-                '${StrainEngine.displayZoneLowerBounds.map(_pct).join(' / ')} '
-                'of reserve for zones 1–5.',
-              ),
-              para(
-                'Sparse heart rate: if fewer than '
-                '${_pct(StrainDay.minCoverage)} of waking minutes have a '
-                'reading (or fewer than ${StrainDay.minSamples} samples), '
-                'zones would under-count, so the day gets no strain score: '
-                'the screen lists what was measured instead (workouts and '
-                'steps). A single workout without heart rate inside it uses '
-                'its own average HR and is labelled “Estimated”.',
-              ),
-              para(
-                'Target: ${_n(StrainEngine.targetFactor)} × the morning’s '
-                'recovery, kept between ${_n(StrainEngine.targetMin)} and '
-                '${_n(StrainEngine.targetMax)}. Cross-check: Banister TRIMP '
-                'over the same minutes, weighted '
-                '${_n(Trimp.maleA)}·e^(${_n(Trimp.maleB)}x) (male) or '
-                '${_n(Trimp.femaleA)}·e^(${_n(Trimp.femaleB)}x) (female), '
-                'the mean of both when not specified.',
-              ),
-            ]),
+            ),
+            ExplainSection(
+              title: 'Scale',
+              formula:
+                  'strain = ${_n(StrainEngine.scaleMax)} × '
+                  '(1 − e^(−load ÷ ${_n(cfg.strainTau)}))',
+            ),
+            ExplainSection(
+              title: 'Chart zones',
+              body:
+                  'The five zones on the charts are simpler display bands. '
+                  'They start at '
+                  '${StrainEngine.displayZoneLowerBounds.map(_pct).join(' / ')} '
+                  'of your heart-rate reserve (zones 1–5).',
+            ),
+            ExplainSection(
+              title: 'Patchy heart rate',
+              body:
+                  'If fewer than ${_pct(StrainDay.minCoverage)} of waking '
+                  'minutes have a reading (or fewer than '
+                  '${StrainDay.minSamples} readings), zones would undercount, '
+                  'so the day gets no Strain score. The screen lists what was '
+                  'measured instead (workouts and steps). A single workout '
+                  'with no heart rate inside it uses its own average heart '
+                  'rate and is labelled “Estimated”.',
+            ),
+            ExplainSection(
+              title: 'Effort goal and second opinion',
+              body:
+                  'Effort goal: ${_n(StrainEngine.targetFactor)} × the '
+                  'morning’s Recovery, kept between '
+                  '${_n(StrainEngine.targetMin)} and '
+                  '${_n(StrainEngine.targetMax)}. Second opinion: Banister '
+                  'TRIMP over the same minutes, weighted '
+                  '${_n(Trimp.maleA)}·e^(${_n(Trimp.maleB)}x) (male) or '
+                  '${_n(Trimp.femaleA)}·e^(${_n(Trimp.femaleB)}x) (female), '
+                  'the mean of both when sex isn’t set. It doesn’t change any '
+                  'score.',
+            ),
+          ],
+        ),
+        children: [
+          line('How hard your heart worked today, from 0 to 21.'),
+          labelled(
+            'Harder minutes count more',
+            WeightStepBars(
+              color: DomainColors.strain,
+              weightText: (v) => '×${_n(v)}',
+              steps: [
+                for (var i = 0; i < StrainEngine.zoneLowerBounds.length; i++)
+                  (
+                    StrainEngine.zoneLabels[i],
+                    'from ${_pct(StrainEngine.zoneLowerBounds[i])}',
+                    StrainEngine.zoneWeights[i],
+                  ),
+              ],
+            ),
+          ),
+          labelled(
+            'Effort goal',
+            Text(
+              'Your Recovery × ${_n(StrainEngine.targetFactor)}, kept between '
+              '${_n(StrainEngine.targetMin)} and '
+              '${_n(StrainEngine.targetMax)}.',
+              style: F.bodySm.copyWith(color: p.ink),
+            ),
+          ),
+        ],
+      ),
 
-            section('Sleep', [
-              formula(
-                'target = ${_hm(sleep.baselineNeedMinutes)} '
-                '+ ${_pct(sleep.debtRepayFraction)} of debt '
-                '+ up to ${_n(sleep.strainNeedBoostMaxMinutes)} min for strain '
-                'above ${_n(SleepEngine.strainBoostFrom)}\n'
-                'boost = clamp((strain − ${_n(SleepEngine.strainBoostFrom)}) ÷ '
-                '${_n(SleepEngine.strainBoostSpan)}, 0, 1) × '
-                '${_n(sleep.strainNeedBoostMaxMinutes)} min',
-              ),
-              para(
-                'The target is kept between '
-                '${_n(SleepEngine.needBelowBaselineMinutes)} minutes under and '
-                '${_n(SleepEngine.needAboveBaselineMinutes)} minutes over '
-                'the baseline. Performance is sleep ÷ target (naps count). '
-                'Debt carries forward night to night, gains at most '
-                '${_n(sleep.maxDebtGainPerNightMinutes)} min a night and is '
-                'capped at ${_hm(sleep.maxDebtMinutes)}. Consistency compares '
-                'bed and wake times over the last '
-                '${SleepEngine.consistencyWindow} nights: 100 % is the same '
-                'times, 0 % an average shift of '
-                '${_n(SleepEngine.consistencyZeroMinutes)} minutes. Tonight’s '
-                'bedtime is your average wake time over the last '
-                '${SleepEngine.bedtimeWakeDays} days minus the projected '
-                'target.',
-              ),
-            ]),
+      // ── Sleep ─────────────────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.l1,
+        title: 'Sleep',
+        icon: Icons.bedtime_outlined,
+        accent: C.sleep,
+        dividers: false,
+        info: info(
+          'How your sleep goal is set',
+          'In short: your sleep goal, missed sleep, and how regular your sleep '
+              'is.',
+          [
+            ExplainSection(
+              title: 'Formula',
+              formula:
+                  'goal = ${durationWords(sleep.baselineNeedMinutes)} '
+                  '+ ${_pct(sleep.debtRepayFraction)} of missed sleep '
+                  '+ up to ${_n(sleep.strainNeedBoostMaxMinutes)} min for '
+                  'Strain above ${_n(SleepEngine.strainBoostFrom)}\n'
+                  'boost = clamp((strain − ${_n(SleepEngine.strainBoostFrom)}) '
+                  '÷ ${_n(SleepEngine.strainBoostSpan)}, 0, 1) × '
+                  '${_n(sleep.strainNeedBoostMaxMinutes)} min',
+            ),
+            ExplainSection(
+              title: 'Details',
+              body:
+                  'The goal stays between '
+                  '${_n(SleepEngine.needBelowBaselineMinutes)} minutes under '
+                  'and ${_n(SleepEngine.needAboveBaselineMinutes)} minutes '
+                  'over your usual need. Your sleep % is sleep ÷ goal (naps '
+                  'count). Missed sleep carries over from night to night, '
+                  'grows by at most ${_n(sleep.maxDebtGainPerNightMinutes)} '
+                  'min a night, and never goes above '
+                  '${durationWords(sleep.maxDebtMinutes)}. Consistency '
+                  'compares bed and wake times over the last '
+                  '${SleepEngine.consistencyWindow} nights: 100% means the '
+                  'same times, 0% means '
+                  '${_n(SleepEngine.consistencyZeroMinutes)} minutes off on '
+                  'average. Tonight’s bedtime is your usual wake-up time over '
+                  'the last ${SleepEngine.bedtimeWakeDays} days, minus the '
+                  'sleep goal.',
+            ),
+          ],
+        ),
+        children: [
+          line('Your sleep goal for tonight.'),
+          SettingsBlock(
+            child: InputWeightBar(
+              parts: [
+                WeightPart(
+                  'Usual need',
+                  sleep.baselineNeedMinutes,
+                  C.sleep,
+                  valueText: durationWords(sleep.baselineNeedMinutes),
+                ),
+                WeightPart(
+                  'Catch-up',
+                  sleep.debtRepayFraction * sleep.maxDebtMinutes,
+                  C.sleep,
+                  valueText: '${_pct(sleep.debtRepayFraction)} of missed sleep',
+                  hatched: true,
+                ),
+                WeightPart(
+                  'Hard day',
+                  sleep.strainNeedBoostMaxMinutes,
+                  C.violet,
+                  valueText:
+                      'up to ${_n(sleep.strainNeedBoostMaxMinutes)} min',
+                  hatched: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
 
-            section('Health Monitor', [
-              para(
-                'Each overnight signal is compared with your usual range: '
-                'baseline ± ${_n(HealthMonitor.bandSd)} SD (about 90 % of '
-                'your nights), never narrower than a floor, so a very steady '
-                'metric is not over-sensitive.',
-              ),
-              table(
-                ['Metric', 'Floor ±'],
+      // ── Overnight signals ─────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.m5,
+        title: 'Overnight signals',
+        icon: Icons.monitor_heart_outlined,
+        accent: C.sky,
+        dividers: false,
+        info: info(
+          'Overnight signals',
+          'In short: five overnight readings, each checked against your usual '
+              'range. The range is your usual ± '
+              '${_n(HealthMonitor.bandSd)} SD (about 9 in 10 of your nights), '
+              'and never narrower than a set floor, so a very steady signal '
+              'isn’t too touchy.',
+          [
+            ExplainSection(
+              title: 'Floors',
+              child: _Table(
+                ['Signal', 'Floor ±'],
                 [
-                  for (final e in floors.entries)
-                    [e.key.label, '${_n(e.value)} ${e.key.unit}'],
+                  for (final k in HealthMetricKind.values)
+                    [
+                      _signal(k),
+                      '${_n(HealthMonitor.minimumHalfWidth(k))} ${k.unit}',
+                    ],
                 ],
-                flex: [5, 3],
+                flex: const [5, 3],
               ),
-              para(
-                'Each range is built from the last '
-                '${cfg.baselineWindowDays} nights measured the same way and '
-                'appears after ${_R.reliableNights} of them. SpO₂ has only a '
-                'floor, never below ${_n(HealthMonitor.spo2HardFloor)} %.',
-              ),
-              para(
-                'An alert needs two metrics out of range on the same day, or '
-                'one for two days running. Out of range is shown in amber, '
-                'never alarm red: it is a prompt to look, not a diagnosis.',
-              ),
-            ]),
+            ),
+            ExplainSection(
+              title: 'Your usual range',
+              body:
+                  'Each range comes from your last ${cfg.baselineWindowDays} '
+                  'nights measured the same way, and shows up after '
+                  '${_R.reliableNights} of them. Blood oxygen (SpO₂) has only '
+                  'a floor, never below ${_n(HealthMonitor.spo2HardFloor)}%.',
+            ),
+            const ExplainSection(
+              title: 'When a card appears',
+              body:
+                  'A card appears when two signals are out of range on the '
+                  'same day, or one is out for two days running. Out of range '
+                  'shows in amber, never alarm red: it’s a prompt to look, not '
+                  'a diagnosis.',
+            ),
+          ],
+        ),
+        children: [
+          line('Five readings from your sleep, each checked against your usual.'),
+          SettingsBlock(
+            child: Wrap(
+              spacing: S.x2,
+              runSpacing: S.x2,
+              children: [
+                for (final k in HealthMetricKind.values)
+                  MetricChip(label: _signal(k)),
+              ],
+            ),
+          ),
+          line(
+            'A card shows when 2 are out of range on one day, or 1 for 2 days.',
+          ),
+          const SizedBox(height: S.x3),
+        ],
+      ),
 
-            section('HRV readiness', [
-              para(
-                'Following Plews et al.: the ${Readiness.minWindowNights}+ '
-                'nights of the last week are averaged on the log scale and '
-                'compared with your smallest worthwhile change, baseline '
-                '± ${_n(Readiness.swcFactor)} SD of ln RMSSD (needs '
-                '${Readiness.minBaselineNights} baseline nights). The weekly '
-                'coefficient of variation is shown alongside; a rising one '
-                'flags instability even when the mean looks normal.',
-              ),
-            ]),
+      // ── HRV this week ─────────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.m12,
+        title: 'HRV this week',
+        icon: Icons.show_chart_rounded,
+        accent: C.health,
+        dividers: false,
+        info: info(
+          'HRV this week',
+          'In short: your 7-night HRV average, compared with your usual. '
+              'Following Plews et al., the ${Readiness.minWindowNights}+ '
+              'nights of the last week are averaged on the log scale and '
+              'compared with your smallest worthwhile change: your usual ± '
+              '${_n(Readiness.swcFactor)} SD of ln RMSSD (after '
+              '${Readiness.minBaselineNights} nights). The night-to-night '
+              'swing (coefficient of variation) shows alongside. If it keeps '
+              'rising, your body may be less settled even when the average '
+              'looks fine.',
+          const [],
+        ),
+        children: [
+          line('Your 7-night HRV average, compared with your usual.'),
+          const SizedBox(height: S.x3),
+        ],
+      ),
 
-            section('Load and trends', [
-              para(
-                'Training load is the acute:chronic ratio: mean daily strain '
-                'over ${TrainingLoadEngine.acuteDays} days ÷ over '
-                '${TrainingLoadEngine.chronicDays} days, needing '
-                '${TrainingLoadEngine.minDays} days of strain. Below '
-                '${_n(TrainingLoadEngine.optimalFrom)} detraining, '
-                '${_n(TrainingLoadEngine.optimalFrom)}–'
-                '${_n(TrainingLoadEngine.optimalTo)} steady, '
-                '${_n(TrainingLoadEngine.optimalTo)}–'
-                '${_n(TrainingLoadEngine.elevatedTo)} elevated, above '
-                '${_n(TrainingLoadEngine.elevatedTo)} high (Gabbett 2016). Days '
-                'without data are skipped, not counted as rest.',
-              ),
-              para(
-                'Trends use the Mann–Kendall test (two-sided, |Z| > '
-                '${TrendEngine.zCritical.toStringAsFixed(2)}, p < 0.05, at '
-                'least ${TrendEngine.minN} measured days) with Sen’s slope for '
-                'the size.',
-              ),
-            ]),
+      // ── Training load ─────────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.m20,
+        title: 'Training load',
+        icon: Icons.trending_up_rounded,
+        accent: C.health,
+        dividers: false,
+        info: info(
+          'Training load and trends',
+          'In short: your last 7 days compared with your last 4 weeks. '
+              'Training load is the acute:chronic ratio: average daily Strain '
+              'over ${_L.acuteDays} days ÷ over ${_L.chronicDays} days, after '
+              '${_L.minDays} days of Strain. Below ${_n(_L.optimalFrom)}: '
+              'less than usual. ${_n(_L.optimalFrom)}–${_n(_L.optimalTo)}: '
+              'about usual. ${_n(_L.optimalTo)}–${_n(_L.elevatedTo)}: more '
+              'than usual. Above ${_n(_L.elevatedTo)}: much more than usual '
+              '(Gabbett 2016). Days without data are skipped, not counted as '
+              'rest.',
+          [
+            ExplainSection(
+              title: 'Trends',
+              body:
+                  'A trend arrow shows only for a real change. Trends use the '
+                  'Mann–Kendall test (two-sided, |Z| > '
+                  '${TrendEngine.zCritical.toStringAsFixed(2)}, p < 0.05, at '
+                  'least ${TrendEngine.minN} measured days) with Sen’s slope '
+                  'for the size.',
+            ),
+          ],
+        ),
+        children: [
+          line('Your last 7 days compared with your last 4 weeks.'),
+          SettingsBlock(
+            child: BandScale(
+              bands: [
+                ScaleBand(
+                  'Less than usual',
+                  'below ${_n(_L.optimalFrom)}',
+                  DomainColors.load(LoadState.detraining),
+                ),
+                ScaleBand(
+                  'About usual',
+                  '${_n(_L.optimalFrom)}–${_n(_L.optimalTo)}',
+                  DomainColors.load(LoadState.optimal),
+                ),
+                ScaleBand(
+                  'More than usual',
+                  '${_n(_L.optimalTo)}–${_n(_L.elevatedTo)}',
+                  DomainColors.load(LoadState.elevated),
+                ),
+                ScaleBand(
+                  'Much more than usual',
+                  'above ${_n(_L.elevatedTo)}',
+                  DomainColors.load(LoadState.high),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
 
-            section('Live sessions', [
-              formula(
-                'HRR-60 = HR at Stop − HR 60 s later   (readings within ±10 s)',
-              ),
-              para(
-                'Heart-rate recovery after a workout, from 1-second Bluetooth '
-                'heart rate (Cole et al. 1999). The live screen keeps '
-                'recording for 60 s after Stop to measure it.',
-              ),
-              para(
-                'HRV check: beat-to-beat (RR) intervals are cleaned first '
-                '(${_n(HrvTools.minRrMs)}–${_n(HrvTools.maxRrMs)} ms, no jump '
-                'over ${_pct(HrvTools.maxRelativeJump)} from the previous '
-                'good beat). RMSSD (Task Force 1996) needs '
-                '${HrvTools.minCleanForRmssd} clean intervals. Only '
-                'available when your tracker sends RR intervals.',
-              ),
-            ]),
+      // ── Live heart rate ───────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.m16,
+        title: 'Live heart rate',
+        icon: Icons.favorite_border_rounded,
+        accent: C.recRed,
+        dividers: false,
+        info: info(
+          'Live heart rate',
+          'In short: how fast your heart rate drops after a workout, and the '
+              'HRV check.',
+          [
+            const ExplainSection(
+              title: 'Heart-rate recovery',
+              formula:
+                  'HRR-60 = HR at Stop − HR 60 s later   (readings within '
+                  '±10 s)',
+              body:
+                  'Heart-rate recovery comes from second-by-second Bluetooth '
+                  'heart rate (Cole et al. 1999). The live screen keeps '
+                  'recording for 60 s after you tap Stop to measure it.',
+            ),
+            ExplainSection(
+              title: 'HRV check',
+              body:
+                  'Beat-to-beat (RR) intervals are cleaned first '
+                  '(${_n(HrvTools.minRrMs)}–${_n(HrvTools.maxRrMs)} ms, no '
+                  'jump over ${_pct(HrvTools.maxRelativeJump)} from the '
+                  'previous good beat). RMSSD (Task Force 1996) needs '
+                  '${HrvTools.minCleanForRmssd} clean intervals. It only works '
+                  'when your tracker sends RR intervals.',
+            ),
+          ],
+        ),
+        children: [
+          line('Heart-rate recovery: how far your heart rate drops in 1 minute.'),
+          line('HRV check: 2 minutes sitting still.'),
+          const SizedBox(height: S.x3),
+        ],
+      ),
 
-            section('Sources and baselines', [
-              table(
-                ['Metric', 'First available wins'],
-                const [
+      // ── Your usual ────────────────────────────────────────────────────
+      SettingsTile(
+        glow: GlowRecipes.m8,
+        title: 'Your usual',
+        icon: Icons.tune_rounded,
+        accent: C.lavender,
+        dividers: false,
+        info: info(
+          'Data sources and your usual',
+          'Within Health Connect, each measurement comes from one app at a '
+              'time (your pick in Settings → Data sources, or the automatic '
+              'one), never a mix. Your usual is built only from nights '
+              'measured the same way by the same app as today. So if you '
+              'switch apps, or go from all-night to deep-sleep HRV, Airlog '
+              'learns your usual again instead of mixing the two. Sample data '
+              'and your data are stored apart.',
+          [
+            const ExplainSection(
+              title: 'Where it comes from',
+              child: _Table(
+                ['Measurement', 'Where it comes from (first available)'],
+                [
                   [
                     'HRV',
-                    'Google Health deep-sleep RMSSD › Health Connect sleep-mean RMSSD',
+                    'Enhanced mode deep-sleep HRV › Health Connect overnight '
+                        'HRV',
                   ],
                   [
-                    'Resting HR, sleep, breathing, skin temp, workouts, steps, HR',
-                    'Health Connect › Google Health API › Takeout',
+                    'Resting heart rate, sleep, breathing, skin temperature, '
+                        'workouts, steps, heart rate',
+                    'Health Connect › Enhanced mode',
                   ],
                   [
-                    'SpO₂',
-                    'Health Connect (overnight, from any app), else Google Health API',
+                    'Blood oxygen',
+                    'Health Connect (overnight, from any app), else Enhanced '
+                        'mode',
                   ],
                   ['Live heart rate', 'Bluetooth only'],
                 ],
                 flex: [4, 5],
               ),
-              para(
-                'Within Health Connect each metric comes from one app at a '
-                'time (your pick in Settings → Sources, or the automatic '
-                'one), never a mix. Each value carries its source, definition '
-                'and app; a baseline is built only from nights measured the '
-                'same way by the same app as today, so a change of app, or '
-                'from all-night to deep-sleep HRV, starts a new baseline '
-                'instead of mixing the two. Demo and live data are stored '
-                'apart.',
-              ),
-              para(
-                'Calibration: fewer than ${_R.reliableNights} baseline '
-                'nights = calibrating; ${_R.reliableNights}–'
-                '${cfg.calibrationNeedNights - 1} = provisional; '
-                '${cfg.calibrationNeedNights} or more = established. A '
-                'baseline needs at least ${Stats.minBaselineValues} nights '
-                'before it exists at all.',
-              ),
-            ]),
-
-            section('Other apps’ scores', [
-              para(
-                'WHOOP’s Recovery and Oura’s Readiness are those apps’ own '
-                'scores. Airlog does not show or copy them. It computes its '
-                'own Recovery from the measurements the app writes to Health '
-                'Connect (HRV, resting heart rate, sleep, breathing), with '
-                'the same published formula for every device and your '
-                'baseline on this phone.',
-              ),
-              para(
-                'So the two numbers differ. The apps’ formulas, weights and '
-                'baselines are their own and unpublished, and they may use '
-                'measurements they do not write to Health Connect. Neither '
-                'number is wrong: compare Airlog’s Recovery with itself over '
-                'time, not with the other app’s score.',
-              ),
-            ]),
-
-            section('Citations', const [
-              BulletLine(
-                'Karvonen MJ, Kentala E, Mustala O (1957). The effects '
-                'of training on heart rate; a longitudinal study. Ann Med Exp '
-                'Biol Fenn.',
-              ),
-              BulletLine(
-                'Banister EW (1991). Modeling elite athletic '
-                'performance. In: Physiological Testing of the '
-                'High-Performance Athlete.',
-              ),
-              BulletLine(
-                'Morton RH, Fitz-Clarke JR, Banister EW (1990). '
-                'Modeling human performance in running. J Appl Physiol.',
-              ),
-              BulletLine(
-                'Tanaka H, Monahan KD, Seals DR (2001). Age-predicted '
-                'maximal heart rate revisited. J Am Coll Cardiol.',
-              ),
-              BulletLine(
-                'Cole CR et al. (1999). Heart-rate recovery immediately '
-                'after exercise as a predictor of mortality. N Engl J Med.',
-              ),
-              BulletLine(
-                'Plews DJ et al. (2012). Heart rate variability in elite '
-                'triathletes: is variation in variability the key to '
-                'effective training? Eur J Appl Physiol.',
-              ),
-              BulletLine(
-                'Plews DJ et al. (2013). Training adaptation and heart '
-                'rate variability in elite endurance athletes: opening the '
-                'door to effective monitoring. Sports Med.',
-              ),
-              BulletLine(
-                'Task Force of the ESC and NASPE (1996). Heart rate '
-                'variability: standards of measurement, physiological '
-                'interpretation and clinical use. Circulation.',
-              ),
-              BulletLine(
-                'Gabbett TJ (2016). The training-injury prevention '
-                'paradox. Br J Sports Med.',
-              ),
-              BulletLine(
-                'WHOOP’s public articles on recovery, strain and sleep '
-                'were read for inspiration only. No WHOOP formula or code is '
-                'used, and the numbers are not comparable.',
-              ),
-            ]),
-
-            section('Credits', [
-              para(
-                'Airlog stands on two open-source projects. Ported files '
-                'name their origin in a header.',
-              ),
-              _Credit(
-                title: 'Pulse (Apache-2.0)',
-                body:
-                    'Recovery, Strain, Sleep, Health Monitor and journal '
-                    'formulas and constants; the demo-data idea; the '
-                    'sync-log pattern.',
-                onTap: () => open(Uri.parse('https://github.com/Luraxx/pulse')),
-              ),
-              const SizedBox(height: S.x3),
-              _Credit(
-                title: 'Edge (MIT)',
-                body:
-                    'Chart painters, the theme and contrast solver, the '
-                    'motion gate and the Bluetooth heart-rate parser. Type: DM '
-                    'Sans (OFL) and Subway Ticker Grid (K-Type, personal-use '
-                    'licence).',
-                onTap: () =>
-                    open(Uri.parse('https://github.com/OpenStrap/edge')),
-              ),
-              const SizedBox(height: S.x4),
-              Text(
-                'WHOOP is a trademark of WHOOP, Inc. Google, Fitbit, Fitbit '
-                'Air and Google Health are trademarks of Google LLC. Airlog is '
-                'independent and not affiliated with any of them.',
-                style: F.cap.copyWith(color: p.ink3),
-              ),
-            ]),
+            ),
+            ExplainSection(
+              title: 'Learning',
+              body:
+                  'Fewer than ${_R.reliableNights} nights = “Learning”; '
+                  '${_R.reliableNights}–${cfg.calibrationNeedNights - 1} = '
+                  '“early estimate”; ${cfg.calibrationNeedNights} or more = '
+                  'settled. Airlog needs at least ${Stats.minBaselineValues} '
+                  'nights before it has a usual at all.',
+            ),
           ],
         ),
+        children: [
+          line('One app per measurement. Switching apps starts learning again.'),
+          SettingsBlock(
+            child: BandScale(
+              bands: [
+                const ScaleBand(
+                  'Learning',
+                  '0–${_R.reliableNights - 1} nights',
+                  C.neutral,
+                ),
+                ScaleBand(
+                  'Early estimate',
+                  '${_R.reliableNights}–${cfg.calibrationNeedNights - 1}',
+                  C.amber,
+                ),
+                ScaleBand(
+                  'Settled',
+                  '${cfg.calibrationNeedNights}+',
+                  C.health,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+
+      // ── Other apps' scores ────────────────────────────────────────────
+      SettingsTile(
+        title: 'Other apps’ scores',
+        icon: Icons.apps_rounded,
+        dividers: false,
+        info: info(
+          'Other apps’ scores',
+          'Some trackers’ apps show their own recovery or readiness score. '
+              'Airlog doesn’t show or copy them. It works out its own Recovery '
+              'from the measurements the app shares with Health Connect, with '
+              'the same published formula for every device and your usual on '
+              'this phone.',
+          const [
+            ExplainSection(
+              title: 'Why the numbers differ',
+              body:
+                  'Those apps’ formulas, weights and baselines are their own '
+                  'and unpublished, and they may use measurements they don’t '
+                  'share with Health Connect. Neither number is wrong: compare '
+                  'Airlog’s Recovery with itself over time, not with the other '
+                  'app’s score.',
+            ),
+          ],
+        ),
+        children: [
+          line('Other apps’ scores are their own. Compare Airlog with itself.'),
+          const SizedBox(height: S.x3),
+        ],
+      ),
+
+      // ── Research, licences ────────────────────────────────────────────
+      SettingsTile(
+        children: [
+          SettingsRow(
+            icon: Icons.menu_book_outlined,
+            title: 'Research behind the scores',
+            onTap: () => showExplainSheet<void>(
+              context,
+              title: 'Research behind the scores',
+              lede: 'The published methods Airlog uses.',
+              footnote: null,
+              children: const [
+                ExplainSection(
+                  title: 'Citations',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      BulletLine(
+                        'Karvonen MJ, Kentala E, Mustala O (1957). The effects '
+                        'of training on heart rate; a longitudinal study. Ann '
+                        'Med Exp Biol Fenn.',
+                      ),
+                      BulletLine(
+                        'Banister EW (1991). Modeling elite athletic '
+                        'performance. In: Physiological Testing of the '
+                        'High-Performance Athlete.',
+                      ),
+                      BulletLine(
+                        'Morton RH, Fitz-Clarke JR, Banister EW (1990). '
+                        'Modeling human performance in running. J Appl '
+                        'Physiol.',
+                      ),
+                      BulletLine(
+                        'Tanaka H, Monahan KD, Seals DR (2001). Age-predicted '
+                        'maximal heart rate revisited. J Am Coll Cardiol.',
+                      ),
+                      BulletLine(
+                        'Cole CR et al. (1999). Heart-rate recovery '
+                        'immediately after exercise as a predictor of '
+                        'mortality. N Engl J Med.',
+                      ),
+                      BulletLine(
+                        'Plews DJ et al. (2012). Heart rate variability in '
+                        'elite triathletes: is variation in variability the '
+                        'key to effective training? Eur J Appl Physiol.',
+                      ),
+                      BulletLine(
+                        'Plews DJ et al. (2013). Training adaptation and heart '
+                        'rate variability in elite endurance athletes: opening '
+                        'the door to effective monitoring. Sports Med.',
+                      ),
+                      BulletLine(
+                        'Task Force of the ESC and NASPE (1996). Heart rate '
+                        'variability: standards of measurement, physiological '
+                        'interpretation and clinical use. Circulation.',
+                      ),
+                      BulletLine(
+                        'Gabbett TJ (2016). The training-injury prevention '
+                        'paradox. Br J Sports Med.',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SettingsRow(
+            icon: Icons.gavel_rounded,
+            title: 'Licences and credits',
+            onTap: () => Navigator.of(context).pushNamed(Routes.licenses),
+          ),
+        ],
+      ),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('How scores work'),
+        actions: SampleDataChip.action(context),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              'Every score, at a glance',
+              style: F.t1.copyWith(color: p.ink),
+            ),
+          ),
+          const SizedBox(height: S.x2),
+          Text(
+            'Worked out on this phone, from your own data.',
+            style: F.body.copyWith(color: p.ink2),
+          ),
+          const SizedBox(height: S.x3),
+          Wrap(
+            spacing: S.x2,
+            runSpacing: S.x2,
+            children: [
+              StatePill.tone(PillTone.good, 'Formula version $kAlgoVersion'),
+              StatePill.tone(PillTone.off, 'Our own formula'),
+              StatePill.tone(PillTone.off, 'Not medical advice'),
+            ],
+          ),
+          const SizedBox(height: S.x5),
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const SizedBox(height: S.x3),
+            EnterFade(index: i, child: tiles[i]),
+          ],
+        ],
       ),
     );
   }
 }
 
-class _Credit extends StatelessWidget {
-  const _Credit({required this.title, required this.body, required this.onTap});
-  final String title;
-  final String body;
-  final VoidCallback onTap;
+/// The honesty rules as icon cells, two per row (one at large text).
+class _RuleGrid extends StatelessWidget {
+  const _RuleGrid(this.rules);
+  final List<(IconData, String)> rules;
 
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
-    return AppCard(
-      onTap: onTap,
-      semanticLabel: '$title. $body. Opens the project page.',
-      child: ExcludeSemantics(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, c) {
+        final one = bigText(context) || c.maxWidth < 280;
+        final width = one ? c.maxWidth : (c.maxWidth - S.x3) / 2;
+        return Wrap(
+          spacing: S.x3,
+          runSpacing: S.x3,
           children: [
-            Expanded(
-              child: Column(
+            for (final (icon, label) in rules)
+              SizedBox(
+                width: width,
+                child: Row(
+                  children: [
+                    IconBadge(icon: icon, size: 28),
+                    const SizedBox(width: S.x2),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: F.bodySm.copyWith(
+                          color: p.ink,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A small table inside a sheet: an over-label header row, the first column
+/// bold, the rest right-aligned in tabular figures.
+class _Table extends StatelessWidget {
+  const _Table(this.head, this.rows, {this.flex});
+  final List<String> head;
+  final List<List<String>> rows;
+  final List<int>? flex;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = P.of(context);
+    final fl = flex ?? List.filled(head.length, 1);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: S.x4, vertical: S.x3),
+      decoration: BoxDecoration(color: p.card2, borderRadius: R.rMd),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              for (var i = 0; i < head.length; i++)
+                Expanded(
+                  flex: fl[i],
+                  child: Text(
+                    head[i].toUpperCase(),
+                    textAlign: i == 0 ? TextAlign.start : TextAlign.end,
+                    style: F.over.copyWith(color: p.ink3),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: S.x2),
+          for (final r in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: F.head.copyWith(color: p.ink)),
-                  const SizedBox(height: 2),
-                  Text(body, style: F.bodySm.copyWith(color: p.ink2)),
+                  for (var i = 0; i < r.length; i++)
+                    Expanded(
+                      flex: fl[i],
+                      child: Text(
+                        r[i],
+                        textAlign: i == 0 ? TextAlign.start : TextAlign.end,
+                        style: F
+                            .tab(F.bodySm)
+                            .copyWith(
+                              color: i == 0 ? p.ink : p.ink2,
+                              fontWeight: i == 0
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                      ),
+                    ),
                 ],
               ),
             ),
-            const SizedBox(width: S.x2),
-            Icon(Icons.open_in_new_rounded, size: 18, color: p.ink3),
-          ],
-        ),
+        ],
       ),
     );
   }

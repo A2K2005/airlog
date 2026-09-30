@@ -118,7 +118,19 @@ class SourceStatus {
   final bool beta;
 }
 
-enum HcAvailability { available, notInstalled, updateRequired, unsupported }
+enum HcAvailability {
+  available,
+  notInstalled,
+  updateRequired,
+
+  /// This platform can't run Health Connect at all (not Android).
+  unsupported,
+
+  /// [additive 2026-10-01] The availability check itself failed (the SDK
+  /// threw or gave no answer), so Health Connect may well be there: the UI
+  /// offers "Check again" instead of sending the user to install it.
+  checkFailed,
+}
 
 class HcPermissionState {
   const HcPermissionState({

@@ -5,15 +5,17 @@
 //                 Ease-out both ways (an implicit animation always runs
 //                 forward), ≤ 200 ms, zero under reduced motion. The header
 //                 reports expanded / collapsed to screen readers.
-//   * IconBadge   an icon in a tinted circle (the options and section heads).
-//   * InfoButton  the ⓘ that opens an explain sheet: long explanations live
-//                 there instead of in paragraphs.
+//   * IconBadge, InfoButton  now live in design/components/info_button.dart;
+//                 re-exported here so older imports keep compiling.
 //
 // Shared kit for features/: imports no feature, reads no provider.
 
 import 'package:flutter/material.dart';
 
+import '../design/components/info_button.dart';
 import '../design/design.dart';
+
+export '../design/components/info_button.dart' show IconBadge, InfoButton;
 
 class Disclosure extends StatefulWidget {
   const Disclosure({
@@ -154,72 +156,6 @@ class _DisclosureState extends State<Disclosure> {
               : const SizedBox(width: double.infinity),
         ),
       ],
-    );
-  }
-}
-
-/// An icon in a tinted circle. Neutral (card2 and ink2) without an accent.
-class IconBadge extends StatelessWidget {
-  const IconBadge({
-    super.key,
-    required this.icon,
-    this.accent,
-    this.size = 36,
-  });
-
-  final IconData icon;
-  final Color? accent;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = P.of(context);
-    final a = accent;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: a == null ? p.card2 : p.wash(a),
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Icon(icon, size: size * .5, color: a == null ? p.ink2 : p.on(a)),
-    );
-  }
-}
-
-/// The ⓘ: a 48 dp target that opens an explain sheet.
-class InfoButton extends StatelessWidget {
-  const InfoButton({
-    super.key,
-    required this.title,
-    this.lede,
-    this.children = const [],
-    this.semanticLabel,
-    this.footnote,
-  });
-
-  final String title;
-  final String? lede;
-  final List<Widget> children;
-  final String? semanticLabel;
-  final String? footnote;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = P.of(context);
-    return AppIconButton(
-      icon: Icons.info_outline_rounded,
-      size: 20,
-      color: p.ink2,
-      semanticLabel: semanticLabel ?? 'About $title',
-      onTap: () => showExplainSheet<void>(
-        context,
-        title: title,
-        lede: lede,
-        footnote: footnote,
-        children: children,
-      ),
     );
   }
 }

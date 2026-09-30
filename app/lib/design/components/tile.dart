@@ -92,9 +92,16 @@ Path tilePath(
 
 /// [tilePath] as a ShapeBorder (clips, decorations, Material shapes).
 class TileBorder extends ShapeBorder {
-  const TileBorder({this.radius = R.tile, this.smoothing = R.tileSmoothing});
+  const TileBorder({
+    this.radius = R.tile,
+    this.smoothing = R.tileSmoothing,
+    this.side = BorderSide.none,
+  });
   final double radius;
   final double smoothing;
+
+  /// An optional ring drawn inside the outline (a selected tile).
+  final BorderSide side;
 
   @override
   EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
@@ -108,20 +115,28 @@ class TileBorder extends ShapeBorder {
       tilePath(rect, radius: radius, smoothing: smoothing);
 
   @override
-  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {}
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    if (side.style == BorderStyle.none || side.width <= 0) return;
+    final inset = rect.deflate(side.width / 2);
+    canvas.drawPath(
+      tilePath(inset, radius: radius - side.width / 2, smoothing: smoothing),
+      side.toPaint(),
+    );
+  }
 
   @override
   ShapeBorder scale(double t) =>
-      TileBorder(radius: radius * t, smoothing: smoothing);
+      TileBorder(radius: radius * t, smoothing: smoothing, side: side.scale(t));
 
   @override
   bool operator ==(Object other) =>
       other is TileBorder &&
       other.radius == radius &&
-      other.smoothing == smoothing;
+      other.smoothing == smoothing &&
+      other.side == side;
 
   @override
-  int get hashCode => Object.hash(radius, smoothing);
+  int get hashCode => Object.hash(radius, smoothing, side);
 }
 
 /// Paints a [GlowRecipe] clipped to the tile outline. Painted once: the tile

@@ -201,11 +201,16 @@ class ScreensBRepo implements HealthRepository {
 
   // Any-app sources (contract 2026-09-29). Placeholder; the Data agent
   // implements these for real in HealthRepositoryImpl.
-  @override
-  Future<List<SourceApp>> detectedSources() async => const [];
+  /// Apps found in Health Connect, and the app per metric (Sources tests).
+  List<SourceApp>? appsOverride;
+  Map<Metric, SourceChoice>? choicesOverride;
 
   @override
-  Future<Map<Metric, SourceChoice>> sourceChoices() async => const {};
+  Future<List<SourceApp>> detectedSources() async => appsOverride ?? const [];
+
+  @override
+  Future<Map<Metric, SourceChoice>> sourceChoices() async =>
+      choicesOverride ?? const {};
 
   @override
   Future<void> setSourceChoice(Metric metric, String? origin) async {}

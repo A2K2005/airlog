@@ -4,6 +4,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../design/design.dart' show PillTone;
 import '../../domain/models.dart';
 import '../../domain/repositories.dart';
 import '../../app/platform_services.dart';
@@ -23,6 +24,7 @@ class SettingsState {
     this.profile = const UserProfile(),
     this.busy,
     this.error,
+    this.lastSyncAt,
   });
   final DataMode mode;
   final List<SourceStatus> sources;
@@ -31,6 +33,20 @@ class SettingsState {
   /// 'export' | 'wipe' | 'mode' while running.
   final String? busy;
   final String? error;
+
+  /// The last completed sync (the Sync log row's caption).
+  final DateTime? lastSyncAt;
+
+  /// The Data sources tile's pill. SourceStatus.available is one bool, so
+  /// "not installed", "update needed" and "not found" share "Needs a fix".
+  (String, PillTone) get sourcesPill {
+    if (mode == DataMode.demo) return ('Sample data', PillTone.attention);
+    final hc = source(SourceKind.healthConnect);
+    if (hc == null || !hc.available) return ('Needs a fix', PillTone.attention);
+    return hc.connected
+        ? ('Connected', PillTone.good)
+        : ('Not connected', PillTone.off);
+  }
 
   SourceStatus? source(SourceKind k) {
     for (final s in sources) {
@@ -53,6 +69,7 @@ class SettingsState {
     profile: profile ?? this.profile,
     busy: idle ? null : (busy ?? this.busy),
     error: clearError ? null : (error ?? this.error),
+    lastSyncAt: lastSyncAt,
   );
 
   /// "Connected · Enhanced mode not configured" style summary.
@@ -60,19 +77,16 @@ class SettingsState {
     final hc = source(SourceKind.healthConnect);
     final gh = source(SourceKind.googleHealthApi);
     final parts = <String>[
-      if (mode == DataMode.demo) 'Demo data in use',
+      if (mode == DataMode.demo) 'Sample data in use',
       if (hc != null)
         hc.connected
             ? 'Health Connect connected'
             : hc.available
             ? 'Health Connect not connected'
-            : 'Health Connect unavailable',
-      if (gh != null)
-        !gh.available
-            ? 'Enhanced mode not configured'
-            : gh.connected
-            ? 'Enhanced mode on'
-            : 'Enhanced mode off',
+            : 'Health Connect not available',
+      // A build without the cloud sign-in never mentions Enhanced mode.
+      if (gh != null && gh.available)
+        gh.connected ? 'Enhanced mode on' : 'Enhanced mode off',
     ];
     return parts.join(' · ');
   }
@@ -86,7 +100,8 @@ class SettingsState {
         Sex.male => 'Male',
         Sex.unspecified => 'Sex not specified',
       },
-      if (p.maxHrOverride != null) 'Max HR ${p.maxHrOverride!.round()}',
+      if (p.maxHrOverride != null)
+        'Max heart rate ${p.maxHrOverride!.round()}',
     ];
     return parts.join(' · ');
   }
@@ -148,6 +163,7 @@ class SettingsController extends AsyncNotifier<SettingsState> {
       profile: profile,
       busy: _busy,
       error: _error,
+      lastSyncAt: repo.syncStatus.lastSyncAt,
     );
   }
 
@@ -159,8 +175,7 @@ class SettingsController extends AsyncNotifier<SettingsState> {
     try {
       await _repo.setMode(mode);
     } catch (_) {
-      _error =
-          'Could not switch data mode. Check the selected mode and try again.';
+      _error = 'Couldn’t switch. Try again.';
     } finally {
       _finish();
     }
@@ -186,7 +201,7 @@ class SettingsController extends AsyncNotifier<SettingsState> {
           );
       return ExportOutcome(files: r.files.length);
     } catch (_) {
-      _error = 'Could not create or share the export. Try again.';
+      _error = 'Couldn’t make the export. Try again.';
       return ExportOutcome(error: _error);
     } finally {
       _finish();
@@ -200,8 +215,8 @@ class SettingsController extends AsyncNotifier<SettingsState> {
       return true;
     } catch (_) {
       _error =
-          'Deletion did not finish. Some records may already be removed. '
-          'Try again to complete it.';
+          'Delete didn’t finish. Some data may already be gone. Try again to '
+          'finish.';
       return false;
     } finally {
       _finish();

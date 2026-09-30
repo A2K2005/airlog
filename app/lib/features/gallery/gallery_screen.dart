@@ -9,6 +9,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../app/screen_kit.dart' show IconBadge, InfoButton;
 import '../../design/design.dart';
 import '../../domain/results.dart';
 import 'gallery_samples.dart';
@@ -24,6 +25,7 @@ enum GallerySection {
   sleep('Sleep charts'),
   strain('Strain charts'),
   sheet('Explain sheet'),
+  settings('Settings and sources'),
   edges('Edge cases'),
   loading('Loading and empty');
 
@@ -157,6 +159,7 @@ class GalleryBody extends StatelessWidget {
       GallerySection.sleep => _sleep(),
       GallerySection.strain => _strain(),
       GallerySection.sheet => _sheet(),
+      GallerySection.settings => _settings(),
       GallerySection.edges => _edges(),
       GallerySection.loading => _loading(),
     };
@@ -800,6 +803,223 @@ class GalleryBody extends StatelessWidget {
             EnterFade(
               enabled: playSeed != null,
               child: const StatePill(label: 'Entered once', color: C.sky),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ];
+
+  List<Widget> _settings() => [
+    _Case(
+      'InfoButton · IconBadge · StatePill.tone · FadeSwap',
+      Wrap(
+        spacing: S.x2,
+        runSpacing: S.x2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const InfoButton(
+            title: 'Health Connect',
+            lede: 'Android’s shared health store.',
+          ),
+          const IconBadge(icon: Icons.favorite_border_rounded, accent: C.health),
+          const IconBadge(icon: Icons.hub_outlined),
+          FadeSwap(
+            swapKey: 'connected',
+            child: StatePill.tone(PillTone.good, 'Swaps by fading'),
+          ),
+          for (final t in PillTone.values)
+            StatePill.tone(t, switch (t) {
+              PillTone.good => 'Connected',
+              PillTone.off => 'Off',
+              PillTone.beta => 'Beta',
+              PillTone.attention => 'Needs a fix',
+              PillTone.locked => 'Locked',
+            }),
+        ],
+      ),
+    ),
+    _Case(
+      'SettingsTile · SettingsRow · SettingsSwitchRow · SettingsValueRow · SettingsBlock',
+      SettingsTile(
+        title: 'Health Connect',
+        icon: Icons.favorite_border_rounded,
+        accent: C.health,
+        status: StatePill.tone(PillTone.good, 'Connected'),
+        info: const InfoButton(title: 'Health Connect'),
+        children: [
+          SettingsRow(
+            icon: Icons.receipt_long_outlined,
+            title: 'Sync log',
+            subtitle: 'Last sync 18 min ago',
+            onTap: () {},
+          ),
+          SettingsRow(
+            icon: Icons.bluetooth_rounded,
+            title: 'Bluetooth heart rate',
+            pill: StatePill.tone(PillTone.off, 'Live only'),
+            subtitle: 'Used only on the Live heart rate screen.',
+          ),
+          SettingsSwitchRow(
+            title: 'Read from Health Connect',
+            value: true,
+            onChanged: (_) {},
+          ),
+          const SettingsValueRow(title: 'App version', value: '1.0.0 (1)'),
+          SettingsBlock(
+            child: AppButton(
+              label: 'Review permissions',
+              kind: AppButtonKind.secondary,
+              compact: true,
+              onTap: () {},
+            ),
+          ),
+        ],
+      ),
+    ),
+    _Case(
+      'NavTileGrid · NavTile (selected, tappable, static)',
+      NavTileGrid(
+        children: [
+          NavTile(
+            icon: Icons.science_outlined,
+            accent: C.amber,
+            title: 'Sample data',
+            caption: 'Made on this phone',
+            selected: true,
+            onTap: () {},
+          ),
+          NavTile(
+            icon: Icons.favorite_border_rounded,
+            accent: C.health,
+            title: 'My data',
+            caption: 'From your tracker',
+            selected: false,
+            onTap: () {},
+          ),
+          NavTile(
+            icon: Icons.hub_outlined,
+            accent: C.health,
+            title: 'Data sources',
+            status: StatePill.tone(PillTone.attention, 'Sample data'),
+            onTap: () {},
+          ),
+          const NavTile(
+            icon: Icons.cloud_off_rounded,
+            title: 'No server, no account',
+          ),
+        ],
+      ),
+    ),
+    const _Case(
+      'DotStat · MetricChip',
+      AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: S.x6,
+              runSpacing: S.x3,
+              children: [
+                DotStat(value: '9/10', caption: 'kinds of data allowed'),
+                DotStat(
+                  value: '25',
+                  unit: 'pts lower',
+                  color: C.amber,
+                  style: F.dot28,
+                ),
+                DotStat(value: '9982', caption: 'Records', style: F.dot28),
+              ],
+            ),
+            SizedBox(height: S.x4),
+            Wrap(
+              spacing: S.x2,
+              runSpacing: S.x2,
+              children: [
+                MetricChip(
+                  label: 'HRV',
+                  count: '14/14',
+                  style: MetricChipStyle.used,
+                ),
+                MetricChip(label: 'Steps', count: '12/14'),
+                MetricChip(
+                  label: 'Blood oxygen',
+                  icon: Icons.water_drop_outlined,
+                  style: MetricChipStyle.add,
+                ),
+                MetricChip(
+                  label: 'Blood oxygen below 90%',
+                  style: MetricChipStyle.penalty,
+                ),
+                MetricChip(
+                  label: 'Travel',
+                  icon: Icons.flight_outlined,
+                  style: MetricChipStyle.muted,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+    const _Case(
+      'InputWeightBar (shares, and "up to" minutes) · WeightStepBars · BandScale',
+      AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InputWeightBar(
+              parts: [
+                WeightPart('HRV', .40, C.recGreen, valueText: '40%'),
+                WeightPart(
+                  'Resting heart rate',
+                  .25,
+                  C.health,
+                  valueText: '25%',
+                ),
+                WeightPart('Sleep', .25, C.sleep, valueText: '25%'),
+                WeightPart('Breathing rate', .10, C.sky, valueText: '10%'),
+              ],
+            ),
+            SizedBox(height: S.x5),
+            InputWeightBar(
+              parts: [
+                WeightPart('Usual need', 456, C.sleep, valueText: '7h 36m'),
+                WeightPart(
+                  'Catch-up',
+                  90,
+                  C.sleep,
+                  valueText: '30% of missed sleep',
+                  hatched: true,
+                ),
+                WeightPart(
+                  'Hard day',
+                  45,
+                  C.violet,
+                  valueText: 'up to 45 min',
+                  hatched: true,
+                ),
+              ],
+            ),
+            SizedBox(height: S.x5),
+            WeightStepBars(
+              color: C.strain,
+              steps: [
+                ('Very light', 'from 20%', .5),
+                ('Light', 'from 30%', 1),
+                ('Moderate', 'from 45%', 2.5),
+                ('Demanding', 'from 60%', 5),
+                ('Hard', 'from 72%', 8),
+                ('Max', 'from 85%', 11),
+              ],
+            ),
+            SizedBox(height: S.x5),
+            BandScale(
+              bands: [
+                ScaleBand('Low', '1–33', C.recRed),
+                ScaleBand('Fair', '34–66', C.recYellow),
+                ScaleBand('Good', '67–99', C.recGreen),
+              ],
             ),
           ],
         ),

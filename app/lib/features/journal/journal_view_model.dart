@@ -196,23 +196,23 @@ abstract final class JournalMapper {
     );
   }
 
-  /// "Alcohol is associated with 24 points lower recovery the next day".
+  /// "Alcohol is associated with 24 points lower Recovery the next day".
   static String headline(FactorInsight i) {
     final d = i.delta.round();
     final pts = d.abs() == 1 ? 'point' : 'points';
     // "Associated with", never "causes" (PRODUCT_PLAN §7).
     if (d == 0) {
-      return '${i.factor.label}: no difference in next-day recovery';
+      return '${i.factor.label}: no difference in your next-day Recovery';
     }
     final dir = d > 0 ? 'higher' : 'lower';
     return '${i.factor.label} is associated with ${d.abs()} $pts $dir '
-        'recovery the next day';
+        'Recovery the next day';
   }
 
-  /// "15 days with vs 63 without · 38 % vs 62 % average".
+  /// "15 days with, 63 without · average 38% vs 62%".
   static String detail(FactorInsight i) =>
-      '${i.daysWith} days with vs ${i.daysWithout} without · '
-      'average ${i.avgWith.round()} % vs ${i.avgWithout.round()} %';
+      '${i.daysWith} days with, ${i.daysWithout} without · '
+      'average ${i.avgWith.round()}% vs ${i.avgWithout.round()}%';
 }
 
 extension on JournalState {

@@ -4,6 +4,10 @@
 //
 // Keep this text in step with what the app actually does. It is the in-app
 // policy Health Connect requires and the Play data-safety form is based on it.
+//
+// Layout: the five promises as summary tiles on top, then the full policy,
+// one tile per section. The policy text itself stays on the page (never
+// behind ⓘ): it is the policy.
 
 import 'package:flutter/material.dart';
 
@@ -14,7 +18,7 @@ import '../../domain/coach/coach_contracts.dart' show CoachProvider;
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
 
-  static const updated = '30 September 2026';
+  static const updated = '1 October 2026';
 
   /// Health Connect data types read, and why: app/copy.dart's list, which
   /// the onboarding and Sources rationale print too.
@@ -27,19 +31,30 @@ class PrivacyScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: S.x3),
       child: Text(s, style: F.body.copyWith(color: p.ink2)),
     );
-    Widget section(String title, List<Widget> body) => Padding(
-      padding: const EdgeInsets.only(top: S.x6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    Widget section(IconData icon, String title, List<Widget> body) => Padding(
+      padding: const EdgeInsets.only(top: S.x3),
+      child: SettingsTile(
+        title: title,
+        icon: icon,
+        dividers: false,
         children: [
-          Semantics(
-            header: true,
-            child: Text(title, style: F.t2.copyWith(color: p.ink)),
+          SettingsBlock(
+            top: S.x3,
+            bottom: 0,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: body,
+            ),
           ),
-          const SizedBox(height: S.x3),
-          ...body,
         ],
       ),
+    );
+    NavTile promise(IconData icon, String title, String sentence) => NavTile(
+      icon: icon,
+      accent: C.health,
+      title: title,
+      caption: sentence,
+      semanticLabel: sentence,
     );
 
     return Scaffold(
@@ -50,86 +65,76 @@ class PrivacyScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(S.gutter, S.x2, S.gutter, S.x12),
         children: [
-          Text(
-            'Private by default. Cloud only by choice.',
-            style: F.t1.copyWith(color: p.ink),
+          Semantics(
+            header: true,
+            child: Text(
+              'Private by default. Cloud only by choice.',
+              style: F.t1.copyWith(color: p.ink),
+            ),
           ),
           const SizedBox(height: S.x2),
           Text('Last updated $updated', style: F.cap.copyWith(color: p.ink3)),
           const SizedBox(height: S.x5),
-          AppCard(
-            tone: CardTone.inset,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final (icon, text) in const [
-                  (
-                    Icons.phone_android_rounded,
-                    'Every score is computed on this phone.',
-                  ),
-                  (
-                    Icons.cloud_off_rounded,
-                    'There is no Airlog server and no account.',
-                  ),
-                  (
-                    Icons.visibility_off_outlined,
-                    'No analytics, no ads, no crash reporting, no tracking.',
-                  ),
-                  (
-                    Icons.ios_share_rounded,
-                    'Export your readings and scores, or delete local data.',
-                  ),
-                  (
-                    Icons.chat_bubble_outline_rounded,
-                    'The coach runs on this phone unless you turn on a cloud '
-                        'engine with your own key.',
-                  ),
-                ])
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: S.x1 + 2),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(icon, size: 18, color: p.ink),
-                        const SizedBox(width: S.x3),
-                        Expanded(
-                          child: Text(
-                            text,
-                            style: F.bodySm.copyWith(
-                              color: p.ink,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          section('What Airlog reads from Health Connect', [
-            para(
-              'Airlog asks Health Connect for read access to the data '
-              'types below, written there by your tracker’s app. '
-              'You choose which to grant, and you can revoke any of them at '
-              'any time in Health Connect settings. A type you do not grant '
-              'shows as missing; it is never guessed.',
-            ),
-            for (final (type, why) in readTypes)
-              Padding(
-                padding: const EdgeInsets.only(bottom: S.x1),
-                child: BulletLine(why, strong: '$type.', large: true),
+          NavTileGrid(
+            children: [
+              promise(
+                Icons.phone_android_rounded,
+                'On this phone',
+                'Every score is worked out on this phone.',
               ),
-          ]),
-          section('Where it is kept', [
+              promise(
+                Icons.cloud_off_rounded,
+                'No server',
+                'There is no Airlog server and no account.',
+              ),
+              promise(
+                Icons.visibility_off_outlined,
+                'No tracking',
+                'No analytics, no ads, no crash reporting, no tracking.',
+              ),
+              promise(
+                Icons.ios_share_rounded,
+                'Yours to keep',
+                'Save a copy of your readings and scores, or delete them.',
+              ),
+              promise(
+                Icons.chat_bubble_outline_rounded,
+                'Coach stays here',
+                'Coach runs on this phone unless you turn on Claude or Gemini '
+                    'with your own key.',
+              ),
+            ],
+          ),
+          const SizedBox(height: S.x6),
+          const OverLabel('The full policy'),
+          section(
+            Icons.favorite_border_rounded,
+            'What Airlog reads from Health Connect',
+            [
+              para(
+                'Airlog asks Health Connect to read the kinds of data below, '
+                'which your tracker’s app puts there. You choose which to '
+                'allow, and you can turn any of them off at any time in '
+                'Health Connect’s settings. Anything you don’t allow shows as '
+                'missing. It’s never guessed.',
+              ),
+              for (final (type, why) in readTypes)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: S.x1),
+                  child: BulletLine(why, strong: '$type.', large: true),
+                ),
+              const SizedBox(height: S.x3),
+            ],
+          ),
+          section(Icons.storage_rounded, 'Where it’s kept', [
             para(
-              'Data read from Health Connect, and the scores computed from '
-              'it, are stored in a database in the app\'s private storage on '
-              'this phone. Nothing is uploaded, unless you turn on a cloud '
-              'engine for the coach (below). Uninstalling Airlog deletes it.',
+              'Data read from Health Connect, and the scores worked out from '
+              'it, are stored in Airlog’s private storage on this phone. '
+              'Nothing is uploaded unless you turn on Claude or Gemini for '
+              'Coach (below). Uninstalling Airlog deletes it.',
             ),
           ]),
-          section('Enhanced mode (optional)', [
+          section(Icons.cloud_outlined, 'Enhanced mode (optional)', [
             para(
               'If you turn on Enhanced mode, Airlog signs in to the Google '
               'Health API with your Google account (OAuth) and requests your '
@@ -140,13 +145,13 @@ class PrivacyScreen extends StatelessWidget {
               'requests.',
             ),
           ]),
-          section('Live heart rate over Bluetooth', [
+          section(Icons.bluetooth_rounded, 'Live heart rate over Bluetooth', [
             para(
               'When you use the live screen, Airlog connects directly to '
               'your tracker over Bluetooth. The readings stay on this phone.',
             ),
           ]),
-          section(CoachCopy.privacyTitle, [
+          section(Icons.chat_bubble_outline_rounded, CoachCopy.privacyTitle, [
             para(CoachCopy.privacyOnDevice),
             para(CoachCopy.privacyCloud),
             for (final s in CoachCopy.sentWithData) BulletLine(s, large: true),
@@ -164,16 +169,16 @@ class PrivacyScreen extends StatelessWidget {
             para(CoachCopy.privacyMemories),
             para(CoachCopy.privacyDelete),
           ]),
-          section('Export and delete', [
+          section(Icons.ios_share_rounded, 'Export and delete', [
             para(
-              '${SettingsCopy.exportPath} writes your raw data and every '
-              'score as CSV and JSON files to this phone, to keep or share '
-              'as you choose. ${SettingsCopy.deletePath} erases the local '
-              'store. Revoking Health Connect access stops all further '
-              'reads.',
+              '${SettingsCopy.exportPath} saves your raw data and every '
+              'score as CSV and JSON files on this phone, to keep or share as '
+              'you choose. ${SettingsCopy.deletePath} deletes everything '
+              'Airlog stored on this phone. Turning off Health Connect access '
+              'stops all further reads.',
             ),
           ]),
-          section('Not medical advice', [
+          section(Icons.health_and_safety_outlined, 'Not medical advice', [
             para(
               'Airlog is a wellness app, not a medical device. Its scores '
               'are estimates that help you notice patterns against your own '
@@ -181,7 +186,7 @@ class PrivacyScreen extends StatelessWidget {
               'condition. Talk to a clinician about any health concern.',
             ),
           ]),
-          section('Changes', [
+          section(Icons.update_rounded, 'Changes', [
             para(
               'If this policy changes, the new version ships inside the app '
               'with a new date at the top of this page.',
