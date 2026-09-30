@@ -4,7 +4,7 @@
 
 Airlog is an Android app built in Flutter. It reads raw measurements from any wearable app through Health Connect and turns them into its own Recovery, Strain and Sleep scores. On top of those it adds a deterministic daily plan and an optional AI coach that can only cite your own data.
 
-Built end to end on 90 days of sample data. Next milestone: field validation on the Fitbit Air.
+Built end to end. Next milestone: field validation on the Fitbit Air.
 
 ![Airlog's Today, Recovery, Sleep and Trends screens for the same sample day: a plan headed "Ready to push", Recovery 78, 7 h 1 m of sleep against a 7 h 51 m target, and 30 days of recovery and strain](docs/readme/hero.png)
 
