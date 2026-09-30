@@ -8,6 +8,8 @@ Built end to end. Next milestone: field validation on the Fitbit Air.
 
 ![Airlog's Today, Recovery, Sleep and Trends screens for the same sample day: a plan headed "Ready to push", Recovery 78, 7 h 1 m of sleep against a 7 h 51 m target, and 30 days of recovery and strain](docs/readme/hero.png)
 
+**[Download the Android app (APK)](https://github.com/A2K2005/airlog/releases/latest)** · Android 8.0 or newer
+
 [Product plan](PRODUCT_PLAN.md) · [Research](research/) · [Architecture](app/ARCHITECTURE.md) · [Build and run](app/README.md)
 
 ---
@@ -88,6 +90,10 @@ For example, I asked for the UI to be a 1:1 copy of my Figma widget pack. Princi
 **Sources.** Onboarding says what the app is and isn't, then offers real data through Health Connect or clearly labelled sample data.
 
 ![Onboarding "What it is / What it isn't"; the choice between Health Connect and sample data; the Sources screen explaining one source per metric](docs/readme/sources.png)
+
+**Home-screen widgets.** The day at a glance without opening the app: Recovery, Strain and Sleep side by side, today's plan with its one next step, and Recovery on a ring. They refresh after every sync.
+
+![Three Airlog home-screen widgets: Today with Recovery 78 %, Strain 6.1 and Sleep 89 %; the plan reading "Your body is ready. A hard workout would be fine today"; and Recovery 78, Good, on a ring](docs/readme/widgets.png)
 
 ## How it works
 
