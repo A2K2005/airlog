@@ -63,6 +63,8 @@ For example, I asked for the UI to be a 1:1 copy of my Figma widget pack. Princi
 | **Health Connect as the base, every app, one app per metric** | Free, with no cloud project, OAuth review or security audit | Gap-filling across apps. Mixing two apps' data in one metric was cut |
 | **Never guess a missing signal** | A guessed number shown as a measurement breaks trust | Thinner scores for apps that share less, such as Samsung Health |
 | **A grounded coach, not a chatbot** | I wanted Q&A over my own data, and hallucination is the top complaint about coaches | Build cost: a verifier and an output policy |
+| **The coach opens straight to chat** | A setup screen stood between the user and the first answer. On-phone answers work at once, and a cloud key only makes them fuller | A consent step up front; the cloud choice now lives in Settings |
+| **Onboarding hands off to Android's own permission sheet** | Health Connect's sheet already lists every data type with a toggle, so a second list in the app was pure friction | Room to explain each data type before the prompt |
 | **Model fallback stays inside one provider, then goes on-device** | Consent covers one provider, and a model's reasoning can't be handed to another mid-answer | No failover to the other provider |
 | **Google Health API as an opt-in beta** | Its OAuth verification needs an annual CASA audit ($500–$4,500). Health Connect covers the core without it | Richer overnight data for most users, for now |
 | **Flutter, not Kotlin and Compose** | Reuses existing Flutter chart and theme code, and keeps an iOS path open | First-party Health Connect SDK fidelity. One metric needs a small Kotlin bridge |
@@ -109,6 +111,7 @@ Each provider also gets a daily budget (50 requests and 300k tokens by default) 
 **Design.** The UI is a 1:1 build of my own Figma widget pack, dark only. Where pixels and data disagreed, data won: one chart keeps a true linear scale over an ordinal one that would have matched the design more closely. Motion stays under 300 ms and drops to zero under reduced motion. Touch targets are 48 dp, and tiles reflow at large text sizes. See [DESIGN_SYSTEM.md](app/docs/DESIGN_SYSTEM.md).
 
 **Quality.**
+- **Copy and honesty review:** a 328-item review moved the app to plain words and fixed six places where the text claimed more than the data showed, such as an on-phone coach reply that guessed the band was charging when nothing had been recorded.
 - **Exploratory QA** on an emulator logged 21 issues. The worst was a P0: the background sync worker closed the app's shared database handle about every 15 minutes, which broke every screen. The worker now opens its own connection.
 - **An independent review** by separate agents logged 19 deeper findings on persistence, provenance and coach privacy. [LAUNCH_READINESS](LAUNCH_READINESS.md) maps each one to its fix and to the device runs that come next.
 - **Startup:** onboarding now appears 2.2–2.7 s after `main()` instead of 3.5–3.8 s, after a database read and background-job registration moved off the critical path (profile build, emulator).
