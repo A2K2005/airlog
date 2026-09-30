@@ -12,11 +12,30 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/copy.dart';
+import '../../../app/screen_kit.dart';
 import '../../../design/design.dart';
 import '../../../domain/coach/coach_contracts.dart';
 import '../coach_providers.dart';
 import '../coach_view_model.dart' show MemoryChoice;
 import 'answer_text.dart';
+
+/// The answer's own labels (the coach chat's strings live with the chat;
+/// see docs/UI_REVAMP.md). Glossary: "numbers checked", "just your numbers".
+abstract final class CoachAnswerCopy {
+  static String checked(int n) =>
+      '$n ${n == 1 ? 'number' : 'numbers'} checked';
+  static const checkedTitle = 'Numbers checked';
+  static const checkedWhy =
+      'Coach found every number in this answer in your data.';
+  static const checkedHow =
+      'Each number with a source chip is one of your own readings or scores. '
+      'Tap a source to open the screen it came from.';
+  static const fallback = 'Just your numbers';
+  static const fallbackWhy =
+      'Coach couldn’t check every number in its answer, so it shows only the '
+      'numbers from your data.';
+  static const safety = 'For your safety';
+}
 
 /// A one-time entrance for a new message. [play] false renders at once
 /// (every message loaded from storage, and every rebuild after the first).
@@ -102,9 +121,8 @@ class UserBubble extends StatelessWidget {
   }
 }
 
-/// "✓ Checked against your data · 3 numbers", or the fallback's honest
-/// "Showing facts only — couldn't verify the answer". Null when there is
-/// nothing to say (no numbers were quoted).
+/// "3 numbers checked", or the fallback's honest "Just your numbers". A tap
+/// explains it (ⓘ). Null when there is nothing to say (no numbers quoted).
 class VerificationPill extends StatelessWidget {
   const VerificationPill({super.key, required this.verification});
   final Verification verification;
@@ -112,19 +130,42 @@ class VerificationPill extends StatelessWidget {
   static bool shows(Verification? v) =>
       v != null && (!v.verified || v.checkedNumbers > 0);
 
-  static String label(Verification v) {
-    if (!v.verified) return CoachCopy.fallback;
-    final n = v.checkedNumbers;
-    return '${CoachCopy.checked} · $n ${n == 1 ? 'number' : 'numbers'}';
-  }
+  static String label(Verification v) => v.verified
+      ? CoachAnswerCopy.checked(v.checkedNumbers)
+      : CoachAnswerCopy.fallback;
 
   @override
   Widget build(BuildContext context) {
+    final p = P.of(context);
     final ok = verification.verified;
-    return StatePill(
-      label: label(verification),
-      color: ok ? C.recGreen : C.amber,
-      icon: ok ? Icons.check_rounded : Icons.info_outline_rounded,
+    final text = label(verification);
+    return Pressable(
+      onTap: () => showExplainSheet<void>(
+        context,
+        title: ok ? CoachAnswerCopy.checkedTitle : CoachAnswerCopy.fallback,
+        lede: ok ? CoachAnswerCopy.checkedWhy : CoachAnswerCopy.fallbackWhy,
+        children: [
+          if (ok) const ExplainSection(title: 'How', body: CoachAnswerCopy.checkedHow),
+        ],
+        footnote: CoachCopy.notMedical,
+      ),
+      semanticLabel: '$text. What this means',
+      child: ExcludeSemantics(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: StatePill(
+                label: text,
+                color: ok ? C.recGreen : C.amber,
+                icon: ok ? Icons.check_rounded : Icons.info_outline_rounded,
+              ),
+            ),
+            const SizedBox(width: S.x1),
+            Icon(Icons.info_outline_rounded, size: 16, color: p.ink3),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -143,45 +184,87 @@ class SourceChip extends StatelessWidget {
   final SourceRef source;
   final VoidCallback? onTap;
 
+  /// The value split for the dot face: ("64", "%"), or null when it is not
+  /// one plain number (a duration such as "6h 40m" stays in DM Sans).
+  static (String, String)? dotParts(SourceRef r) {
+    final v = refValue(r);
+    if (v == null) return null;
+    final unit = r.unit?.trim() ?? '';
+    if (unit == 'min' || unit == 'minutes') return null;
+    final n = unit.isEmpty ? v : v.substring(0, v.length - unit.length).trim();
+    final ok = n.isNotEmpty &&
+        n.split('').every((c) => DotMatrixNumber.glyphs.contains(c));
+    return ok ? (n, unit) : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = P.of(context);
     final value = refValue(source);
+    final parts = source.label.split(' · ');
+    final metric = parts.first;
+    final when = parts.length > 1 ? parts.sublist(1).join(' · ') : null;
+    final dot = dotParts(source);
+    final Widget? shown = value == null
+        ? null
+        : dot != null
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              DotMatrixNumber(dot.$1, style: F.dot24, color: p.ink),
+              if (dot.$2.isNotEmpty) ...[
+                const SizedBox(width: 2),
+                Text(dot.$2, style: F.micro.copyWith(color: p.ink2)),
+              ],
+            ],
+          )
+        : Text(
+            value,
+            style: F
+                .tab(F.bodySm)
+                .copyWith(color: p.ink, fontWeight: FontWeight.w700),
+          );
     final chip = Container(
-      padding: const EdgeInsets.fromLTRB(S.x2, S.x2, S.x3, S.x2),
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: S.tap),
+      padding: const EdgeInsets.fromLTRB(S.x2, S.x2, S.x2, S.x2),
       decoration: BoxDecoration(
         color: p.card2,
         borderRadius: R.rMd,
         border: Border.all(color: p.line),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           CiteMark(number: number, inline: false),
           const SizedBox(width: S.x2),
-          Flexible(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: source.label),
-                  if (value != null)
-                    TextSpan(
-                      text: '  $value',
-                      style: F
-                          .tab(F.cap)
-                          .copyWith(color: p.ink, fontWeight: FontWeight.w700),
-                    ),
-                ],
-              ),
-              style: F.cap.copyWith(color: p.ink2),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  metric,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: F.cap.copyWith(
+                    color: p.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (when != null)
+                  Text(
+                    when,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: F.tab(F.micro).copyWith(color: p.ink3),
+                  ),
+              ],
             ),
           ),
-          if (onTap != null) ...[
-            const SizedBox(width: S.x1),
+          if (shown != null) ...[const SizedBox(width: S.x1), shown],
+          if (onTap != null)
             Icon(Icons.chevron_right_rounded, size: 16, color: p.ink3),
-          ],
         ],
       ),
     );
@@ -196,7 +279,7 @@ class SourceChip extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       semanticLabel: '$spoken. Opens the screen.',
-      scale: .96,
+      scale: .97,
       child: ExcludeSemantics(child: chip),
     );
   }
@@ -258,89 +341,108 @@ class AnswerView extends StatelessWidget {
       for (var i = 0; i < m.proposedMemories.length; i++)
         if (memoryOn && choiceOf(i) != MemoryChoice.dismissed) i,
     ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (sample && m.refs.isNotEmpty) ...[
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: DemoBadge(
-              key: ValueKey('answer-sample'),
-              label: CoachCopy.sampleData,
+    final card = AppCard(
+      padding: const EdgeInsets.fromLTRB(S.x4, S.x4, S.x4, S.x2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (sample && m.refs.isNotEmpty) ...[
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: DemoBadge(
+                key: ValueKey('answer-sample'),
+                label: CoachCopy.sampleData,
+              ),
             ),
-          ),
-          const SizedBox(height: S.x2),
-        ],
-        CitedText(text: m.text, refs: m.refs),
-        if (m.refs.isNotEmpty) ...[
-          const SizedBox(height: S.x3),
-          const OverLabel('Sources'),
+            const SizedBox(height: S.x3),
+          ],
+          CitedText(text: m.text, refs: m.refs),
+          if (m.refs.isNotEmpty) ...[
+            const SizedBox(height: S.x4),
+            const OverLabel('Sources'),
+            const SizedBox(height: S.x2),
+            LayoutBuilder(
+              builder: (context, c) {
+                final cols = c.maxWidth >= 280 ? 2 : 1;
+                final w = (c.maxWidth - (cols - 1) * S.x2) / cols;
+                return Wrap(
+                  spacing: S.x2,
+                  runSpacing: S.x2,
+                  children: [
+                    for (var i = 0; i < m.refs.length; i++)
+                      SizedBox(
+                        width: w,
+                        child: SourceChip(
+                          key: ValueKey('source-${m.id}-${m.refs[i].id}'),
+                          number: i + 1,
+                          source: m.refs[i],
+                          onTap: refRoute(m.refs[i]) == null
+                              ? null
+                              : () => onOpenRef(m.refs[i]),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+          if (VerificationPill.shows(v)) ...[
+            const SizedBox(height: S.x2),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: VerificationPill(verification: v!),
+            ),
+          ],
+          if (engineNote != null) ...[
+            const SizedBox(height: S.x2),
+            _EngineNote(
+              key: ValueKey('answer-engine-${m.id}'),
+              text: engineNote!,
+              onDevice: m.answeredBy == ChatMessage.onDevice,
+            ),
+            if (onAskAgain != null && askAgainLabel != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  key: ValueKey('ask-again-${m.id}'),
+                  label: askAgainLabel!,
+                  kind: AppButtonKind.quiet,
+                  compact: true,
+                  icon: Icons.refresh_rounded,
+                  onTap: onAskAgain,
+                ),
+              ),
+          ],
           const SizedBox(height: S.x2),
           Wrap(
             spacing: S.x2,
             runSpacing: 0,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              for (var i = 0; i < m.refs.length; i++)
-                SourceChip(
-                  key: ValueKey('source-${m.id}-${m.refs[i].id}'),
-                  number: i + 1,
-                  source: m.refs[i],
-                  onTap: refRoute(m.refs[i]) == null
-                      ? null
-                      : () => onOpenRef(m.refs[i]),
+              if (onShowSent != null)
+                AppButton(
+                  label: 'What was sent',
+                  kind: AppButtonKind.secondary,
+                  compact: true,
+                  icon: Icons.outbox_outlined,
+                  onTap: onShowSent,
                 ),
+              AppButton(
+                label: reported ? 'Reported' : 'Report answer',
+                kind: AppButtonKind.secondary,
+                compact: true,
+                icon: reported ? Icons.flag_rounded : Icons.flag_outlined,
+                onTap: reported ? null : onReport,
+              ),
             ],
           ),
         ],
-        if (VerificationPill.shows(v)) ...[
-          const SizedBox(height: S.x2),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: VerificationPill(verification: v!),
-          ),
-        ],
-        if (engineNote != null) ...[
-          const SizedBox(height: S.x2),
-          _EngineNote(
-            key: ValueKey('answer-engine-${m.id}'),
-            text: engineNote!,
-            onDevice: m.answeredBy == ChatMessage.onDevice,
-          ),
-          if (onAskAgain != null && askAgainLabel != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppButton(
-                key: ValueKey('ask-again-${m.id}'),
-                label: askAgainLabel!,
-                kind: AppButtonKind.quiet,
-                compact: true,
-                icon: Icons.refresh_rounded,
-                onTap: onAskAgain,
-              ),
-            ),
-        ],
-        const SizedBox(height: S.x1),
-        Wrap(
-          spacing: S.x5,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (onShowSent != null)
-              AppButton(
-                label: 'What was sent',
-                kind: AppButtonKind.quiet,
-                compact: true,
-                icon: Icons.outbox_outlined,
-                onTap: onShowSent,
-              ),
-            AppButton(
-              label: reported ? 'Reported' : 'Report answer',
-              kind: AppButtonKind.quiet,
-              compact: true,
-              icon: reported ? Icons.flag_rounded : Icons.flag_outlined,
-              onTap: reported ? null : onReport,
-            ),
-          ],
-        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        card,
         for (final i in proposals) ...[
           const SizedBox(height: S.x2),
           RememberCard(
@@ -498,40 +600,37 @@ class SafetyAnswer extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) {
-    final p = P.of(context);
-    return AppCard(
-      tone: CardTone.tinted,
-      accent: C.health,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.health_and_safety_outlined,
-            size: 20,
-            color: p.on(C.health),
-          ),
-          const SizedBox(width: S.x3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'For your safety',
-                  style: F.bodySm.copyWith(
-                    color: p.on(C.health),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: S.x1),
-                Text(text, style: F.body.copyWith(color: p.ink)),
-              ],
+  Widget build(BuildContext context) => GlowPanel(
+    glow: GlowRecipes.s9,
+    width: double.infinity,
+    padding: const EdgeInsets.all(S.x5),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.health_and_safety_outlined,
+              size: 22,
+              color: TileInk.primary,
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            const SizedBox(width: S.x2),
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  CoachAnswerCopy.safety,
+                  style: F.tileTitle.copyWith(color: TileInk.primary),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: S.x3),
+        Text(text, style: F.body.copyWith(color: TileInk.primary)),
+      ],
+    ),
+  );
 }
 
 /// The quiet line that says which engine answered, when it wasn't the
@@ -848,11 +947,14 @@ class DisclosureCard extends StatelessWidget {
     final p = P.of(context);
     return AppCard(
       tone: CardTone.inset,
-      padding: const EdgeInsets.all(S.x4),
+      padding: const EdgeInsets.all(S.x3),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.smart_toy_outlined, size: 18, color: p.ink2),
+          const IconBadge(
+            icon: Icons.auto_awesome_outlined,
+            accent: C.violet,
+            size: 32,
+          ),
           const SizedBox(width: S.x3),
           Expanded(
             child: Text(
