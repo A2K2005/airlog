@@ -74,8 +74,6 @@
 <text x="958.0" y="402.0" font-size="15" font-weight="400" fill="#A1A1AA" text-anchor="start">what it&#x27;s based on</text>
 <rect x="936.0" y="436" width="124.5" height="24" rx="7" fill="#A3E635" fill-opacity="0.16" stroke="#A3E635" stroke-opacity="0.35" stroke-width="1"/>
 <text x="945.0" y="452.5" font-size="12" font-weight="700" fill="#A3E635" text-anchor="start" letter-spacing="0.6">DETERMINISTIC</text>
-<rect x="936.0" y="468" width="151.3" height="24" rx="7" fill="#A3E635" fill-opacity="0.16" stroke="#A3E635" stroke-opacity="0.35" stroke-width="1"/>
-<text x="945.0" y="484.5" font-size="12" font-weight="700" fill="#A3E635" text-anchor="start" letter-spacing="0.6">180/180 PLAN EVAL</text>
 <path d="M344,334.0 L370,334.0" fill="none" stroke="#6B6B74" stroke-width="2" marker-end="url(#ah6B6B74)"/>
 <path d="M614,334.0 L640,334.0" fill="none" stroke="#6B6B74" stroke-width="2" marker-end="url(#ah6B6B74)"/>
 <path d="M884,334.0 L910,334.0" fill="none" stroke="#6B6B74" stroke-width="2" marker-end="url(#ah6B6B74)"/>
@@ -83,8 +81,8 @@
 <text x="58.0" y="565.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Clean Architecture</text>
 <text x="58.0" y="586.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">screens never import the data layer</text>
 <rect x="418.6666666666667" y="540" width="362.6666666666667" height="58" rx="14" fill="#131315" stroke="#2C2C31" stroke-width="1.5"/>
-<text x="436.7" y="565.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Boundary-tested</text>
-<text x="436.7" y="586.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">0 violations across 215 files, 1,012 imports</text>
+<text x="436.7" y="565.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Pure-Dart score engine</text>
+<text x="436.7" y="586.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">runs without a device, versioned formulas</text>
 <rect x="797.3333333333334" y="540" width="362.6666666666667" height="58" rx="14" fill="#131315" stroke="#2C2C31" stroke-width="1.5"/>
 <text x="815.3" y="565.0" font-size="15" font-weight="700" fill="#F4F4F5" text-anchor="start">Private by default</text>
 <text x="815.3" y="586.0" font-size="14" font-weight="400" fill="#A1A1AA" text-anchor="start">no Airlog server, no account, no analytics</text>

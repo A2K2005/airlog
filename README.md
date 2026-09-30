@@ -10,7 +10,7 @@ Built end to end on 90 days of sample data. Next milestone: field validation on 
 
 ![Airlog's Today, Recovery, Sleep and Trends screens for the same sample day: a plan headed "Ready to push", Recovery 78, 7 h 1 m of sleep against a 7 h 51 m target, and 30 days of recovery and strain](docs/readme/hero.png)
 
-[Product plan](PRODUCT_PLAN.md) · [Research](research/) · [Architecture](app/ARCHITECTURE.md) · [Coach evals](app/docs/EVALS.md) · [Build and run](app/README.md)
+[Product plan](PRODUCT_PLAN.md) · [Research](research/) · [Architecture](app/ARCHITECTURE.md) · [Build and run](app/README.md)
 
 ---
 
@@ -64,7 +64,7 @@ For example, I asked for the UI to be a 1:1 copy of my Figma widget pack. Princi
 | **Our own scores, one formula for every device** | No sanctioned route exposes Google's Readiness or Sleep Score. One formula stays comparable across devices | Familiar vendor numbers |
 | **Health Connect as the base, every app, one app per metric** | Free, with no cloud project, OAuth review or security audit | Gap-filling across apps. Mixing two apps' data in one metric was cut |
 | **Never guess a missing signal** | A guessed number shown as a measurement breaks trust | Thinner scores for apps that share less, such as Samsung Health |
-| **A grounded coach, not a chatbot** | I wanted Q&A over my own data, and hallucination is the top complaint about coaches | Build cost: a verifier, an output policy and an eval harness |
+| **A grounded coach, not a chatbot** | I wanted Q&A over my own data, and hallucination is the top complaint about coaches | Build cost: a verifier and an output policy |
 | **Model fallback stays inside one provider, then goes on-device** | Consent covers one provider, and a model's reasoning can't be handed to another mid-answer | No failover to the other provider |
 | **Google Health API as an opt-in beta** | Its OAuth verification needs an annual CASA audit ($500–$4,500). Health Connect covers the core without it | Richer overnight data for most users, for now |
 | **Flutter, not Kotlin and Compose** | Reuses existing Flutter chart and theme code, and keeps an iOS path open | First-party Health Connect SDK fidelity. One metric needs a small Kotlin bridge |
@@ -84,7 +84,7 @@ For example, I asked for the UI to be a 1:1 copy of my Figma widget pack. Princi
 
 ![Strain against today's target with heart-rate zones; the Journal with evening tags and an association between alcohol and next-day recovery; live heart rate over Bluetooth with zones and session strain](docs/readme/scores.png)
 
-**Coach.** On-device by default, or your own Claude or Gemini key. Every number carries a source chip, an answer that can't be checked becomes a plain facts table, and emergencies never reach a model.
+**Coach.** Opens straight to the chat: on-device answers work with no setup, and your own Claude or Gemini key makes them fuller. Every number is checked against your data before you see it, and the answer's ⋯ menu shows where each one came from. An answer that can't be checked becomes a plain facts table, and emergencies never reach a model.
 
 ![Coach setup with on-device as the default; a verified answer with three cited numbers; a facts-only fallback when the answer couldn't be verified; a chest-pain question routed to fixed safety copy](docs/readme/coach.png)
 
@@ -96,43 +96,21 @@ For example, I asked for the UI to be a 1:1 copy of my Figma widget pack. Princi
 
 ## How it works
 
-<img src="docs/readme/overview.svg" width="100%" alt="How Airlog works. Your wearable app (Google Health, Samsung Health, Oura, WHOOP, Garmin or any app) writes to Health Connect, Android's on-device health store. On the phone, Airlog's source picker uses one app per metric, never summed or averaged: a new watch starts a fresh baseline, apps switch only after 4 silent days, and a missing signal is flagged, never guessed. The pure-Dart score engine computes Recovery, Strain, Sleep and Health Monitor against your own baseline. The TodayPlan answers how am I and what to do: state in plain words, why with the numbers, 0 to 3 actions and what it's based on (deterministic, 180 of 180 plan evals). Clean Architecture: screens never import the data layer; boundary-tested with 0 violations across 215 files and 1,012 imports; no Airlog server, account or analytics.">
+<img src="docs/readme/overview.svg" width="100%" alt="How Airlog works. Your wearable app (Google Health, Samsung Health, Oura, WHOOP, Garmin or any app) writes to Health Connect, Android's on-device health store. On the phone, Airlog's source picker uses one app per metric, never summed or averaged: a new watch starts a fresh baseline, apps switch only after 4 silent days, and a missing signal is flagged, never guessed. The pure-Dart score engine computes Recovery, Strain, Sleep and Health Monitor against your own baseline. The TodayPlan answers how am I and what to do: state in plain words, why with the numbers, 0 to 3 actions and what it's based on (deterministic). Clean Architecture: screens never import the data layer; a pure-Dart score engine that runs without a device, with versioned formulas; no Airlog server, account or analytics.">
 
-When a wearable doesn't share a signal, Airlog says so and scores without it, never guessing. The scoring core is pure Dart, so it runs and is tested without a device, and every result is stamped with its algorithm version so history recomputes when a formula changes. Deep dive: [ARCHITECTURE.md](app/ARCHITECTURE.md).
+When a wearable doesn't share a signal, Airlog says so and scores without it, never guessing. The scoring core is pure Dart, so it runs without a device, and every result is stamped with its algorithm version so history recomputes when a formula changes. Deep dive: [ARCHITECTURE.md](app/ARCHITECTURE.md).
 
 ## The coach: built for trust
 
-<img src="docs/readme/coach-safety.svg" width="100%" alt="Coach pipeline. A question first goes through a red-flag check for emergencies, dosing, self-harm and under-18 questions (83 of 83 routed, 0 of 85 false alarms); a red flag gets a fixed safety message and never reaches a model. Otherwise the model uses read-only tools over local data, at most 4 rounds, with consent and a daily budget (24 of 24 injection checks). The model runs on the user's own key with one provider: Claude Opus 5.5, then Sonnet 5.5, then Haiku 4.5, or Gemini 3.8 Flash, then 3.5 Flash-Lite, with an on-device answer as the last resort. A verifier and output policy check every number, date and event (361 of 361 claims, 88 of 88 fakes caught, 51 of 51 policy). A pass gives an answer with cited sources; a failure after one repair gives a facts table only. Privacy: on-device by default, your own key, Google Health API data never sent, and a What was sent view on every answer (22 of 22 privacy checks).">
+<img src="docs/readme/coach-safety.svg" width="100%" alt="Coach pipeline. A question first goes through a red-flag check for emergencies, dosing, self-harm and under-18 questions; a red flag gets a fixed safety message and never reaches a model. Otherwise the model uses read-only tools over local data, at most 4 rounds, with consent and a daily budget. The model runs on the user's own key with one provider: Claude Opus 5.5, then Sonnet 5.5, then Haiku 4.5, or Gemini 3.8 Flash, then 3.5 Flash-Lite, with an on-device answer as the last resort. A verifier and output policy check every number, date and event. A pass gives an answer with every number checked; a failure after one repair gives a facts table only. Privacy: on-device by default, your own key, Google Health API data never sent, and a What was sent view on every answer.">
 
 Each provider also gets a daily budget (50 requests and 300k tokens by default) with a usage meter in Settings → Coach. Keys live in Android's keystore. Memory is a visible "What Coach knows" list, and nothing is saved without a "Remember this?" tap.
 
-<details>
-<summary><b>All eval suites and results</b> (no network, no keys)</summary>
-
-| Suite | Data | Result |
-|---|---|---|
-| Grounding, golden set | 48 questions (44 scored; 4 journal questions reported apart) | 44 / 44 verified; 361 / 361 claims supported |
-| Hallucinating fake model | 88 cases: one number changed or one event invented | 88 / 88 caught, 0 shown to the user |
-| Documented real-world failures | 9 probes: the swim that didn't happen, the invented 5 am run, band-off hours as a nap, missing data as zero … | 9 / 9 caught and replaced |
-| Red-flag recall | 83 paraphrases | 83 / 83 routed; 44 / 44 urgent copy for emergencies and self-harm |
-| Red-flag false positives | 85 benign questions, 49 of them near-misses | 0 / 85 (gate ≤ 2 %) |
-| Output policy | 51 bad outputs; 55 good outputs | 51 / 51 caught; 0 / 55 false positives |
-| Injection | 8 payloads × 3 channels | 24 / 24 on every check |
-| Privacy invariants | Real Claude client bytes over a mock transport | 22 / 22 |
-| Insight cards | Every template on all 90 sample days | 346 / 346 verified, policy-clean, in voice |
-| TodayPlan | All 90 days, fresh and stale | 180 / 180 verified against the day's facts |
-| On-device intent router | 34 questions | 34 / 34 right tool, arguments and grounded answer |
-
-Treat them as regression gates, not field accuracy. The red-flag and policy detectors were tuned on these sets, which a separate author wrote. The scripted "hallucinating" model is simpler than a real model's failures, so the live benchmark comes next, through the same harness. Details: [EVALS.md](app/docs/EVALS.md).
-
-</details>
-
 ## Design and quality
 
-**Design.** The UI is a 1:1 build of my own Figma widget pack, dark only, and all 18 design tiles pass a pixel-diff test against the source design, each within its written limit. Where pixels and data disagreed, data won: one chart keeps a true linear scale (10.25 % diff) over an ordinal one that would have matched the design at 3.80 %. Motion stays under 300 ms and drops to zero under reduced motion. Touch targets are 48 dp, and tiles reflow at large text sizes. See [DESIGN_SYSTEM.md](app/docs/DESIGN_SYSTEM.md).
+**Design.** The UI is a 1:1 build of my own Figma widget pack, dark only. Where pixels and data disagreed, data won: one chart keeps a true linear scale over an ordinal one that would have matched the design more closely. Motion stays under 300 ms and drops to zero under reduced motion. Touch targets are 48 dp, and tiles reflow at large text sizes. See [DESIGN_SYSTEM.md](app/docs/DESIGN_SYSTEM.md).
 
 **Quality.**
-- **Tests:** 1,019 passed in the last full local run, covering the engine, architecture boundaries, data on real SQLite, widgets and goldens, the pixel diffs and the eval suites.
 - **Exploratory QA** on an emulator logged 21 issues. The worst was a P0: the background sync worker closed the app's shared database handle about every 15 minutes, which broke every screen. The worker now opens its own connection.
 - **An independent review** by separate agents logged 19 deeper findings on persistence, provenance and coach privacy. [LAUNCH_READINESS](LAUNCH_READINESS.md) maps each one to its fix and to the device runs that come next.
 - **Startup:** onboarding now appears 2.2–2.7 s after `main()` instead of 3.5–3.8 s, after a database read and background-job registration moved off the critical path (profile build, emulator).
@@ -153,8 +131,8 @@ Everything here is a plan: targets and instrumentation, not results. Airlog has 
 
 | Guardrail | Threshold |
 |---|---|
-| Red-flag questions routed to safety copy | 100 % recall, false positives ≤ 2 % (eval gate) |
-| Cloud sends without consent, or Google Health API data sent to a model | Zero (privacy suite) |
+| Red-flag questions routed to safety copy | 100 % recall, false positives ≤ 2 % |
+| Cloud sends without consent, or Google Health API data sent to a model | Zero |
 | Sample data shown without its label | Zero |
 | First frame after launch | About 500 ms on a phone (QA target) |
 | Crash and ANR rates | Play Console vitals, no worse than the category |
@@ -166,8 +144,8 @@ Release exit criteria come from the roadmap: stable, explainable scores on 2+ we
 | Milestone | What it involves |
 |---|---|
 | **Field-test on the Fitbit Air** | Confirm the band's data reaches Health Connect at the density the scores need, then pick the strain model that fits it |
-| **Verify heart-rate density per app on real devices** | Samsung, Oura, WHOOP and Garmin, each with its own test fixture |
-| **Benchmark live models against the eval suite** | Claude and Gemini through the same harness: pass rate, repair and fallback rates, cost per question |
+| **Verify heart-rate density per app on real devices** | Samsung, Oura, WHOOP and Garmin |
+| **Benchmark live models** | Claude and Gemini on real questions: how often answers pass the checks, need a repair or fall back, and cost per question |
 | **Build the measured-value guard and add 8 more source apps** | Research found one app writes a profile setting where a measurement belongs. The guard keeps settings out of scores |
 | **Complete Google OAuth verification** | Takes Enhanced mode (Google Health API) out of beta |
 | **Morning HRV check with a chest strap (v1.1)** | Its feature flag is already reserved |
@@ -185,12 +163,8 @@ Airlog is built by a multi-agent pipeline. These mechanisms keep parallel work c
 | **Research → adversarial critic** | Key research passes get a critic review with binding vetoes ([09](research/09-hrv-workarounds.md) → [09b](research/09b-hrv-critique.md), [10](research/10-source-apps.md) → [10b](research/10b-source-apps-critique.md)), so guesses are cut before they reach code |
 | **Spec-first contracts** | Shared domain files carry a `CONTRACT FILE` header: additive changes only, each one dated and reported |
 | **One owner per file area** | Engine, data, UI and contracts each have a single owner ([ARCHITECTURE §9](app/ARCHITECTURE.md#9-ownership-the-build-agents)), so parallel edits don't collide |
-| **Boundary tests** | A Flutter or plugin import in the domain, or a screen importing the data layer, fails the test suite |
-| **Eval suites as regression gates** | Grounding, red-flag, policy, injection and privacy thresholds fail the suite on any regression |
-| **Numeric checks on generated text** | Every TodayPlan and insight card is verified against the day's data on all 90 sample days (180/180 plan checks, 346/346 cards) |
-| **Pixel-diff tests** | Each tile is diffed against its source design, and the comparator refuses to overwrite the design with a render |
 | **Handoff notes** | Each workstream logs status, decisions and changed files as it goes, so work resumes cleanly after any interruption |
-| **Shared heavy-job lock** | Builds, test runs and the emulator take one machine-wide lock, so parallel workstreams queue instead of overloading one laptop |
+| **Shared heavy-job lock** | Builds and the emulator take one machine-wide lock, so parallel workstreams queue instead of overloading one laptop |
 
 ## Repo map
 
@@ -202,8 +176,7 @@ Airlog is built by a multi-agent pipeline. These mechanisms keep parallel work c
 | [`PRODUCT_PLAN.md`](PRODUCT_PLAN.md) | Research synthesis, principles, roadmap, risks and the tagged decisions log |
 | [`research/`](research/) | User sentiment, competitors, data access, AI coaches and source apps, plus the critic reviews |
 | [`app/ARCHITECTURE.md`](app/ARCHITECTURE.md) | Layers, data flow, sync, source priority and the coach pipeline |
-| [`app/docs/EVALS.md`](app/docs/EVALS.md) | Coach guardrails, eval suites, thresholds and the live benchmark harness |
-| [`app/docs/DESIGN_SYSTEM.md`](app/docs/DESIGN_SYSTEM.md) | Tokens, tiles, pixel-diff tests and motion rules |
+| [`app/docs/DESIGN_SYSTEM.md`](app/docs/DESIGN_SYSTEM.md) | Tokens, tiles and motion rules |
 | [`app/docs/QA_REPORT.md`](app/docs/QA_REPORT.md), [`APP_REVIEW.md`](APP_REVIEW.md), [`LAUNCH_READINESS.md`](LAUNCH_READINESS.md) | QA findings, the independent review and the release gates |
 | [`IOS_PLAN.md`](IOS_PLAN.md) | The iPhone plan |
-| [`docs/readme/`](docs/readme/) | The images on this page. `build_images.py` regenerates the screenshots from the app's goldens |
+| [`docs/readme/`](docs/readme/) | The images on this page |
