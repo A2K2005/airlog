@@ -146,6 +146,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   onTap: () => ref.read(linkOpenerProvider)(hcSettingsUri),
                 )
               : s.permissions?.availability == HcAvailability.available ||
+                    s.permissions?.availability ==
+                        HcAvailability.checkFailed ||
                     s.permissions == null
               ? AppButton(
                   label: requesting
@@ -649,6 +651,10 @@ class _Denied extends StatelessWidget {
       HcAvailability.unsupported => (
         OnboardingCopy.unsupportedTitle,
         OnboardingCopy.unsupportedBody,
+      ),
+      HcAvailability.checkFailed => (
+        OnboardingCopy.checkFailedTitle,
+        OnboardingCopy.checkFailedBody,
       ),
       _ when state.error != null => (
         OnboardingCopy.noAnswerTitle,

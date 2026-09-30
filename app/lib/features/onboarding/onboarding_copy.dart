@@ -141,6 +141,10 @@ abstract final class OnboardingCopy {
   static const deniedTwiceBody =
       'Your phone won’t ask again. Open Health Connect settings and allow '
       'Airlog there.';
+  static const checkFailedTitle = 'Couldn’t reach Health Connect';
+  static const checkFailedBody =
+      'The check didn’t finish, so it may still be on this phone. Try again, '
+      'or connect later in Settings → Data sources.';
   static const noAnswerTitle = 'Health Connect didn’t answer';
   static const noAnswerBody = 'Nothing was changed. Try again in a moment.';
 }
