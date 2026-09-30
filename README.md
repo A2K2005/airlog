@@ -1,5 +1,3 @@
-<!-- Author: add name + links -->
-
 # Airlog
 
 **One clear answer each morning: how you are, and what to do today. It's built from the wearable you already own and computed on your phone.**
@@ -168,7 +166,7 @@ Airlog is built by a multi-agent pipeline. These mechanisms keep parallel work c
 
 ## Repo map
 
-**Build and run:** follow [`app/README.md`](app/README.md). A fresh clone needs the Subway Ticker Grid font file placed by hand before the first build.
+**Build and run:** follow [`app/README.md`](app/README.md).
 
 | Path | What's there |
 |---|---|
