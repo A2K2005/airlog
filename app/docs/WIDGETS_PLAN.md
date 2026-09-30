@@ -119,3 +119,4 @@ A PendingIntent opens `MainActivity` with action `app.airlog.airlog.OPEN_ROUTE` 
 **Deferred.**
 - Everything in §10.
 - Not exercised on the device: the Recovery and Strain plate taps, the cold-start versus warm-start routing, resizing (`onAppWidgetOptionsChanged`), the RTC boundary alarm firing on its own, and a live-mode background (workmanager) redraw.
+- Also not exercised: the Dart-driven stale plan, which is the planner's "Waiting for today's data" state from §4. The stale screenshots show only the native rollover, where Dart hasn't run and the `until` rule applies.
