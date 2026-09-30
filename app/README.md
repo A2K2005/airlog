@@ -82,7 +82,6 @@ The first screen asks how to start:
 - **Try with sample data.** This is demo mode: 90 days of synthetic data generated on the phone, in a worker isolate, the first time you choose it. The demo includes a planted illness episode, so the alerts and status cards have something to show.
 
 In demo mode:
-- Screens look exactly like live mode. The data mode is shown only where you choose it: the onboarding choice, Settings and Settings → Data sources.
 - Nothing is read from Health Connect.
 - The data is regenerated once a day so that its 90 days end today. Before the night is complete (roughly 00:00–10:30), it is refreshed at most hourly, so Today may show a partial night in the small hours.
 - Live Bluetooth heart rate uses a simulated band.
