@@ -2,13 +2,15 @@
 
 **One clear answer each morning: how you are, and what to do today. It's built from the wearable you already own and computed on your phone.**
 
+<a href="https://github.com/A2K2005/airlog/releases/download/v1.0.0/airlog-launch-film.mp4"><img src="docs/readme/launch-film.webp" width="100%" alt="Airlog launch film, 25 seconds. 'How am I?' over a dot-matrix 57; the phone rises on a warm paper stage and the plan card lifts out: Good for a normal day. 'What to do?' with the two actions. 'What made your score': 16 + 10 + 23 + 8 = 57. The coach answers 'Why is my Recovery lower today?' from your own numbers. It works with the tracker you already have, plus home-screen widgets. Sign-off: Airlog, one clear answer every morning."></a>
+
+**[▶ Watch the launch film with sound](https://github.com/A2K2005/airlog/releases/download/v1.0.0/airlog-launch-film.mp4)** (25 s, MP4) · **[Download the Android app (APK)](https://github.com/A2K2005/airlog/releases/latest)** · Android 8.0 or newer
+
 Airlog is an Android app built in Flutter. It reads raw measurements from any wearable app through Health Connect and turns them into its own Recovery, Strain and Sleep scores. On top of those it adds a deterministic daily plan and an optional AI coach that can only cite your own data.
 
 Built end to end. Next milestone: field validation on the Fitbit Air.
 
 ![Airlog on one morning, Saturday 26 September: Today with a plan headed "Good for a normal day", Recovery 57 % and HRV 46 ms, 7 % below usual; Recovery 57, Fair, with the points HRV, resting heart rate, sleep and breathing rate each earned; Sleep with 7 h 4 m asleep against a 7 h 40 m goal and the night's stages; Trends with 30 days of recovery and strain](docs/readme/hero.png)
-
-**[Download the Android app (APK)](https://github.com/A2K2005/airlog/releases/latest)** · Android 8.0 or newer
 
 [Product plan](PRODUCT_PLAN.md) · [Research](research/) · [Architecture](app/ARCHITECTURE.md) · [Build and run](app/README.md)
 
