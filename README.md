@@ -10,7 +10,6 @@ Airlog is an Android app built in Flutter. It reads raw measurements from any we
 
 Built end to end. Next milestone: field validation on the Fitbit Air.
 
-![Airlog on one morning, Saturday 26 September: Today with a plan headed "Good for a normal day", Recovery 57 % and HRV 46 ms, 7 % below usual; Recovery 57, Fair, with the points HRV, resting heart rate, sleep and breathing rate each earned; Sleep with 7 h 4 m asleep against a 7 h 40 m goal and the night's stages; Trends with 30 days of recovery and strain](docs/readme/hero.png)
 
 [Product plan](PRODUCT_PLAN.md) · [Research](research/) · [Architecture](app/ARCHITECTURE.md) · [Build and run](app/README.md)
 
